@@ -1,0 +1,119 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/*
+ * 10X Engage design tokens (prototype v2). Light theme only. shadcn/ui reads the semantic
+ * variables below; change --primary to rebrand.
+ */
+:root {
+    --radius: 0.625rem;
+
+    --background: #f5f6f8;
+    --foreground: #0f172a;
+    --card: #ffffff;
+    --card-foreground: #0f172a;
+    --popover: #ffffff;
+    --popover-foreground: #0f172a;
+    --primary: #4f46e5;
+    --primary-foreground: #ffffff;
+    --secondary: #f1f3f7;
+    --secondary-foreground: #0f172a;
+    --muted: #f1f3f7;
+    --muted-foreground: #64748b;
+    --accent: #eef0ff;
+    --accent-foreground: #4338ca;
+    --destructive: #dc2626;
+    --destructive-foreground: #ffffff;
+    --border: #e5e8ef;
+    --input: #e5e8ef;
+    --ring: #4f46e5;
+
+    --brand-50: #eef0ff;
+    --brand-100: #e0e3ff;
+    --brand-600: #4338ca;
+    --ink-2: #334155;
+    --faint: #94a3b8;
+    --line-2: #eff1f6;
+
+    --good: #16a34a;
+    --good-bg: #dcfce7;
+    --warn: #b45309;
+    --warn-bg: #fef3c7;
+    --bad: #dc2626;
+    --bad-bg: #fee2e2;
+    --info: #1d4ed8;
+    --info-bg: #dbeafe;
+    --grey: #64748b;
+    --grey-bg: #f1f3f7;
+    --whatsapp: #25d366;
+
+    --sidebar: #0e1220;
+    --sidebar-2: #181d30;
+    --sidebar-foreground: #c7ccdb;
+    --sidebar-muted: #79839b;
+}
+
+@theme inline {
+    --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    --radius-sm: calc(var(--radius) - 4px);
+    --radius-md: calc(var(--radius) - 2px);
+    --radius-lg: var(--radius);
+    --radius-xl: calc(var(--radius) + 4px);
+
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --color-card: var(--card);
+    --color-card-foreground: var(--card-foreground);
+    --color-popover: var(--popover);
+    --color-popover-foreground: var(--popover-foreground);
+    --color-primary: var(--primary);
+    --color-primary-foreground: var(--primary-foreground);
+    --color-secondary: var(--secondary);
+    --color-secondary-foreground: var(--secondary-foreground);
+    --color-muted: var(--muted);
+    --color-muted-foreground: var(--muted-foreground);
+    --color-accent: var(--accent);
+    --color-accent-foreground: var(--accent-foreground);
+    --color-destructive: var(--destructive);
+    --color-destructive-foreground: var(--destructive-foreground);
+    --color-border: var(--border);
+    --color-input: var(--input);
+    --color-ring: var(--ring);
+
+    --color-brand-50: var(--brand-50);
+    --color-brand-100: var(--brand-100);
+    --color-brand-600: var(--brand-600);
+    --color-ink-2: var(--ink-2);
+    --color-faint: var(--faint);
+    --color-line-2: var(--line-2);
+    --color-good: var(--good);
+    --color-good-bg: var(--good-bg);
+    --color-warn: var(--warn);
+    --color-warn-bg: var(--warn-bg);
+    --color-bad: var(--bad);
+    --color-bad-bg: var(--bad-bg);
+    --color-info: var(--info);
+    --color-info-bg: var(--info-bg);
+    --color-grey: var(--grey);
+    --color-grey-bg: var(--grey-bg);
+    --color-whatsapp: var(--whatsapp);
+    --color-sidebar: var(--sidebar);
+    --color-sidebar-2: var(--sidebar-2);
+    --color-sidebar-foreground: var(--sidebar-foreground);
+    --color-sidebar-muted: var(--sidebar-muted);
+}
+
+@layer base {
+    * {
+        @apply border-border outline-ring/50;
+    }
+    html {
+        color-scheme: light;
+    }
+    body {
+        @apply bg-background text-foreground antialiased;
+        font-feature-settings: 'cv11', 'ss01';
+    }
+}
