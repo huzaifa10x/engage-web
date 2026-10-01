@@ -38,6 +38,7 @@ type Options = {
     body?: unknown;
     query?: Record<string, string | number | boolean | null | undefined>;
     signal?: AbortSignal;
+    headers?: Record<string, string>;
 };
 
 function readCookie(name: string): string | null {
@@ -77,7 +78,7 @@ export async function api<T>(path: string, options: Options = {}, retried = fals
 
     if (mutating) await ensureCsrfCookie();
 
-    const headers: Record<string, string> = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' };
+    const headers: Record<string, string> = { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', ...options.headers };
     if (options.body !== undefined) headers['Content-Type'] = 'application/json';
     const xsrf = readCookie('XSRF-TOKEN');
     if (mutating && xsrf) headers['X-XSRF-TOKEN'] = xsrf;
@@ -136,4 +137,36 @@ export function errorMessage(error: unknown, fallback = 'Something went wrong. P
     }
 
     return error instanceof Error && error.message ? error.message : fallback;
+}
+
+/** multipart/form-data POST (file uploads) with the same CSRF + error handling as api(). */
+export async function upload<T>(path: string, form: FormData, retried = false): Promise<T> {
+    await ensureCsrfCookie();
+    const xsrf = readCookie('XSRF-TOKEN');
+    const response = await fetch(buildUrl(path), {
+        method: 'POST',
+        credentials: 'include',
+        headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', ...(xsrf ? { 'X-XSRF-TOKEN': xsrf } : {}) },
+        body: form,
+    });
+
+    if (response.status === 419 && !retried) {
+        await ensureCsrfCookie(true);
+
+        return upload<T>(path, form, true);
+    }
+
+    const json = safeJson(await response.text());
+    if (!response.ok) {
+        const err = (json as { error?: ApiErrorBody } | null)?.error;
+        throw new ApiError(
+            response.status,
+            err?.code ?? 'request_failed',
+            err?.message ?? `Upload failed (${response.status}).`,
+            err?.details ?? {},
+            err?.request_id,
+        );
+    }
+
+    return json as T;
 }

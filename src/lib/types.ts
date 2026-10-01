@@ -175,3 +175,77 @@ export type Paginated<T> = {
     links: { first: string | null; last: string | null; prev: string | null; next: string | null };
     meta: { current_page?: number; last_page?: number; total?: number; per_page: number; next_cursor?: string | null; prev_cursor?: string | null };
 };
+
+// ── Messaging (Phase 3) ──────────────────────────────────────────────────────────────────
+
+export type ConsentState = 'unknown' | 'opted_in' | 'opted_out';
+
+export type Contact = {
+    id: string;
+    display_name: string;
+    name: string | null;
+    profile_name: string | null;
+    username: string | null;
+    phone: string | null;
+    wa_id: string | null;
+    bsuid: string | null;
+    email: string | null;
+    attributes: Record<string, unknown>;
+    source: string;
+    consent_state: ConsentState;
+    opted_out_at: string | null;
+    marketing_opted_out: boolean;
+    last_inbound_at: string | null;
+    created_at: string | null;
+};
+
+export type Conversation = {
+    id: string;
+    phone_number_id: string;
+    status: 'open' | 'closed';
+    assigned_membership_id: string | null;
+    unread_count: number;
+    last_message_at: string | null;
+    last_message_preview: string | null;
+    last_message_direction: 'inbound' | 'outbound' | null;
+    window: { open: boolean; expires_at: string | null };
+    contact?: Contact;
+    phone_number?: { id: string; display_phone_number: string | null; verified_name: string | null };
+    created_at: string | null;
+};
+
+export type MessageStatus = 'queued' | 'accepted' | 'sent' | 'delivered' | 'read' | 'failed' | 'received' | 'deleted';
+
+export type Message = {
+    id: string;
+    conversation_id: string;
+    direction: 'inbound' | 'outbound';
+    origin: 'customer' | 'agent' | 'api' | 'campaign' | 'automation' | 'app_echo' | 'history';
+    type: string;
+    status: MessageStatus;
+    body: string | null;
+    content: Record<string, unknown>;
+    template: { name?: string; language?: string; components?: unknown[] } | null;
+    media: {
+        id: string;
+        status: 'pending' | 'ready' | 'failed';
+        mime_type: string | null;
+        filename: string | null;
+        file_size: number | null;
+        url: string | null;
+    } | null;
+    wamid: string | null;
+    reply_to_wamid: string | null;
+    error: { code: string; title: string | null } | null;
+    sent_by_membership_id: string | null;
+    timestamp: string | null;
+    sent_at: string | null;
+    delivered_at: string | null;
+    read_at: string | null;
+    edited_at: string | null;
+    revoked_at: string | null;
+};
+
+export type UploadedMedia = { id: string; type: 'image' | 'video' | 'audio' | 'document' | 'sticker'; mime_type: string; filename: string; file_size: number };
+
+export type CursorPage<T> = { data: T[]; meta: { next_cursor?: string | null; prev_cursor?: string | null; per_page: number } };

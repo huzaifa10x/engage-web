@@ -47,15 +47,24 @@ ngrok http 3000                   # → https://abc123.ngrok-free.app
   **Allowed domains** and **Valid OAuth redirect URIs**
 - Meta App Dashboard → WhatsApp → Configuration → Callback URL `https://abc123.ngrok-free.app/api/webhooks/meta`
 
+## Realtime inbox
+
+Team Inbox updates live through Laravel Reverb. Set `NEXT_PUBLIC_REVERB_KEY` (the backend's
+`REVERB_APP_KEY`) plus host/port; the browser connects to Reverb directly and authorises private
+channels through `/api/broadcasting/auth` (same-origin, session cookie). Without a key the inbox
+polls (list every 15 s, open thread every 5 s) — everything still works, just less instantly.
+
 ## Structure
 
 ```
 src/app/(auth)            login, register
-src/app/(app)             authenticated shell: dashboard, channels, team, settings, audit-log
+src/app/(app)             authenticated shell: dashboard, inbox, contacts, channels, team, settings, audit-log
 src/app/select-workspace  src/app/invitations/[token]  src/app/impersonate  src/app/deletion-status
 src/components/ui         shadcn/ui primitives (add more with `npx shadcn@latest add <name>`)
 src/components/app        shell: sidebar, switchers, banners, session context
 src/hooks/use-embedded-signup.ts   Meta Embedded Signup v4 flow
+src/hooks/use-inbox-realtime.ts    Reverb subscriptions → batched query refresh
+src/components/inbox      conversation list, thread, composer, contact panel, templates
 src/lib                   api client, query hooks, types, permissions, formatting
 ```
 

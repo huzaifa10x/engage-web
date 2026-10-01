@@ -1,10 +1,15 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from './api';
 import type {
     AuditEntry,
+    ConsentState,
+    Contact,
+    Conversation,
+    CursorPage,
+    Message,
     EntitlementsDetail,
     Invitation,
     Me,
@@ -31,6 +36,12 @@ export const keys = {
     numbers: ['whatsapp', 'numbers'] as const,
     signup: (id: string) => ['whatsapp', 'signup', id] as const,
     audit: ['audit'] as const,
+    conversations: (filters: object) => ['inbox', 'conversations', filters] as const,
+    conversationsAll: ['inbox', 'conversations'] as const,
+    conversation: (id: string) => ['inbox', 'conversation', id] as const,
+    thread: (id: string) => ['inbox', 'thread', id] as const,
+    contacts: (filters: object) => ['contacts', filters] as const,
+    contactsAll: ['contacts'] as const,
 };
 
 type Data<T> = { data: T };
@@ -95,4 +106,77 @@ export function useSwitchTenant() {
 
 export async function fetchAuditPage(cursor: string | null) {
     return api<Paginated<AuditEntry>>('audit-logs', { query: { cursor } });
+}
+
+// ── Messaging ────────────────────────────────────────────────────────────────────────────
+
+export type ConversationFilters = {
+    phone_number_id?: string | null;
+    status?: 'open' | 'closed';
+    assigned?: 'me' | 'unassigned' | 'any';
+    unread?: boolean;
+    q?: string;
+};
+
+export const useConversations = (filters: ConversationFilters, refetchInterval: number | false = false) =>
+    useInfiniteQuery({
+        queryKey: keys.conversations(filters),
+        refetchInterval,
+        queryFn: ({ pageParam }) =>
+            api<CursorPage<Conversation>>('conversations', {
+                query: { ...filters, unread: filters.unread ? 1 : undefined, cursor: pageParam, per_page: 30 },
+            }),
+        initialPageParam: null as string | null,
+        getNextPageParam: (last) => last.meta.next_cursor ?? null,
+    });
+
+export const useConversation = (id: string | null, refetchInterval: number | false = false) =>
+    useQuery({
+        queryKey: keys.conversation(id ?? 'none'),
+        refetchInterval,
+        queryFn: () => api<{ data: Conversation }>(`conversations/${id}`).then((r) => r.data),
+        enabled: id !== null,
+    });
+
+/** Newest-first pages from the API; the thread view reverses them for display. */
+export const useThread = (id: string | null, refetchInterval: number | false = false) =>
+    useInfiniteQuery({
+        queryKey: keys.thread(id ?? 'none'),
+        refetchInterval,
+        queryFn: ({ pageParam }) => api<CursorPage<Message>>(`conversations/${id}/messages`, { query: { cursor: pageParam, per_page: 40 } }),
+        initialPageParam: null as string | null,
+        getNextPageParam: (last) => last.meta.next_cursor ?? null,
+        enabled: id !== null,
+    });
+
+export type ContactFilters = { q?: string; consent?: ConsentState };
+
+export const useContacts = (filters: ContactFilters) =>
+    useInfiniteQuery({
+        queryKey: keys.contacts(filters),
+        queryFn: ({ pageParam }) => api<CursorPage<Contact>>('contacts', { query: { ...filters, cursor: pageParam, per_page: 50 } }),
+        initialPageParam: null as string | null,
+        getNextPageParam: (last) => last.meta.next_cursor ?? null,
+    });
+
+export type SendPayload = {
+    type: 'text' | 'image' | 'video' | 'audio' | 'document' | 'sticker' | 'template' | 'reaction';
+    body?: string | null;
+    media_id?: string | null;
+    reply_to?: string | null;
+    content?: Record<string, unknown>;
+    template?: { name: string; language: string; components?: unknown[] };
+};
+
+/** Idempotency-Key makes double clicks / retries safe: the server stores the message once. */
+export function sendToConversation(conversationId: string, payload: SendPayload, idempotencyKey: string) {
+    return api<{ data: Message }>(`conversations/${conversationId}/messages`, {
+        method: 'POST',
+        body: payload,
+        headers: { 'Idempotency-Key': idempotencyKey },
+    }).then((r) => r.data);
+}
+
+export function startConversation(payload: SendPayload & { phone_number_id: string; contact_id?: string; to?: string }, idempotencyKey: string) {
+    return api<{ data: Message }>('messages', { method: 'POST', body: payload, headers: { 'Idempotency-Key': idempotencyKey } }).then((r) => r.data);
 }

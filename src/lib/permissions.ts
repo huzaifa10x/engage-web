@@ -1,7 +1,12 @@
 /** Mirrors App\Domain\Access\Permission. '*' = every permission (Owner). */
 export const P = {
     InboxView: 'inbox.view',
+    InboxReply: 'inbox.reply',
+    InboxAssign: 'inbox.assign',
     ContactsView: 'contacts.view',
+    ContactsCreate: 'contacts.create',
+    ContactsUpdate: 'contacts.update',
+    ContactsDelete: 'contacts.delete',
     CampaignsView: 'campaigns.view',
     TemplatesView: 'templates.view',
     ChannelsView: 'channels.view',

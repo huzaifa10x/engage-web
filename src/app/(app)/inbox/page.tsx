@@ -1,0 +1,97 @@
+'use client';
+
+import { MessageSquarePlusIcon, RadioIcon, WifiOffIcon } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useState } from 'react';
+
+import { EmptyState, Forbidden } from '@/components/app/page-header';
+import { useSelectedNumber } from '@/components/app/number-switcher';
+import { useSession } from '@/components/app/session';
+import { ConversationList } from '@/components/inbox/conversation-list';
+import { NewConversationDialog } from '@/components/inbox/new-conversation-dialog';
+import { Thread } from '@/components/inbox/thread';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useInboxRealtime } from '@/hooks/use-inbox-realtime';
+import { P } from '@/lib/permissions';
+import { cn } from '@/lib/utils';
+
+function Inbox() {
+    const { me, can } = useSession();
+    const router = useRouter();
+    const params = useSearchParams();
+    const [numberId] = useSelectedNumber();
+    const [composeOpen, setComposeOpen] = useState(false);
+    const selected = params.get('c');
+
+    const notify = useCallback((e: { conversation_id: string; preview: string }) => {
+        if (typeof document !== 'undefined' && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+            new Notification('New WhatsApp message', { body: e.preview, tag: e.conversation_id });
+        }
+    }, []);
+    const realtime = useInboxRealtime(me.active_tenant_id ?? '', notify);
+    const polling = realtime !== 'live';
+
+    const open = (id: string | null) => router.replace(id ? `/inbox?c=${id}` : '/inbox', { scroll: false });
+
+    if (!can(P.InboxView)) return <Forbidden />;
+
+    return (
+        <div className="flex h-full min-h-0">
+            <div className={cn('w-full shrink-0 flex-col md:flex md:w-80 lg:w-96', selected ? 'hidden' : 'flex')}>
+                <div className="flex items-center gap-2 border-r border-b bg-card px-3 py-2.5">
+                    <h1 className="flex-1 text-[15px] font-semibold">Team Inbox</h1>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <span className={cn('inline-flex items-center gap-1 text-[11.5px]', realtime === 'live' ? 'text-good' : 'text-muted-foreground')}>
+                                {realtime === 'live' ? <RadioIcon className="size-3.5" /> : <WifiOffIcon className="size-3.5" />}
+                                {realtime === 'live' ? 'Live' : realtime === 'connecting' ? 'Connecting' : 'Refreshing'}
+                            </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            {realtime === 'live' ? 'New messages appear instantly.' : 'Realtime is not connected; the inbox refreshes every few seconds.'}
+                        </TooltipContent>
+                    </Tooltip>
+                    {can(P.InboxReply) && (
+                        <Button size="icon-sm" variant="ghost" onClick={() => setComposeOpen(true)} aria-label="New conversation">
+                            <MessageSquarePlusIcon />
+                        </Button>
+                    )}
+                </div>
+                <div className="min-h-0 flex-1">
+                    <ConversationList phoneNumberId={numberId} selectedId={selected} onSelect={(c) => open(c.id)} polling={polling} />
+                </div>
+            </div>
+
+            <div className={cn('min-h-0 min-w-0 flex-1', selected ? 'flex' : 'hidden md:flex')}>
+                {selected ? (
+                    <Thread key={selected} conversationId={selected} polling={polling} onBack={() => open(null)} />
+                ) : (
+                    <div className="flex flex-1 items-center justify-center bg-[#efeae2]">
+                        <EmptyState
+                            title="Select a conversation"
+                            description="Pick a chat on the left, or start a new one with an approved template."
+                            action={
+                                can(P.InboxReply) ? (
+                                    <Button onClick={() => setComposeOpen(true)}>
+                                        <MessageSquarePlusIcon /> New conversation
+                                    </Button>
+                                ) : undefined
+                            }
+                        />
+                    </div>
+                )}
+            </div>
+
+            <NewConversationDialog open={composeOpen} onOpenChange={setComposeOpen} defaultNumberId={numberId} onStarted={(id) => open(id)} />
+        </div>
+    );
+}
+
+export default function InboxPage() {
+    return (
+        <Suspense>
+            <Inbox />
+        </Suspense>
+    );
+}
