@@ -1,0 +1,45 @@
+name: Check & deploy
+
+on:
+    push:
+        branches: [main]
+    workflow_dispatch:
+
+concurrency:
+    group: production-web
+    cancel-in-progress: false
+
+jobs:
+    check:
+        runs-on: ubuntu-24.04
+        steps:
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+                  cache: npm
+            - run: npm ci --no-audit --no-fund
+            - name: Types
+              run: npm run typecheck
+            - name: Lint
+              run: npm run lint
+            - name: Format
+              run: npm run format:check
+            - name: Build
+              run: npm run build
+              env:
+                  NEXT_TELEMETRY_DISABLED: 1
+
+    deploy:
+        needs: check
+        runs-on: ubuntu-24.04
+        environment: production
+        steps:
+            - name: Deploy to Oracle Cloud
+              uses: appleboy/ssh-action@v1
+              with:
+                  host: ${{ secrets.SERVER_HOST }}
+                  username: ${{ secrets.SERVER_USER }}
+                  key: ${{ secrets.SERVER_SSH_KEY }}
+                  command_timeout: 30m
+                  script: bash /opt/engage/backend/deploy/deploy.sh web
