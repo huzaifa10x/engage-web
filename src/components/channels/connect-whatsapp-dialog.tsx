@@ -1,20 +1,21 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2Icon, CircleIcon, ExternalLinkIcon, Loader2Icon, SmartphoneIcon, XCircleIcon, ZapIcon } from 'lucide-react';
+import { AlertTriangleIcon, CheckCircle2Icon, CircleIcon, ExternalLinkIcon, Loader2Icon, SmartphoneIcon, XCircleIcon, ZapIcon } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useEmbeddedSignup, type SignupPhase } from '@/hooks/use-embedded-signup';
 import { keys } from '@/lib/queries';
-import type { SignupAttempt } from '@/lib/types';
+import type { SignupAttempt, SubscribedApp } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 type Flow = 'standard' | 'coexistence';
 
 const STEP_LABELS: Record<string, string> = {
     exchange_code: 'Secure connection with Meta',
+    check_other_apps: 'Check the number is not connected to another application',
     fetch_waba: 'Read your WhatsApp Business Account',
     subscribe_webhooks: 'Subscribe to message events',
     register_number: 'Register the number with Cloud API',
@@ -23,7 +24,7 @@ const STEP_LABELS: Record<string, string> = {
 };
 
 function stepsFor(flow: Flow, attempt: SignupAttempt | null): string[] {
-    const base = ['exchange_code', 'fetch_waba', 'subscribe_webhooks'];
+    const base = ['exchange_code', 'check_other_apps', 'fetch_waba', 'subscribe_webhooks'];
     if (attempt?.event === 'FINISH_ONLY_WABA') return base;
 
     return flow === 'coexistence' ? [...base, 'fetch_number', 'coexistence_sync'] : [...base, 'register_number', 'fetch_number'];
@@ -58,6 +59,8 @@ export function ConnectWhatsappDialog({ open, onOpenChange }: { open: boolean; o
 
                 {signup.phase === 'idle' || signup.phase === 'cancelled' ? (
                     <ChooseFlow flow={flow} setFlow={setFlow} cancelled={signup.phase === 'cancelled'} />
+                ) : signup.phase === 'failed' && signup.conflict ? (
+                    <RegisteredElsewhere apps={signup.conflict} />
                 ) : signup.phase === 'failed' ? (
                     <Failure message={signup.error} />
                 ) : signup.phase === 'completed' ? (
@@ -74,7 +77,9 @@ export function ConnectWhatsappDialog({ open, onOpenChange }: { open: boolean; o
                             <Button variant="outline" onClick={() => close(false)}>
                                 Close
                             </Button>
-                            <Button onClick={() => signup.launch({ coexistence: flow === 'coexistence' })}>Try again</Button>
+                            <Button onClick={() => signup.launch({ coexistence: flow === 'coexistence' })}>
+                                {signup.conflict ? 'I have disconnected it — check again' : 'Try again'}
+                            </Button>
                         </>
                     ) : (
                         <>
@@ -235,6 +240,51 @@ function Failure({ message }: { message: string | null }) {
             <div>
                 <p className="font-semibold text-bad">We could not connect this number</p>
                 <p className="mt-0.5 text-ink-2">{message ?? 'Something went wrong while talking to Meta.'}</p>
+            </div>
+        </div>
+    );
+}
+
+function RegisteredElsewhere({ apps }: { apps: SubscribedApp[] }) {
+    const names = apps.map((a) => a.name).filter((n): n is string => Boolean(n));
+    const where = names.length ? names.join(', ') : 'another application';
+
+    return (
+        <div className="grid gap-3">
+            <div className="flex items-start gap-3 rounded-lg border border-bad/20 bg-bad-bg p-4 text-sm">
+                <AlertTriangleIcon className="mt-0.5 size-5 shrink-0 text-bad" />
+                <div>
+                    <p className="font-semibold text-bad">This number is already registered with another application</p>
+                    <p className="mt-0.5 text-ink-2">
+                        {names.length ? (
+                            <>
+                                It is currently connected to <span className="font-semibold">{where}</span>.
+                            </>
+                        ) : (
+                            'It is currently connected to another WhatsApp platform.'
+                        )}{' '}
+                        Nothing was connected to 10X Engage. A number can only be onboarded here once it has been disconnected there.
+                    </p>
+                </div>
+            </div>
+            <div className="rounded-lg border p-4 text-sm">
+                <p className="font-semibold">How to fix it</p>
+                <ol className="mt-2 grid list-decimal gap-1.5 pl-5 text-[13px] text-muted-foreground">
+                    <li>
+                        Sign in to {where} and disconnect or remove this WhatsApp number (usually under Settings, Channels or WhatsApp). If you cannot find the
+                        option, ask their support to unsubscribe your WhatsApp Business Account.
+                    </li>
+                    <li>
+                        Or remove the application yourself in Meta Business Settings: open WhatsApp accounts, select your account, and remove {where} from the
+                        partners / connected apps.
+                    </li>
+                    <li>Wait a minute, then come back here and check again.</li>
+                </ol>
+                <Button asChild variant="outline" size="sm" className="mt-3">
+                    <a href="https://business.facebook.com/settings/whatsapp-business-accounts" target="_blank" rel="noreferrer">
+                        Open Meta Business Settings <ExternalLinkIcon />
+                    </a>
+                </Button>
             </div>
         </div>
     );

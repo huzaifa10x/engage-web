@@ -143,6 +143,9 @@ export type WabaAccount = {
 
 export type SignupStatus = 'started' | 'exchanging' | 'provisioning' | 'completed' | 'failed' | 'cancelled';
 
+/** Another provider's Meta app that a WhatsApp Business Account is still subscribed to. */
+export type SubscribedApp = { id: string; name: string | null; link: string | null };
+
 export type SignupAttempt = {
     id: string;
     flow: 'standard' | 'coexistence';
@@ -152,7 +155,7 @@ export type SignupAttempt = {
     phone_number_id: string | null;
     waba_account_id: string | null;
     steps: Record<string, { state: 'done' | 'failed'; at: string; error?: string }>;
-    error: { code: string | null; message: string } | null;
+    error: { code: string | null; message: string; apps?: SubscribedApp[] } | null;
     created_at: string | null;
     finished_at: string | null;
 };

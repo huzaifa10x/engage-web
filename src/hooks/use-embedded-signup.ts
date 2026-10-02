@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { loadFacebookSdk } from '@/lib/facebook-sdk';
 import { startSignup } from '@/lib/queries';
-import type { SignupAttempt, SignupLaunch } from '@/lib/types';
+import type { SignupAttempt, SignupLaunch, SubscribedApp } from '@/lib/types';
 
 /**
  * Embedded Signup v4 (Tech Provider).
@@ -36,6 +36,8 @@ export function useEmbeddedSignup(onFinished?: (attempt: SignupAttempt) => void)
     const [attempt, setAttempt] = useState<SignupAttempt | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [numbers, setNumbers] = useState<SignupLaunch['numbers'] | null>(null);
+    // Set when the server refuses the number because it is still registered with another application.
+    const [conflict, setConflict] = useState<SubscribedApp[] | null>(null);
 
     const attemptId = useRef<string | null>(null);
     const code = useRef<string | null>(null);
@@ -128,7 +130,10 @@ export function useEmbeddedSignup(onFinished?: (attempt: SignupAttempt) => void)
                 poll(Date.now());
             }
         } catch (e) {
-            if (e instanceof ApiError && e.code === 'plan_limit_reached') {
+            if (e instanceof ApiError && e.code === 'number_subscribed_elsewhere') {
+                setConflict(Array.isArray(e.details?.apps) ? (e.details.apps as SubscribedApp[]) : []);
+                fail(e.message);
+            } else if (e instanceof ApiError && e.code === 'plan_limit_reached') {
                 fail('Your plan has no free WhatsApp number slots. Upgrade or disconnect a number, then connect again.');
             } else {
                 fail(errorMessage(e));
@@ -188,6 +193,7 @@ export function useEmbeddedSignup(onFinished?: (attempt: SignupAttempt) => void)
         async (options: { coexistence: boolean }) => {
             clearTimers();
             setError(null);
+            setConflict(null);
             setAttempt(null);
             code.current = null;
             session.current = null;
@@ -246,7 +252,8 @@ export function useEmbeddedSignup(onFinished?: (attempt: SignupAttempt) => void)
         setPhase('idle');
         setAttempt(null);
         setError(null);
+        setConflict(null);
     }, []);
 
-    return { phase, attempt, error, numbers, launch, reset };
+    return { phase, attempt, error, conflict, numbers, launch, reset };
 }
