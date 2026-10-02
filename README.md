@@ -94,3 +94,6 @@ cannot do; Laravel enforces it regardless.
 ## Production
 
 `docker build -t engage-web .` then run with `BACKEND_URL=https://api.engage.10xdigital.ae`.
+
+To start Dev server
+./dev start
