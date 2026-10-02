@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# 10X Engage — local development from the frontend repo. Same commands as ../engage-backend/dev:
+#   ./dev setup | start | stop | status | update | reset | inbound "Hello!" | logs
+# Full guide: ../engage-backend/docs/local-development.md
+set -euo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKEND="${ENGAGE_BACKEND_DIR:-$(cd "$HERE/.." && pwd)/engage-backend}"
+
+if [[ ! -x "$BACKEND/dev" ]]; then
+    echo "engage-backend was not found next to this folder (expected: $BACKEND)."
+    echo "Clone both repos side by side:"
+    echo "  cd \"$(cd "$HERE/.." && pwd)\" && git clone https://github.com/huzaifa10x/engage-backend.git"
+    exit 1
+fi
+
+ENGAGE_WEB_DIR="$HERE" exec "$BACKEND/dev" "$@"

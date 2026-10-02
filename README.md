@@ -1,5 +1,21 @@
 # 10X Engage — client app
 
+## Getting started (local)
+
+Both repos side by side, then two commands — no Docker knowledge needed:
+
+```bash
+mkdir -p ~/engage && cd ~/engage
+git clone https://github.com/huzaifa10x/engage-backend.git
+git clone https://github.com/huzaifa10x/engage-web.git
+cd engage-web
+./dev setup     # once per computer (~10 min)
+./dev start     # every day → http://localhost:3000  ·  owner@engage.test / Password123!
+```
+
+Needs Docker Desktop (running) and Node 22. Full guide, demo data and troubleshooting:
+`../engage-backend/docs/local-development.md`.
+
 Next.js 16 (App Router) · React 19 · Tailwind CSS v4 · shadcn/ui (Radix) · TanStack Query.
 Talks only to the Laravel `/api/v1` API ([engage-backend](https://github.com/huzaifa10x/engage-backend)).
 
