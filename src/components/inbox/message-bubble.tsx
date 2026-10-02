@@ -2,7 +2,6 @@
 
 import { AlertCircleIcon, CheckCheckIcon, CheckIcon, ClockIcon, FileIcon, MapPinIcon, ReplyIcon, SmartphoneIcon } from 'lucide-react';
 
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { clockTime, fileSize } from '@/lib/format';
 import type { Message } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -10,7 +9,11 @@ import { cn } from '@/lib/utils';
 function StatusTicks({ message }: { message: Message }) {
     switch (message.status) {
         case 'queued':
-            return <ClockIcon className="size-3.5" aria-label="Sending" />;
+            return (
+                <span className="inline-flex items-center gap-0.5">
+                    <ClockIcon className="size-3.5" aria-label="Sending" /> Sending
+                </span>
+            );
         case 'accepted':
         case 'sent':
             return <CheckIcon className="size-3.5" aria-label="Sent" />;
@@ -20,15 +23,9 @@ function StatusTicks({ message }: { message: Message }) {
             return <CheckCheckIcon className="size-3.5 text-sky-500" aria-label="Read" />;
         case 'failed':
             return (
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <AlertCircleIcon className="size-3.5 text-bad" aria-label="Failed" />
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        {message.error?.title ?? 'Not delivered'}
-                        {message.error?.code ? ` (${message.error.code})` : ''}
-                    </TooltipContent>
-                </Tooltip>
+                <span className="inline-flex items-center gap-0.5 font-medium text-bad">
+                    <AlertCircleIcon className="size-3.5" aria-hidden /> Not sent
+                </span>
             );
         default:
             return null;
@@ -98,13 +95,27 @@ function Body({ message }: { message: Message }) {
                     {message.body && <p className="text-[14px] break-words whitespace-pre-wrap">{message.body}</p>}
                 </div>
             );
-        case 'template':
+        case 'template': {
+            const rendered = message.template?.rendered;
+
             return (
                 <div>
                     <p className="text-[11.5px] font-semibold tracking-wide uppercase opacity-70">Template · {message.template?.name}</p>
-                    {message.body && <p className="mt-1 text-[14px] whitespace-pre-wrap">{message.body}</p>}
+                    {rendered?.header && <p className="mt-1 text-[14px] font-semibold">{rendered.header}</p>}
+                    {message.body && <p className="mt-1 text-[14px] break-words whitespace-pre-wrap">{message.body}</p>}
+                    {rendered?.footer && <p className="mt-1 text-[12px] opacity-70">{rendered.footer}</p>}
+                    {rendered?.buttons && rendered.buttons.length > 0 && (
+                        <div className="mt-2 grid gap-1 border-t border-black/10 pt-2">
+                            {rendered.buttons.map((label, i) => (
+                                <span key={i} className="rounded bg-black/5 px-2 py-1 text-center text-[12.5px] font-medium">
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+                    )}
                 </div>
             );
+        }
         case 'location': {
             const lat = c.latitude as number | undefined;
             const lng = c.longitude as number | undefined;
@@ -167,6 +178,15 @@ export function MessageBubble({
                     </div>
                 )}
                 <Body message={message} />
+                {message.status === 'failed' && (
+                    <div className="mt-1.5 rounded border border-bad/30 bg-bad-bg px-2 py-1.5 text-[12.5px] text-bad" role="alert">
+                        <p className="font-semibold">
+                            Not sent{message.error?.title ? `: ${message.error.title}` : ''}
+                            {message.error?.code ? ` (${message.error.code})` : ''}
+                        </p>
+                        {(message.error?.hint ?? message.error?.detail) && <p className="mt-0.5 text-ink-2">{message.error?.hint ?? message.error?.detail}</p>}
+                    </div>
+                )}
                 <div className="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-500">
                     {message.origin === 'app_echo' && (
                         <span className="inline-flex items-center gap-0.5" title="Sent from the WhatsApp Business app">

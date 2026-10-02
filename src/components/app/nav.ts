@@ -52,7 +52,7 @@ export const NAV: NavSection[] = [
         title: 'Grow',
         items: [
             { label: 'Campaigns', icon: MegaphoneIcon, permission: P.CampaignsView },
-            { label: 'Templates', icon: FileTextIcon, permission: P.TemplatesView },
+            { label: 'Templates', icon: FileTextIcon, href: '/templates', permission: P.TemplatesView },
             { label: 'Commerce', icon: ShoppingCartIcon },
             { label: 'Analytics', icon: BarChart3Icon, permission: P.AnalyticsView },
         ],

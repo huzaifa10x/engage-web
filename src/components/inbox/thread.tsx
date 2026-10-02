@@ -10,17 +10,17 @@ import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { api, errorMessage } from '@/lib/api';
+import { api } from '@/lib/api';
 import { newId } from '@/lib/id';
 import { dayLabel, timeLeft } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { keys, sendToConversation, type SendPayload, useConversation, useMembers, useThread } from '@/lib/queries';
+import { keys, sendToConversation, type SendPayload, useConversation, useMembers, usePhoneNumbers, useThread } from '@/lib/queries';
 import type { Message } from '@/lib/types';
 
 import { Composer } from './composer';
 import { ContactPanel } from './contact-panel';
 import { MessageBubble } from './message-bubble';
-import { TemplateDialog, type TemplateInput } from './template-dialog';
+import { TemplateDialog } from './template-dialog';
 
 export function Thread({ conversationId, polling, onBack }: { conversationId: string; polling: boolean; onBack: () => void }) {
     const { can, membership } = useSession();
@@ -73,14 +73,14 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
         afterSend();
     };
 
-    const sendTemplate = async (template: TemplateInput) => {
-        try {
-            await send({ type: 'template', template });
-            toast.success('Template sent');
-        } catch (e) {
-            throw new Error(errorMessage(e));
-        }
+    const sendTemplate = async (payload: SendPayload) => {
+        await send(payload);
+        toast.success('Template queued for sending');
     };
+
+    // Templates belong to the WhatsApp Business Account of the number this thread runs on.
+    const numbers = usePhoneNumbers();
+    const wabaAccountId = numbers.data?.find((n) => n.id === conversation.data?.phone_number_id)?.waba_account_id ?? null;
 
     const c = conversation.data;
     if (conversation.isLoading || !c) {
@@ -99,7 +99,7 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
         : contact?.consent_state === 'opted_out'
           ? 'This contact opted out. They must send START before you can message them.'
           : !c.window.open
-            ? 'The 24-hour customer service window is closed. Only approved templates can be sent.'
+            ? 'The 24-hour window is closed, so normal messages cannot be sent. Send an approved template; when the customer replies, the window opens again.'
             : null;
     const optedOut = contact?.consent_state === 'opted_out';
 
@@ -118,7 +118,15 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                             {c.phone_number ? ` · via ${c.phone_number.verified_name ?? c.phone_number.display_phone_number}` : ''}
                         </p>
                     </div>
-                    {c.window.open ? <Badge tone="good">Window {timeLeft(c.window.expires_at)}</Badge> : <Badge tone="grey">Window closed</Badge>}
+                    {c.window.open ? (
+                        <Badge tone="good" dot title="The customer wrote in the last 24 hours: you can send text and media.">
+                            Window open · {timeLeft(c.window.expires_at)}
+                        </Badge>
+                    ) : (
+                        <Badge tone="warn" dot title="More than 24 hours since the customer last wrote: only approved templates can be sent.">
+                            Window closed · template only
+                        </Badge>
+                    )}
                     {c.status === 'closed' && <Badge tone="grey">Closed</Badge>}
                 </header>
 
@@ -179,7 +187,7 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
             </div>
 
             <ContactPanel conversation={c} />
-            <TemplateDialog open={templateOpen} onOpenChange={setTemplateOpen} onSend={sendTemplate} />
+            <TemplateDialog open={templateOpen} onOpenChange={setTemplateOpen} wabaAccountId={wabaAccountId} onSend={sendTemplate} />
         </div>
     );
 }

@@ -9,6 +9,8 @@ export const P = {
     ContactsDelete: 'contacts.delete',
     CampaignsView: 'campaigns.view',
     TemplatesView: 'templates.view',
+    TemplatesCreate: 'templates.create',
+    TemplatesSubmit: 'templates.submit',
     ChannelsView: 'channels.view',
     ChannelsManage: 'channels.manage',
     AnalyticsView: 'analytics.view',

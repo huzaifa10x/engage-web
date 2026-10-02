@@ -10,6 +10,7 @@ import type {
     Conversation,
     CursorPage,
     Message,
+    MessageTemplate,
     EntitlementsDetail,
     Invitation,
     Me,
@@ -20,6 +21,7 @@ import type {
     Role,
     SignupAttempt,
     SignupLaunch,
+    TemplateForm,
     Tenant,
     WabaAccount,
 } from './types';
@@ -42,6 +44,8 @@ export const keys = {
     thread: (id: string) => ['inbox', 'thread', id] as const,
     contacts: (filters: object) => ['contacts', filters] as const,
     contactsAll: ['contacts'] as const,
+    templates: (filters: object) => ['templates', filters] as const,
+    templatesAll: ['templates'] as const,
 };
 
 type Data<T> = { data: T };
@@ -165,7 +169,13 @@ export type SendPayload = {
     media_id?: string | null;
     reply_to?: string | null;
     content?: Record<string, unknown>;
-    template?: { name: string; language: string; components?: unknown[] };
+    template?: {
+        name: string;
+        language: string;
+        components?: unknown[];
+        /** Values for the template's placeholders; the server builds Meta's components from them. */
+        variables?: { header?: string[]; body?: string[]; buttons?: Record<string, string> };
+    };
 };
 
 /** Idempotency-Key makes double clicks / retries safe: the server stores the message once. */
@@ -180,3 +190,28 @@ export function sendToConversation(conversationId: string, payload: SendPayload,
 export function startConversation(payload: SendPayload & { phone_number_id: string; contact_id?: string; to?: string }, idempotencyKey: string) {
     return api<{ data: Message }>('messages', { method: 'POST', body: payload, headers: { 'Idempotency-Key': idempotencyKey } }).then((r) => r.data);
 }
+
+// ── Message templates ────────────────────────────────────────────────────────────────────
+
+export type TemplateFilters = { waba_account_id?: string | null; status?: string; q?: string };
+
+/** Stored templates; the server refreshes a stale account from Meta in the background. */
+export const useTemplates = (filters: TemplateFilters = {}, enabled = true, refetchInterval: number | false = false) =>
+    useQuery({
+        queryKey: keys.templates(filters),
+        refetchInterval,
+        queryFn: () => api<{ data: MessageTemplate[]; meta: { last_synced_at: Record<string, string | null> } }>('templates', { query: filters }),
+        enabled,
+        staleTime: 15_000,
+    });
+
+export const createTemplate = (form: TemplateForm) => api<Data<MessageTemplate>>('templates', { method: 'POST', body: form }).then((r) => r.data);
+
+export const deleteTemplate = (id: string) => api(`templates/${id}`, { method: 'DELETE' });
+
+/** Reads everything from Meta right now (statuses, edits, deletions). */
+export const syncTemplates = (wabaAccountId?: string | null) =>
+    api<Data<{ synced: number; removed: number; accounts: number }>>('templates/sync', {
+        method: 'POST',
+        body: wabaAccountId ? { waba_account_id: wabaAccountId } : {},
+    }).then((r) => r.data);

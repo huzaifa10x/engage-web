@@ -231,7 +231,12 @@ export type Message = {
     status: MessageStatus;
     body: string | null;
     content: Record<string, unknown>;
-    template: { name?: string; language?: string; components?: unknown[] } | null;
+    template: {
+        name?: string;
+        language?: string;
+        components?: unknown[];
+        rendered?: { header?: string; body?: string; footer?: string; buttons?: string[] };
+    } | null;
     media: {
         id: string;
         status: 'pending' | 'ready' | 'failed';
@@ -242,7 +247,8 @@ export type Message = {
     } | null;
     wamid: string | null;
     reply_to_wamid: string | null;
-    error: { code: string; title: string | null } | null;
+    /** `hint` is a plain-language explanation of Meta's error code, `detail` Meta's own longer text. */
+    error: { code: string; title: string | null; detail?: string | null; hint?: string | null } | null;
     sent_by_membership_id: string | null;
     timestamp: string | null;
     sent_at: string | null;
@@ -255,3 +261,54 @@ export type Message = {
 export type UploadedMedia = { id: string; type: 'image' | 'video' | 'audio' | 'document' | 'sticker'; mime_type: string; filename: string; file_size: number };
 
 export type CursorPage<T> = { data: T[]; meta: { next_cursor?: string | null; prev_cursor?: string | null; per_page: number } };
+
+// ── Message templates (Phase 4) ──────────────────────────────────────────────────────────
+
+/** Exactly as Meta reports it; unknown future values are shown as-is. */
+export type TemplateStatus = 'APPROVED' | 'PENDING' | 'REJECTED' | 'PAUSED' | 'DISABLED' | 'IN_APPEAL' | 'PENDING_DELETION' | 'DELETED' | (string & {});
+
+export type TemplateButton = { type: string; text?: string; url?: string; phone_number?: string };
+
+export type TemplateComponent = {
+    type: string;
+    format?: string;
+    text?: string;
+    buttons?: TemplateButton[];
+};
+
+export type MessageTemplate = {
+    id: string;
+    waba_account_id: string;
+    meta_template_id: string | null;
+    name: string;
+    language: string;
+    category: string | null;
+    status: TemplateStatus;
+    sendable: boolean;
+    quality_score: string | null;
+    rejected_reason: string | null;
+    parameter_format: string;
+    components: TemplateComponent[];
+    /** What the sender must fill in. `header_format`: TEXT | IMAGE | VIDEO | DOCUMENT | LOCATION | null. */
+    variables: {
+        header: string[];
+        header_format: string | null;
+        body: string[];
+        buttons: { index: number; type: string; text: string; variable: boolean }[];
+    };
+    last_synced_at: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+};
+
+export type TemplateForm = {
+    waba_account_id: string;
+    name: string;
+    language: string;
+    category: 'MARKETING' | 'UTILITY';
+    header?: { text: string; example?: string } | null;
+    body: string;
+    body_examples?: string[];
+    footer?: string | null;
+    buttons?: { type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER'; text: string; url?: string; example?: string; phone_number?: string }[];
+};
