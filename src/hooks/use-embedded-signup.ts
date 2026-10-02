@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { loadFacebookSdk } from '@/lib/facebook-sdk';
 import { startSignup } from '@/lib/queries';
-import type { SignupAttempt, SignupLaunch, SubscribedApp } from '@/lib/types';
+import type { SignupAttempt, SignupConflict, SignupLaunch, SubscribedApp } from '@/lib/types';
 
 /**
  * Embedded Signup v4 (Tech Provider).
@@ -37,7 +37,7 @@ export function useEmbeddedSignup(onFinished?: (attempt: SignupAttempt) => void)
     const [error, setError] = useState<string | null>(null);
     const [numbers, setNumbers] = useState<SignupLaunch['numbers'] | null>(null);
     // Set when the server refuses the number because it is still registered with another application.
-    const [conflict, setConflict] = useState<SubscribedApp[] | null>(null);
+    const [conflict, setConflict] = useState<SignupConflict | null>(null);
 
     const attemptId = useRef<string | null>(null);
     const code = useRef<string | null>(null);
@@ -131,7 +131,10 @@ export function useEmbeddedSignup(onFinished?: (attempt: SignupAttempt) => void)
             }
         } catch (e) {
             if (e instanceof ApiError && e.code === 'number_subscribed_elsewhere') {
-                setConflict(Array.isArray(e.details?.apps) ? (e.details.apps as SubscribedApp[]) : []);
+                setConflict({
+                    apps: Array.isArray(e.details?.apps) ? (e.details.apps as SubscribedApp[]) : [],
+                    sameApp: e.details?.same_app === true,
+                });
                 fail(e.message);
             } else if (e instanceof ApiError && e.code === 'plan_limit_reached') {
                 fail('Your plan has no free WhatsApp number slots. Upgrade or disconnect a number, then connect again.');

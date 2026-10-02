@@ -28,3 +28,19 @@ Naya code pull karne ke liye: ./dev update
 Data clear karke demo data wapas laane ke liye: ./dev reset
 
 (Note: Aap ko sirf engage-web/src folder me kaam karna hy, backend ko touch karne ki zaroorat nahi hy).
+
+
+Redeploy
+Commands on the server
+
+Both together:
+
+bash /opt/engage/backend/deploy/deploy.sh all
+
+Backend only:
+
+bash /opt/engage/backend/deploy/deploy.sh backend
+
+Frontend only:
+
+bash /opt/engage/backend/deploy/deploy.sh web

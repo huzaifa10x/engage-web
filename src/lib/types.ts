@@ -141,10 +141,13 @@ export type WabaAccount = {
     phone_numbers?: PhoneNumber[];
 };
 
-export type SignupStatus = 'started' | 'exchanging' | 'provisioning' | 'completed' | 'failed' | 'cancelled';
+export type SignupStatus = 'started' | 'signup_captured' | 'exchanging' | 'provisioning' | 'completed' | 'failed' | 'cancelled';
 
 /** Another provider's Meta app that a WhatsApp Business Account is still subscribed to. */
 export type SubscribedApp = { id: string; name: string | null; link: string | null };
+
+/** Why a signup was refused: `sameApp` = connected by another 10X Engage environment (same Meta app). */
+export type SignupConflict = { apps: SubscribedApp[]; sameApp: boolean };
 
 export type SignupAttempt = {
     id: string;
@@ -155,7 +158,7 @@ export type SignupAttempt = {
     phone_number_id: string | null;
     waba_account_id: string | null;
     steps: Record<string, { state: 'done' | 'failed'; at: string; error?: string }>;
-    error: { code: string | null; message: string; apps?: SubscribedApp[] } | null;
+    error: { code: string | null; message: string; apps?: SubscribedApp[]; same_app?: boolean } | null;
     created_at: string | null;
     finished_at: string | null;
 };

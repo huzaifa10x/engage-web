@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useEmbeddedSignup, type SignupPhase } from '@/hooks/use-embedded-signup';
 import { keys } from '@/lib/queries';
-import type { SignupAttempt, SubscribedApp } from '@/lib/types';
+import type { SignupAttempt, SignupConflict } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 type Flow = 'standard' | 'coexistence';
@@ -18,13 +18,14 @@ const STEP_LABELS: Record<string, string> = {
     check_other_apps: 'Check the number is not connected to another application',
     fetch_waba: 'Read your WhatsApp Business Account',
     subscribe_webhooks: 'Subscribe to message events',
+    verify_subscription: 'Confirm the subscription is active',
     register_number: 'Register the number with Cloud API',
     fetch_number: 'Check number status and quality',
     coexistence_sync: 'Start syncing contacts and chat history',
 };
 
 function stepsFor(flow: Flow, attempt: SignupAttempt | null): string[] {
-    const base = ['exchange_code', 'check_other_apps', 'fetch_waba', 'subscribe_webhooks'];
+    const base = ['exchange_code', 'check_other_apps', 'fetch_waba', 'subscribe_webhooks', 'verify_subscription'];
     if (attempt?.event === 'FINISH_ONLY_WABA') return base;
 
     return flow === 'coexistence' ? [...base, 'fetch_number', 'coexistence_sync'] : [...base, 'register_number', 'fetch_number'];
@@ -60,7 +61,7 @@ export function ConnectWhatsappDialog({ open, onOpenChange }: { open: boolean; o
                 {signup.phase === 'idle' || signup.phase === 'cancelled' ? (
                     <ChooseFlow flow={flow} setFlow={setFlow} cancelled={signup.phase === 'cancelled'} />
                 ) : signup.phase === 'failed' && signup.conflict ? (
-                    <RegisteredElsewhere apps={signup.conflict} />
+                    <RegisteredElsewhere conflict={signup.conflict} />
                 ) : signup.phase === 'failed' ? (
                     <Failure message={signup.error} />
                 ) : signup.phase === 'completed' ? (
@@ -245,8 +246,8 @@ function Failure({ message }: { message: string | null }) {
     );
 }
 
-function RegisteredElsewhere({ apps }: { apps: SubscribedApp[] }) {
-    const names = apps.map((a) => a.name).filter((n): n is string => Boolean(n));
+function RegisteredElsewhere({ conflict }: { conflict: SignupConflict }) {
+    const names = conflict.apps.map((a) => a.name).filter((n): n is string => Boolean(n));
     const where = names.length ? names.join(', ') : 'another application';
 
     return (
@@ -254,37 +255,53 @@ function RegisteredElsewhere({ apps }: { apps: SubscribedApp[] }) {
             <div className="flex items-start gap-3 rounded-lg border border-bad/20 bg-bad-bg p-4 text-sm">
                 <AlertTriangleIcon className="mt-0.5 size-5 shrink-0 text-bad" />
                 <div>
-                    <p className="font-semibold text-bad">This number is already registered with another application</p>
+                    <p className="font-semibold text-bad">
+                        {conflict.sameApp
+                            ? 'This number is already connected to another 10X Engage environment'
+                            : 'This number is already registered with another application'}
+                    </p>
                     <p className="mt-0.5 text-ink-2">
-                        {names.length ? (
+                        {conflict.sameApp ? (
+                            'It is live on a different 10X Engage site (for example production), which uses the same Meta app.'
+                        ) : names.length ? (
                             <>
                                 It is currently connected to <span className="font-semibold">{where}</span>.
                             </>
                         ) : (
                             'It is currently connected to another WhatsApp platform.'
                         )}{' '}
-                        Nothing was connected to 10X Engage. A number can only be onboarded here once it has been disconnected there.
+                        Nothing was connected here. A number can only be onboarded once it has been disconnected there.
                     </p>
                 </div>
             </div>
             <div className="rounded-lg border p-4 text-sm">
                 <p className="font-semibold">How to fix it</p>
-                <ol className="mt-2 grid list-decimal gap-1.5 pl-5 text-[13px] text-muted-foreground">
-                    <li>
-                        Sign in to {where} and disconnect or remove this WhatsApp number (usually under Settings, Channels or WhatsApp). If you cannot find the
-                        option, ask their support to unsubscribe your WhatsApp Business Account.
-                    </li>
-                    <li>
-                        Or remove the application yourself in Meta Business Settings: open WhatsApp accounts, select your account, and remove {where} from the
-                        partners / connected apps.
-                    </li>
-                    <li>Wait a minute, then come back here and check again.</li>
-                </ol>
-                <Button asChild variant="outline" size="sm" className="mt-3">
-                    <a href="https://business.facebook.com/settings/whatsapp-business-accounts" target="_blank" rel="noreferrer">
-                        Open Meta Business Settings <ExternalLinkIcon />
-                    </a>
-                </Button>
+                {conflict.sameApp ? (
+                    <ol className="mt-2 grid list-decimal gap-1.5 pl-5 text-[13px] text-muted-foreground">
+                        <li>Sign in to the 10X Engage site where this number is currently working.</li>
+                        <li>Open Channels and disconnect the number there.</li>
+                        <li>Wait a minute, then come back here and check again.</li>
+                    </ol>
+                ) : (
+                    <>
+                        <ol className="mt-2 grid list-decimal gap-1.5 pl-5 text-[13px] text-muted-foreground">
+                            <li>
+                                Sign in to {where} and disconnect or remove this WhatsApp number (usually under Settings, Channels or WhatsApp). If you cannot
+                                find the option, ask their support to unsubscribe your WhatsApp Business Account.
+                            </li>
+                            <li>
+                                Or remove the application yourself in Meta Business Settings: open WhatsApp accounts, select your account, and remove {where}{' '}
+                                from the partners / connected apps.
+                            </li>
+                            <li>Wait a minute, then come back here and check again.</li>
+                        </ol>
+                        <Button asChild variant="outline" size="sm" className="mt-3">
+                            <a href="https://business.facebook.com/settings/whatsapp-business-accounts" target="_blank" rel="noreferrer">
+                                Open Meta Business Settings <ExternalLinkIcon />
+                            </a>
+                        </Button>
+                    </>
+                )}
             </div>
         </div>
     );
