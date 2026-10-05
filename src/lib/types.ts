@@ -494,6 +494,8 @@ export type BillingPlan = {
 
 export type Billing = {
     stripe_configured: boolean;
+    /** Stripe publishable key for the in-page card form (safe to expose). */
+    stripe_publishable_key: string | null;
     plan: { key: string; name: string };
     subscription: {
         status: 'trialing' | 'active' | 'past_due' | 'canceled' | 'expired';
@@ -502,6 +504,8 @@ export type Billing = {
         trial_ends_at: string | null;
         current_period_end: string | null;
         cancel_at: string | null;
+        /** true = the saved card is charged at each renewal; false = an invoice is issued and paid by hand. */
+        auto_pay: boolean;
     } | null;
     details: { legal_name: string | null; country: string | null; tax_trn: string | null; billing_email: string | null };
     vat: { applies: boolean; percent: number; country: string };
@@ -523,4 +527,14 @@ export type BillingInvoice = {
     paid_at: string | null;
     hosted_invoice_url: string | null;
     invoice_pdf: string | null;
+};
+
+export type PaymentMethod = { id: string; brand: string; last4: string; exp_month: number; exp_year: number; is_default: boolean };
+
+/** Result of starting a payment: `requires_confirmation` means the browser must confirm it with Stripe (card check / 3-D Secure). */
+export type PaymentStep = {
+    status: 'active' | 'paid' | 'requires_confirmation';
+    updated?: boolean;
+    client_secret: string | null;
+    payment_method: string | null;
 };

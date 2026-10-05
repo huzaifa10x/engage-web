@@ -4,6 +4,8 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api, upload } from './api';
 import type {
+    PaymentMethod,
+    PaymentStep,
     CampaignPreview,
     Billing,
     BillingInvoice,
@@ -369,18 +371,7 @@ export const requestConsent = (conversationId: string) =>
 
 // ── Billing (Stripe) ─────────────────────────────────────────────────────────────────────
 
-/** `awaitingPayment`: just back from Stripe Checkout — poll until Stripe's webhook has confirmed the plan. */
-export const useBilling = (enabled = true, awaitingPayment = false) =>
-    useQuery({
-        queryKey: ['billing'],
-        queryFn: () => api<Data<Billing>>('billing').then((r) => r.data),
-        enabled,
-        refetchInterval: (query) => {
-            const sub = query.state.data?.subscription;
-
-            return awaitingPayment && !(sub?.provider === 'stripe' && sub.status === 'active') ? 2500 : false;
-        },
-    });
+export const useBilling = (enabled = true) => useQuery({ queryKey: ['billing'], queryFn: () => api<Data<Billing>>('billing').then((r) => r.data), enabled });
 
 export const useInvoices = (enabled = true) =>
     useQuery({ queryKey: ['billing', 'invoices'], queryFn: () => api<Data<BillingInvoice[]>>('billing/invoices').then((r) => r.data), enabled });
@@ -388,11 +379,30 @@ export const useInvoices = (enabled = true) =>
 export const updateBillingDetails = (body: { legal_name: string | null; country: string; tax_trn: string | null; billing_email: string | null }) =>
     api<Data<Billing>>('billing/details', { method: 'PUT', body }).then((r) => r.data);
 
-/** Returns a Stripe Checkout URL to redirect to, or `updated` when the plan was switched in place. */
-export const startCheckout = (plan: string, interval: 'monthly' | 'yearly') =>
-    api<Data<{ url: string | null; updated: boolean }>>('billing/checkout', { method: 'POST', body: { plan, interval } }).then((r) => r.data);
+/** Buy or switch plan with a saved card (no redirect). */
+export const subscribeToPlan = (plan: string, interval: 'monthly' | 'yearly', paymentMethod?: string | null) =>
+    api<Data<PaymentStep>>('billing/subscribe', { method: 'POST', body: { plan, interval, payment_method: paymentMethod ?? null } }).then((r) => r.data);
 
-export const openBillingPortal = () => api<Data<{ url: string }>>('billing/portal', { method: 'POST' }).then((r) => r.data.url);
+/** After the in-page payment step: ask the server to read the result from Stripe now. */
+export const refreshBilling = (abandon = false) =>
+    api<Data<{ status: 'active' | 'pending' | 'failed' }>>('billing/refresh', { method: 'POST', body: { abandon } }).then((r) => r.data.status);
+
+export const usePaymentMethods = (enabled = true) =>
+    useQuery({ queryKey: ['billing', 'payment-methods'], queryFn: () => api<Data<PaymentMethod[]>>('billing/payment-methods').then((r) => r.data), enabled });
+
+export const createSetupIntent = () =>
+    api<Data<{ client_secret: string }>>('billing/payment-methods/setup-intent', { method: 'POST' }).then((r) => r.data.client_secret);
+
+export const setDefaultPaymentMethod = (id: string) =>
+    api<Data<PaymentMethod[]>>(`billing/payment-methods/${id}/default`, { method: 'PUT' }).then((r) => r.data);
+
+export const removePaymentMethod = (id: string) => api<Data<PaymentMethod[]>>(`billing/payment-methods/${id}`, { method: 'DELETE' }).then((r) => r.data);
+
+export const setAutoPay = (enabled: boolean) => api<Data<Billing>>('billing/auto-pay', { method: 'PUT', body: { enabled } }).then((r) => r.data);
+
+export const payInvoice = (id: string) => api<Data<PaymentStep>>(`billing/invoices/${id}/pay`, { method: 'POST' }).then((r) => r.data);
+
+export const refreshInvoice = (id: string) => api<Data<BillingInvoice[]>>(`billing/invoices/${id}/refresh`, { method: 'POST' }).then((r) => r.data);
 
 export const cancelSubscription = () => api<Data<Billing>>('billing/cancel', { method: 'POST' }).then((r) => r.data);
 
