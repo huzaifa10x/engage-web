@@ -10,11 +10,11 @@ import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { api } from '@/lib/api';
+import { api, errorMessage } from '@/lib/api';
 import { newId } from '@/lib/id';
 import { dayLabel, timeLeft } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { keys, sendToConversation, type SendPayload, useConversation, useMembers, usePhoneNumbers, useThread } from '@/lib/queries';
+import { keys, requestConsent, sendToConversation, type SendPayload, useConversation, useMembers, usePhoneNumbers, useThread } from '@/lib/queries';
 import type { Message } from '@/lib/types';
 
 import { Composer } from './composer';
@@ -30,6 +30,7 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
     const members = useMembers(can(P.TeamView));
     const [replyTo, setReplyTo] = useState<Message | null>(null);
     const [templateOpen, setTemplateOpen] = useState(false);
+    const [askingConsent, setAskingConsent] = useState(false);
     const scroller = useRef<HTMLDivElement>(null);
     const pinnedToBottom = useRef(true);
     const readFor = useRef<string | null>(null);
@@ -128,6 +129,28 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                         </Badge>
                     )}
                     {c.status === 'closed' && <Badge tone="grey">Closed</Badge>}
+                    {c.window.open && can(P.InboxReply) && contact && contact.consent_state === 'unknown' && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={askingConsent}
+                            title="Sends a question with Subscribe / No thanks buttons. A tap on Subscribe is recorded as marketing consent."
+                            onClick={async () => {
+                                setAskingConsent(true);
+                                try {
+                                    await requestConsent(c.id);
+                                    toast.success('Consent request sent');
+                                    void qc.invalidateQueries({ queryKey: keys.thread(c.id) });
+                                } catch (e) {
+                                    toast.error(errorMessage(e));
+                                } finally {
+                                    setAskingConsent(false);
+                                }
+                            }}
+                        >
+                            {askingConsent ? 'Sending…' : 'Ask for consent'}
+                        </Button>
+                    )}
                 </header>
 
                 <div

@@ -77,6 +77,7 @@ function Body({ message }: { message: Message }) {
     const c = message.content as Record<string, unknown>;
 
     if (message.status === 'deleted' || message.revoked_at) return <p className="text-[13.5px] italic opacity-70">This message was deleted</p>;
+    if (message.redacted) return <p className="text-[13.5px] italic opacity-70">Content removed by your retention policy</p>;
 
     switch (message.type) {
         case 'text':

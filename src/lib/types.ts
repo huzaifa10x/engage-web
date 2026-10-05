@@ -257,6 +257,8 @@ export type Message = {
     read_at: string | null;
     edited_at: string | null;
     revoked_at: string | null;
+    /** Content removed by the workspace's retention policy; the delivery record remains. */
+    redacted?: boolean;
 };
 
 export type UploadedMedia = { id: string; type: 'image' | 'video' | 'audio' | 'document' | 'sticker'; mime_type: string; filename: string; file_size: number };
@@ -396,4 +398,40 @@ export type AnalyticsOverview = {
     daily: { date: string; inbound: number; outbound: number }[];
     numbers: (Funnel & { id: string; display: string | null; quality_rating: string | null; inbound: number; outbound: number })[];
     top_templates: (Funnel & { name: string; total: number })[];
+};
+
+// ── Compliance ───────────────────────────────────────────────────────────────────────────
+
+export type ComplianceCheck = { key: string; status: 'ok' | 'info' | 'warn' | 'bad'; title: string; detail: string };
+
+export type ComplianceOverview = {
+    contacts: { total: number; opted_in: number; unknown: number; opted_out: number; marketing_stopped_in_whatsapp: number };
+    last_30_days: { opt_ins: number; opt_outs: number };
+    checks: ComplianceCheck[];
+};
+
+export type ComplianceSettings = {
+    opt_out_keywords: string[];
+    opt_in_keywords: string[];
+    locked_opt_out_keywords: string[];
+    locked_opt_in_keywords: string[];
+    confirm_opt_out: boolean;
+    opt_out_reply: string;
+    confirm_opt_in: boolean;
+    opt_in_reply: string;
+    consent_request_text: string;
+    retention_enabled: boolean;
+    message_retention_days: number;
+    media_retention_days: number;
+    min_message_retention_days: number;
+    min_media_retention_days: number;
+};
+
+export type ConsentEvent = {
+    id: string;
+    action: 'opted_in' | 'opted_out' | 'marketing_opted_in' | 'marketing_opted_out' | (string & {});
+    source: string;
+    detail: string | null;
+    created_at: string | null;
+    contact: { id: string; display_name: string; phone: string | null } | null;
 };

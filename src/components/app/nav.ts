@@ -62,7 +62,7 @@ export const NAV: NavSection[] = [
         items: [
             { label: 'Channels', icon: PhoneIcon, href: '/channels', permission: P.ChannelsView },
             { label: 'Team & Roles', icon: UsersIcon, href: '/team', permission: P.TeamView },
-            { label: 'Compliance', icon: ShieldCheckIcon },
+            { label: 'Compliance', icon: ShieldCheckIcon, href: '/compliance', permission: P.ComplianceView },
             { label: 'Integrations', icon: PlugIcon },
             { label: 'Developer', icon: CodeIcon },
             { label: 'Billing', icon: CreditCardIcon, href: '/settings?tab=plan', permission: P.BillingView },

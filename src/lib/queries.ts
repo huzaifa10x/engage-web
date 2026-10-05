@@ -4,6 +4,9 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api, upload } from './api';
 import type {
+    ComplianceOverview,
+    ComplianceSettings,
+    ConsentEvent,
     AnalyticsOverview,
     Campaign,
     CampaignAudience,
@@ -312,3 +315,27 @@ export const useAnalytics = (filters: { days: number; phone_number_id?: string |
         enabled,
         refetchInterval: 60_000,
     });
+
+// ── Compliance ───────────────────────────────────────────────────────────────────────────
+
+export const useComplianceOverview = (enabled = true) =>
+    useQuery({ queryKey: ['compliance', 'overview'], queryFn: () => api<Data<ComplianceOverview>>('compliance/overview').then((r) => r.data), enabled });
+
+export const useComplianceSettings = (enabled = true) =>
+    useQuery({ queryKey: ['compliance', 'settings'], queryFn: () => api<Data<ComplianceSettings>>('compliance/settings').then((r) => r.data), enabled });
+
+export const updateComplianceSettings = (body: Partial<ComplianceSettings>) =>
+    api<Data<ComplianceSettings>>('compliance/settings', { method: 'PUT', body }).then((r) => r.data);
+
+export const useConsentEvents = (filters: { action?: string; q?: string }, enabled = true) =>
+    useInfiniteQuery({
+        queryKey: ['compliance', 'events', filters],
+        queryFn: ({ pageParam }) => api<CursorPage<ConsentEvent>>('compliance/consent-events', { query: { ...filters, cursor: pageParam, per_page: 50 } }),
+        initialPageParam: null as string | null,
+        getNextPageParam: (last) => last.meta.next_cursor ?? null,
+        enabled,
+    });
+
+/** Sends the consent question with Subscribe / No thanks buttons into an open conversation. */
+export const requestConsent = (conversationId: string) =>
+    api<Data<Message>>(`conversations/${conversationId}/consent-request`, { method: 'POST' }).then((r) => r.data);
