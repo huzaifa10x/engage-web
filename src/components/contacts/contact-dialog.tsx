@@ -15,8 +15,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
 import { applyServerErrors } from '@/lib/form';
-import { keys } from '@/lib/queries';
+import { keys, useContactFields, useTags } from '@/lib/queries';
 import type { Contact } from '@/lib/types';
+
+import { TagInput } from './tag-input';
 
 const schema = z.object({
     phone: z.string().trim(),
@@ -31,6 +33,18 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
     const qc = useQueryClient();
     const editing = !!contact;
     const [formError, setFormError] = useState<string | null>(null);
+    const tagList = useTags(open);
+    const fields = useContactFields(open);
+    // Tags and custom fields live outside the form schema; they reset whenever another contact is opened.
+    const [loaded, setLoaded] = useState<string | null | undefined>(undefined);
+    const [tags, setTags] = useState<string[]>([]);
+    const [attributes, setAttributes] = useState<Record<string, string>>({});
+    if (open && loaded !== (contact?.id ?? null)) {
+        setLoaded(contact?.id ?? null);
+        setTags(contact?.tags ?? []);
+        setAttributes(Object.fromEntries(Object.entries(contact?.attributes ?? {}).map(([k, v]) => [k, v == null ? '' : String(v)])));
+    }
+    if (!open && loaded !== undefined) setLoaded(undefined);
     const { register, control, handleSubmit, setError, reset, formState } = useForm<Values>({
         resolver: zodResolver(schema),
         values: { phone: contact?.phone ?? '', name: contact?.name ?? '', email: contact?.email ?? '', opted_in: false },
@@ -43,15 +57,21 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
 
             return;
         }
+        const extra = Object.fromEntries(Object.entries(attributes).filter(([, value]) => value.trim() !== ''));
         try {
             if (editing) {
-                await api(`contacts/${contact.id}`, { method: 'PATCH', body: { name: v.name || null, email: v.email || null } });
+                await api(`contacts/${contact.id}`, { method: 'PATCH', body: { name: v.name || null, email: v.email || null, tags, attributes: extra } });
             } else {
-                await api('contacts', { method: 'POST', body: { phone: v.phone, name: v.name || null, email: v.email || null, opted_in: v.opted_in } });
+                await api('contacts', {
+                    method: 'POST',
+                    body: { phone: v.phone, name: v.name || null, email: v.email || null, opted_in: v.opted_in, tags, attributes: extra },
+                });
             }
             toast.success(editing ? 'Contact updated' : 'Contact added');
             void qc.invalidateQueries({ queryKey: keys.contactsAll });
             void qc.invalidateQueries({ queryKey: keys.conversationsAll });
+            void qc.invalidateQueries({ queryKey: keys.tags });
+            void qc.invalidateQueries({ queryKey: keys.segments });
             reset();
             onOpenChange(false);
         } catch (e) {
@@ -61,7 +81,7 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent>
+            <DialogContent className="max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle>{editing ? 'Edit contact' : 'Add contact'}</DialogTitle>
                     <DialogDescription>
@@ -84,6 +104,23 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
                     <Field label="Email" htmlFor="c-email" error={formState.errors.email?.message}>
                         <Input id="c-email" type="email" aria-invalid={!!formState.errors.email} {...register('email')} />
                     </Field>
+                    <Field label="Tags" htmlFor="c-tags" hint="Used to build segments and campaign audiences">
+                        <TagInput id="c-tags" value={tags} onChange={setTags} suggestions={(tagList.data ?? []).map((t) => t.name)} />
+                    </Field>
+                    {(fields.data ?? []).length > 0 && (
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            {(fields.data ?? []).map((f) => (
+                                <Field key={f.id} label={f.label} htmlFor={`c-f-${f.key}`}>
+                                    <Input
+                                        id={`c-f-${f.key}`}
+                                        type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
+                                        value={attributes[f.key] ?? ''}
+                                        onChange={(e) => setAttributes({ ...attributes, [f.key]: e.target.value })}
+                                    />
+                                </Field>
+                            ))}
+                        </div>
+                    )}
                     {!editing && (
                         <div className="flex items-start gap-2">
                             <Controller

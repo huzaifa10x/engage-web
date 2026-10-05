@@ -2,8 +2,19 @@
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { api } from './api';
+import { api, upload } from './api';
 import type {
+    AnalyticsOverview,
+    Campaign,
+    CampaignAudience,
+    CampaignForm,
+    CampaignRecipient,
+    ContactField,
+    ImportResult,
+    Segment,
+    SegmentCounts,
+    SegmentRule,
+    Tag,
     AuditEntry,
     ConsentState,
     Contact,
@@ -46,6 +57,12 @@ export const keys = {
     contactsAll: ['contacts'] as const,
     templates: (filters: object) => ['templates', filters] as const,
     templatesAll: ['templates'] as const,
+    tags: ['tags'] as const,
+    contactFields: ['contact-fields'] as const,
+    segments: ['segments'] as const,
+    campaigns: ['campaigns'] as const,
+    campaign: (id: string) => ['campaigns', id] as const,
+    analytics: (filters: object) => ['analytics', filters] as const,
 };
 
 type Data<T> = { data: T };
@@ -153,7 +170,7 @@ export const useThread = (id: string | null, refetchInterval: number | false = f
         enabled: id !== null,
     });
 
-export type ContactFilters = { q?: string; consent?: ConsentState };
+export type ContactFilters = { q?: string; consent?: ConsentState; tag?: string; segment_id?: string };
 
 export const useContacts = (filters: ContactFilters) =>
     useInfiniteQuery({
@@ -215,3 +232,83 @@ export const syncTemplates = (wabaAccountId?: string | null) =>
         method: 'POST',
         body: wabaAccountId ? { waba_account_id: wabaAccountId } : {},
     }).then((r) => r.data);
+
+// ── Contacts & CRM ───────────────────────────────────────────────────────────────────────
+
+export const useTags = (enabled = true) => useQuery({ queryKey: keys.tags, queryFn: () => api<Data<Tag[]>>('tags').then((r) => r.data), enabled });
+
+export const deleteTag = (id: string) => api(`tags/${id}`, { method: 'DELETE' });
+
+export const useContactFields = (enabled = true) =>
+    useQuery({ queryKey: keys.contactFields, queryFn: () => api<Data<ContactField[]>>('contact-fields').then((r) => r.data), enabled, staleTime: 60_000 });
+
+export const createContactField = (label: string, type: ContactField['type']) =>
+    api<Data<ContactField>>('contact-fields', { method: 'POST', body: { label, type } }).then((r) => r.data);
+
+export const deleteContactField = (id: string) => api(`contact-fields/${id}`, { method: 'DELETE' });
+
+export const useSegments = (enabled = true) =>
+    useQuery({ queryKey: keys.segments, queryFn: () => api<Data<Segment[]>>('segments').then((r) => r.data), enabled });
+
+export const saveSegment = (id: string | null, body: { name: string; match: 'all' | 'any'; rules: SegmentRule[] }) =>
+    api<Data<Segment>>(id ? `segments/${id}` : 'segments', { method: id ? 'PATCH' : 'POST', body }).then((r) => r.data);
+
+export const deleteSegment = (id: string) => api(`segments/${id}`, { method: 'DELETE' });
+
+export const previewSegment = (body: { match: 'all' | 'any'; rules: SegmentRule[] }) =>
+    api<Data<SegmentCounts>>('segments/preview', { method: 'POST', body }).then((r) => r.data);
+
+export const importContacts = (file: File, tags: string[], optedIn: boolean) => {
+    const form = new FormData();
+    form.append('file', file);
+    tags.forEach((t) => form.append('tags[]', t));
+    if (optedIn) form.append('opted_in', '1');
+
+    return upload<Data<ImportResult>>('contacts/import', form).then((r) => r.data);
+};
+
+// ── Campaigns ────────────────────────────────────────────────────────────────────────────
+
+/** Polls while anything is sending or scheduled, so delivery numbers move without a refresh. */
+export const useCampaigns = (enabled = true) =>
+    useQuery({
+        queryKey: keys.campaigns,
+        queryFn: () => api<Data<Campaign[]>>('campaigns').then((r) => r.data),
+        enabled,
+        refetchInterval: (query) => (query.state.data?.some((c) => c.status === 'sending' || c.status === 'scheduled') ? 5_000 : 30_000),
+    });
+
+export const saveCampaign = (id: string | null, body: CampaignForm) =>
+    api<Data<Campaign>>(id ? `campaigns/${id}` : 'campaigns', { method: id ? 'PATCH' : 'POST', body }).then((r) => r.data);
+
+export const launchCampaign = (id: string, scheduledAt?: string | null) =>
+    api<Data<Campaign>>(`campaigns/${id}/launch`, { method: 'POST', body: scheduledAt ? { scheduled_at: scheduledAt } : {} }).then((r) => r.data);
+
+export const cancelCampaign = (id: string) => api<Data<Campaign>>(`campaigns/${id}/cancel`, { method: 'POST' }).then((r) => r.data);
+
+export const deleteCampaign = (id: string) => api(`campaigns/${id}`, { method: 'DELETE' });
+
+export const useCampaignAudience = (segmentId: string | null, templateId: string | null, enabled = true) =>
+    useQuery({
+        queryKey: ['campaign-audience', segmentId, templateId],
+        queryFn: () => api<Data<CampaignAudience>>('campaigns/audience', { query: { segment_id: segmentId, template_id: templateId } }).then((r) => r.data),
+        enabled,
+    });
+
+export const useCampaignRecipients = (id: string | null, status?: string) =>
+    useQuery({
+        queryKey: ['campaign-recipients', id, status ?? 'all'],
+        queryFn: () => api<{ data: CampaignRecipient[] }>(`campaigns/${id}/recipients`, { query: { status, per_page: 100 } }).then((r) => r.data),
+        enabled: id !== null,
+        refetchInterval: 10_000,
+    });
+
+// ── Analytics ────────────────────────────────────────────────────────────────────────────
+
+export const useAnalytics = (filters: { days: number; phone_number_id?: string | null }, enabled = true) =>
+    useQuery({
+        queryKey: keys.analytics(filters),
+        queryFn: () => api<Data<AnalyticsOverview>>('analytics/overview', { query: filters }).then((r) => r.data),
+        enabled,
+        refetchInterval: 60_000,
+    });

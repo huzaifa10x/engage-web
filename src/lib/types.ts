@@ -197,6 +197,7 @@ export type Contact = {
     bsuid: string | null;
     email: string | null;
     attributes: Record<string, unknown>;
+    tags: string[];
     source: string;
     consent_state: ConsentState;
     opted_out_at: string | null;
@@ -314,4 +315,85 @@ export type TemplateForm = {
     body_examples?: string[];
     footer?: string | null;
     buttons?: { type: 'QUICK_REPLY' | 'URL' | 'PHONE_NUMBER'; text: string; url?: string; example?: string; phone_number?: string }[];
+};
+
+// ── Contacts & CRM ───────────────────────────────────────────────────────────────────────
+
+export type Tag = { id: string; name: string; contacts: number };
+
+export type ContactField = { id: string; key: string; label: string; type: 'text' | 'number' | 'date' };
+
+/** One condition of a segment. `field` is a built-in name or `attr:<custom field key>`. */
+export type SegmentRule = { field: string; op: string; value?: string | number };
+
+export type SegmentCounts = { matched: number; eligible_marketing: number; eligible_utility: number };
+
+/** A saved rule, not a stored list: who matches is worked out whenever it is used. */
+export type Segment = { id: string; name: string; match: 'all' | 'any'; rules: SegmentRule[]; updated_at: string | null; counts?: SegmentCounts };
+
+export type ImportResult = { created: number; updated: number; skipped: number; total: number; errors: { row: number; message: string }[] };
+
+// ── Campaigns ────────────────────────────────────────────────────────────────────────────
+
+export type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'completed' | 'cancelled' | 'failed';
+
+export type CampaignStats = {
+    matched: number;
+    eligible: number;
+    pending: number;
+    skipped: number;
+    queued: number;
+    sent: number;
+    delivered: number;
+    read: number;
+    failed: number;
+};
+
+export type Campaign = {
+    id: string;
+    name: string;
+    status: CampaignStatus;
+    phone_number: { id: string; display: string | null } | null;
+    template: { id: string | null; name: string; language: string; category: string | null };
+    variables: { header: string[]; body: string[]; buttons: Record<string, string> };
+    media_id: string | null;
+    segment_id: string | null;
+    audience_name: string | null;
+    scheduled_at: string | null;
+    started_at: string | null;
+    completed_at: string | null;
+    failure_reason: string | null;
+    stats: CampaignStats;
+    created_at: string | null;
+};
+
+export type CampaignForm = {
+    name: string;
+    phone_number_id: string;
+    template_id: string;
+    segment_id: string | null;
+    media_id: string | null;
+    variables: { header: string[]; body: string[]; buttons: Record<string, string> };
+};
+
+export type CampaignAudience = { matched: number; eligible: number; category: string | null; reach_limit: number | null; reach_used: number };
+
+export type CampaignRecipient = {
+    id: string;
+    contact: { id: string; display_name: string; phone: string | null } | null;
+    status: string;
+    reason: string | null;
+};
+
+// ── Analytics ────────────────────────────────────────────────────────────────────────────
+
+export type Funnel = { sent: number; delivered: number; read: number; failed: number };
+
+export type AnalyticsOverview = {
+    range: { days: number; from: string; timezone: string };
+    totals: Funnel & { outbound: number; inbound: number; open_conversations: number; contacts: number; new_contacts: number };
+    by_origin: { agent: number; campaign: number; api: number; automation: number };
+    daily: { date: string; inbound: number; outbound: number }[];
+    numbers: (Funnel & { id: string; display: string | null; quality_rating: string | null; inbound: number; outbound: number })[];
+    top_templates: (Funnel & { name: string; total: number })[];
 };
