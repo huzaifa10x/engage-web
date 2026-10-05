@@ -45,20 +45,40 @@ export function TemplateStatusBadge({ template }: { template: Pick<MessageTempla
 }
 
 /** WhatsApp-style preview of a template, with variables replaced when values are given. */
-export function TemplatePreview({ template, header = [], body = [] }: { template: MessageTemplate; header?: string[]; body?: string[] }) {
+export function TemplatePreview({
+    template,
+    header = [],
+    body = [],
+    mediaUrl,
+}: {
+    template: MessageTemplate;
+    header?: string[];
+    body?: string[];
+    /** Local preview of a header image being attached; otherwise Meta's sample URL is used. */
+    mediaUrl?: string | null;
+}) {
     const fill = (text: string, names: string[], values: string[]) =>
         names.reduce((out, name, i) => out.replaceAll(new RegExp(`\\{\\{\\s*${name}\\s*\\}\\}`, 'g'), values[i]?.trim() ? values[i] : `{{${name}}}`), text);
     const part = (type: string) => template.components.find((c) => c.type?.toUpperCase() === type);
     const head = part('HEADER');
     const buttons = part('BUTTONS')?.buttons ?? [];
     const format = template.variables.header_format;
+    const handle = head?.example?.header_handle?.[0];
+    const sample = mediaUrl ?? (handle?.startsWith('https://') ? handle : null);
 
     return (
         <div className="rounded-lg bg-[#efeae2] p-3">
             <div className="max-w-sm rounded-lg rounded-tl-sm bg-card px-3 py-2 text-[13.5px] shadow-[0_1px_1px_rgba(15,23,42,.08)]">
                 {head && format === 'TEXT' && <p className="mb-1 font-semibold">{fill(head.text ?? '', template.variables.header, header)}</p>}
-                {head && format && format !== 'TEXT' && (
-                    <p className="mb-1.5 rounded bg-muted px-2 py-3 text-center text-[12px] text-muted-foreground">{format.toLowerCase()} header</p>
+                {head && format === 'IMAGE' && sample ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- remote sample from Meta / local object URL
+                    <img src={sample} alt="Header image" className="mb-1.5 max-h-44 w-full rounded object-cover" />
+                ) : (
+                    head &&
+                    format &&
+                    format !== 'TEXT' && (
+                        <p className="mb-1.5 rounded bg-muted px-2 py-5 text-center text-[12px] text-muted-foreground">{format.toLowerCase()} header</p>
+                    )
                 )}
                 <p className="break-words whitespace-pre-wrap">{fill(part('BODY')?.text ?? '', template.variables.body, body)}</p>
                 {part('FOOTER')?.text && <p className="mt-1 text-[12px] text-muted-foreground">{part('FOOTER')?.text}</p>}

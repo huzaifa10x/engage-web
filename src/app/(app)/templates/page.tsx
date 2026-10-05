@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { FileTextIcon, PlusIcon, RefreshCwIcon, SearchIcon, Trash2Icon } from 'lucide-react';
+import { FileTextIcon, PlusIcon, SearchIcon, Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -30,14 +30,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { errorMessage } from '@/lib/api';
 import { humanize, relative } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { deleteTemplate, keys, syncTemplates, useTemplates, useWabaAccounts } from '@/lib/queries';
+import { useTemplatesRealtime } from '@/hooks/use-templates-realtime';
+import { deleteTemplate, keys, useTemplates, useWabaAccounts } from '@/lib/queries';
 import type { MessageTemplate } from '@/lib/types';
 
 const ALL = '__all__';
 const STATUSES = ['APPROVED', 'PENDING', 'REJECTED', 'PAUSED', 'DISABLED'];
 
 export default function TemplatesPage() {
-    const { can } = useSession();
+    const { can, me } = useSession();
     const qc = useQueryClient();
     const allowed = can(P.TemplatesView);
     const accounts = (useWabaAccounts(allowed && can(P.ChannelsView)).data ?? []).filter((a) => a.status === 'connected');
@@ -48,27 +49,16 @@ export default function TemplatesPage() {
     const [viewing, setViewing] = useState<MessageTemplate | null>(null);
     const [deleting, setDeleting] = useState<MessageTemplate | null>(null);
 
-    const [watch, setWatch] = useState(false);
-    // While something is in review, keep checking so the status flips without a manual refresh.
-    const templates = useTemplates({ waba_account_id: accountId }, allowed, watch ? 20_000 : false);
+    const [reviewing, setReviewing] = useState(false);
+    // Statuses follow Meta automatically. Live updates arrive over the realtime channel; polling
+    // is the safety net (faster while a template is waiting for Meta's review).
+    const live = useTemplatesRealtime(me.active_tenant_id, allowed);
+    const templates = useTemplates({ waba_account_id: accountId }, allowed, reviewing ? 10_000 : live ? 60_000 : 20_000);
     const all = templates.data?.data ?? [];
     const inReview = all.some((t) => t.status === 'PENDING');
-    if (inReview !== watch) setWatch(inReview);
+    if (inReview !== reviewing) setReviewing(inReview);
 
     const rows = all.filter((t) => (!status || t.status === status) && (!search.trim() || t.name.includes(search.trim().toLowerCase())));
-    const synced = Object.values(templates.data?.meta.last_synced_at ?? {})
-        .filter((v): v is string => Boolean(v))
-        .sort()[0];
-
-    const sync = useMutation({
-        mutationFn: () => syncTemplates(accountId),
-        onSuccess: (r) => {
-            toast.success(`Synced ${r.synced} template${r.synced === 1 ? '' : 's'} from Meta${r.removed ? `, ${r.removed} removed` : ''}`);
-            void qc.invalidateQueries({ queryKey: keys.templatesAll });
-        },
-        onError: (e) => toast.error(errorMessage(e)),
-    });
-
     const remove = useMutation({
         mutationFn: (id: string) => deleteTemplate(id),
         onSuccess: () => {
@@ -87,9 +77,6 @@ export default function TemplatesPage() {
                 description="Message templates approved by Meta. They are required to start a conversation or to write to a customer after the 24-hour window has closed."
                 actions={
                     <>
-                        <Button variant="outline" onClick={() => sync.mutate()} disabled={sync.isPending}>
-                            <RefreshCwIcon className={sync.isPending ? 'animate-spin' : undefined} /> Sync from Meta
-                        </Button>
                         {can(P.TemplatesSubmit) && (
                             <Button onClick={() => setCreating(true)} disabled={accounts.length === 0}>
                                 <PlusIcon /> New template
@@ -138,7 +125,10 @@ export default function TemplatesPage() {
                         </SelectContent>
                     </Select>
                 )}
-                <span className="text-[12.5px] text-muted-foreground">{synced ? `Synced with Meta ${relative(synced)}` : 'Not synced yet'}</span>
+                <span className="flex items-center gap-1.5 text-[12.5px] text-muted-foreground">
+                    <span className={`size-2 rounded-full ${templates.isError ? 'bg-bad' : 'bg-good'}`} aria-hidden />
+                    {templates.isError ? 'Could not reach the server' : 'Statuses update automatically from Meta'}
+                </span>
             </div>
 
             <Card className="overflow-hidden p-0">
@@ -156,7 +146,7 @@ export default function TemplatesPage() {
                         title={all.length === 0 ? 'No templates yet' : 'No templates match these filters'}
                         description={
                             all.length === 0
-                                ? 'Create your first template, or press “Sync from Meta” if you already have templates in WhatsApp Manager.'
+                                ? 'Create your first template. Templates you already have in WhatsApp Manager appear here automatically within a minute.'
                                 : undefined
                         }
                     />

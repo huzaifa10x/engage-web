@@ -274,6 +274,8 @@ export type TemplateComponent = {
     format?: string;
     text?: string;
     buttons?: TemplateButton[];
+    /** Media headers: Meta returns a preview URL of the approved sample in `header_handle`. */
+    example?: { header_handle?: string[]; header_text?: string[]; body_text?: string[][] };
 };
 
 export type MessageTemplate = {
@@ -306,7 +308,8 @@ export type TemplateForm = {
     name: string;
     language: string;
     category: 'MARKETING' | 'UTILITY';
-    header?: { text: string; example?: string } | null;
+    /** TEXT (default) uses `text`; IMAGE / VIDEO / DOCUMENT use `media_id` of an uploaded sample file. */
+    header?: { format?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT'; text?: string; example?: string; media_id?: string } | null;
     body: string;
     body_examples?: string[];
     footer?: string | null;

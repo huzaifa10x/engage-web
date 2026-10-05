@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2Icon, PaperclipIcon, RefreshCwIcon } from 'lucide-react';
+import { Loader2Icon, PaperclipIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRef, useState } from 'react';
 
@@ -9,7 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { errorMessage, upload } from '@/lib/api';
-import { type SendPayload, syncTemplates, useTemplates } from '@/lib/queries';
+import { useSession } from '@/components/app/session';
+import { useTemplatesRealtime } from '@/hooks/use-templates-realtime';
+import { type SendPayload, useTemplates } from '@/lib/queries';
 import type { MessageTemplate, UploadedMedia } from '@/lib/types';
 
 import { TemplatePreview } from './template-status';
@@ -72,8 +74,10 @@ export function TemplatePicker({
     value: TemplateSelection;
     onChange: (v: TemplateSelection) => void;
 }) {
-    const templates = useTemplates({ waba_account_id: wabaAccountId }, wabaAccountId !== null);
-    const [syncing, setSyncing] = useState(false);
+    const { me } = useSession();
+    // Statuses follow Meta automatically: live updates, with a slow poll as a safety net.
+    const live = useTemplatesRealtime(me.active_tenant_id, wabaAccountId !== null);
+    const templates = useTemplates({ waba_account_id: wabaAccountId }, wabaAccountId !== null, live ? 60_000 : 15_000);
     const [uploading, setUploading] = useState(false);
     const [uploadError, setUploadError] = useState<string | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
@@ -82,18 +86,6 @@ export function TemplatePicker({
     const approved = all.filter((t) => t.sendable);
     const t = value.template;
     const set = (patch: Partial<TemplateSelection>) => onChange({ ...value, ...patch });
-
-    const sync = async () => {
-        setSyncing(true);
-        try {
-            await syncTemplates(wabaAccountId);
-            await templates.refetch();
-        } catch (e) {
-            setUploadError(errorMessage(e));
-        } finally {
-            setSyncing(false);
-        }
-    };
 
     const pickFile = async (file: File | undefined) => {
         if (!file) return;
@@ -129,7 +121,7 @@ export function TemplatePicker({
                         : approved.length === 0
                           ? all.length > 0
                               ? 'None of your templates is approved yet. Templates in review appear here once Meta approves them.'
-                              : 'No templates yet. Create one on the Templates page, or sync if you created it in WhatsApp Manager.'
+                              : 'No templates yet. Create one on the Templates page; templates made in WhatsApp Manager appear here automatically.'
                           : `${approved.length} approved template${approved.length === 1 ? '' : 's'}`
                 }
             >
@@ -150,9 +142,6 @@ export function TemplatePicker({
                             ))}
                         </SelectContent>
                     </Select>
-                    <Button type="button" variant="outline" size="icon" onClick={sync} disabled={syncing} aria-label="Sync templates from Meta">
-                        {syncing ? <Loader2Icon className="animate-spin" /> : <RefreshCwIcon />}
-                    </Button>
                 </div>
             </Field>
             {approved.length === 0 && !templates.isLoading && (
