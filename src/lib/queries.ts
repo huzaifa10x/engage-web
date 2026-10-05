@@ -4,6 +4,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api, upload } from './api';
 import type {
+    CampaignPreview,
     Billing,
     BillingInvoice,
     ComplianceOverview,
@@ -280,7 +281,7 @@ export const useCampaigns = (enabled = true) =>
         queryKey: keys.campaigns,
         queryFn: () => api<Data<Campaign[]>>('campaigns').then((r) => r.data),
         enabled,
-        refetchInterval: (query) => (query.state.data?.some((c) => c.status === 'sending' || c.status === 'scheduled') ? 5_000 : 30_000),
+        refetchInterval: (query) => (query.state.data?.some((c) => ['sending', 'scheduled', 'paused'].includes(c.status)) ? 5_000 : 30_000),
     });
 
 export const saveCampaign = (id: string | null, body: CampaignForm) =>
@@ -293,12 +294,36 @@ export const cancelCampaign = (id: string) => api<Data<Campaign>>(`campaigns/${i
 
 export const deleteCampaign = (id: string) => api(`campaigns/${id}`, { method: 'DELETE' });
 
-export const useCampaignAudience = (segmentId: string | null, templateId: string | null, enabled = true) =>
+export const useCampaignAudience = (
+    filters: { segment_id: string | null; audience_tag: string | null; template_id: string | null; phone_number_id: string | null },
+    enabled = true,
+) =>
     useQuery({
-        queryKey: ['campaign-audience', segmentId, templateId],
-        queryFn: () => api<Data<CampaignAudience>>('campaigns/audience', { query: { segment_id: segmentId, template_id: templateId } }).then((r) => r.data),
+        queryKey: ['campaign-audience', filters],
+        queryFn: () => api<Data<CampaignAudience>>('campaigns/audience', { query: filters }).then((r) => r.data),
         enabled,
     });
+
+export const useCampaign = (id: string | null) =>
+    useQuery({
+        queryKey: keys.campaign(id ?? ''),
+        queryFn: () => api<Data<Campaign>>(`campaigns/${id}`).then((r) => r.data),
+        enabled: id !== null,
+        refetchInterval: 10_000,
+    });
+
+export const previewCampaign = (body: {
+    template_id: string;
+    segment_id: string | null;
+    audience_tag: string | null;
+    variables: { header: string[]; body: string[] };
+}) => api<Data<CampaignPreview[]>>('campaigns/preview', { method: 'POST', body }).then((r) => r.data);
+
+export const pauseCampaign = (id: string) => api<Data<Campaign>>(`campaigns/${id}/pause`, { method: 'POST' }).then((r) => r.data);
+
+export const resumeCampaign = (id: string) => api<Data<Campaign>>(`campaigns/${id}/resume`, { method: 'POST' }).then((r) => r.data);
+
+export const duplicateCampaign = (id: string) => api<Data<Campaign>>(`campaigns/${id}/duplicate`, { method: 'POST' }).then((r) => r.data);
 
 export const useCampaignRecipients = (id: string | null, status?: string) =>
     useQuery({

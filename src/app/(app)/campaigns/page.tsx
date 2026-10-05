@@ -1,7 +1,19 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { BanIcon, EyeIcon, MegaphoneIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import {
+    BanIcon,
+    CopyIcon,
+    DownloadIcon,
+    EyeIcon,
+    MegaphoneIcon,
+    MoreHorizontalIcon,
+    PauseIcon,
+    PencilIcon,
+    PlayIcon,
+    PlusIcon,
+    Trash2Icon,
+} from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -18,7 +30,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ApiError, errorMessage } from '@/lib/api';
 import { relative } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { cancelCampaign, deleteCampaign, keys, useCampaigns } from '@/lib/queries';
+import { cancelCampaign, deleteCampaign, duplicateCampaign, keys, pauseCampaign, resumeCampaign, useCampaigns } from '@/lib/queries';
 import type { Campaign } from '@/lib/types';
 
 const when = (c: Campaign) =>
@@ -101,12 +113,19 @@ export default function CampaignsPage() {
                                         <TableCell>
                                             <p className="font-medium">{c.name}</p>
                                             <p className="text-[12.5px] text-muted-foreground">
-                                                {c.template.name} · {c.audience_name ?? (c.segment_id ? 'Segment' : 'All contacts')} · {when(c)}
+                                                {c.template.name} ·{' '}
+                                                {[
+                                                    c.audience_name ?? (c.segment_id ? 'Segment' : c.audience_tag ? null : 'All contacts'),
+                                                    c.audience_tag ? `tag ${c.audience_tag}` : null,
+                                                ]
+                                                    .filter(Boolean)
+                                                    .join(' + ')}{' '}
+                                                · {when(c)}
                                             </p>
                                         </TableCell>
                                         <TableCell>
-                                            <Badge tone={CAMPAIGN_STATUS[c.status].tone} dot>
-                                                {CAMPAIGN_STATUS[c.status].label}
+                                            <Badge tone={CAMPAIGN_STATUS[c.status].tone} dot title={c.pause_reason ?? undefined}>
+                                                {c.status === 'sending' && c.next_batch_at ? 'Waiting' : CAMPAIGN_STATUS[c.status].label}
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="text-right tabular-nums">
@@ -134,12 +153,42 @@ export default function CampaignsPage() {
                                                             <PencilIcon /> Edit and send
                                                         </DropdownMenuItem>
                                                     )}
-                                                    {(c.status === 'sending' || c.status === 'scheduled') && can(P.CampaignsSend) && (
-                                                        <DropdownMenuItem onSelect={() => act.mutate(() => cancelCampaign(c.id))}>
-                                                            <BanIcon /> {c.status === 'scheduled' ? 'Unschedule' : 'Stop sending'}
+                                                    {c.status === 'sending' && can(P.CampaignsSend) && (
+                                                        <DropdownMenuItem onSelect={() => act.mutate(() => pauseCampaign(c.id))}>
+                                                            <PauseIcon /> Pause
                                                         </DropdownMenuItem>
                                                     )}
-                                                    {c.status !== 'sending' && c.status !== 'scheduled' && can(P.CampaignsCreate) && (
+                                                    {c.status === 'paused' && can(P.CampaignsSend) && (
+                                                        <DropdownMenuItem onSelect={() => act.mutate(() => resumeCampaign(c.id))}>
+                                                            <PlayIcon /> Resume
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                    {['sending', 'scheduled', 'paused'].includes(c.status) && can(P.CampaignsSend) && (
+                                                        <DropdownMenuItem
+                                                            onSelect={() =>
+                                                                (c.status === 'scheduled' ||
+                                                                    window.confirm(
+                                                                        'Stop this campaign for good? Contacts not yet messaged will not receive it.',
+                                                                    )) &&
+                                                                act.mutate(() => cancelCampaign(c.id))
+                                                            }
+                                                        >
+                                                            <BanIcon /> {c.status === 'scheduled' ? 'Unschedule' : 'Stop for good'}
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                    {can(P.CampaignsCreate) && (
+                                                        <DropdownMenuItem onSelect={() => act.mutate(() => duplicateCampaign(c.id))}>
+                                                            <CopyIcon /> Duplicate
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                    {c.status !== 'draft' && c.status !== 'scheduled' && (
+                                                        <DropdownMenuItem asChild>
+                                                            <a href={`/api/v1/campaigns/${c.id}/export`} download>
+                                                                <DownloadIcon /> Download report
+                                                            </a>
+                                                        </DropdownMenuItem>
+                                                    )}
+                                                    {!['sending', 'scheduled', 'paused'].includes(c.status) && can(P.CampaignsCreate) && (
                                                         <DropdownMenuItem
                                                             destructive
                                                             onSelect={() =>

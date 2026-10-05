@@ -7,13 +7,14 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { humanize } from '@/lib/format';
-import { useCampaignRecipients } from '@/lib/queries';
+import { useCampaign, useCampaignRecipients } from '@/lib/queries';
 import type { Campaign, CampaignStatus } from '@/lib/types';
 
 export const CAMPAIGN_STATUS: Record<CampaignStatus, { label: string; tone: Tone }> = {
     draft: { label: 'Draft', tone: 'grey' },
     scheduled: { label: 'Scheduled', tone: 'info' },
     sending: { label: 'Sending', tone: 'warn' },
+    paused: { label: 'Paused', tone: 'bad' },
     completed: { label: 'Completed', tone: 'good' },
     cancelled: { label: 'Stopped', tone: 'grey' },
     failed: { label: 'Failed', tone: 'bad' },
@@ -63,7 +64,9 @@ export function Funnel({ sent, delivered, read, failed }: { sent: number; delive
 export function CampaignDetailDialog({ campaign, onOpenChange }: { campaign: Campaign | null; onOpenChange: (o: boolean) => void }) {
     const [status, setStatus] = useState('all');
     const recipients = useCampaignRecipients(campaign?.id ?? null, status === 'all' ? undefined : status);
+    const detail = useCampaign(campaign?.id ?? null); // adds the failure reasons to what the list already has
     const s = campaign?.stats;
+    const reasons = detail.data?.failure_reasons ?? [];
 
     return (
         <Dialog open={campaign !== null} onOpenChange={onOpenChange}>
@@ -87,16 +90,28 @@ export function CampaignDetailDialog({ campaign, onOpenChange }: { campaign: Cam
                 {campaign?.failure_reason && (
                     <p className="rounded-md border border-bad/20 bg-bad-bg px-3 py-2 text-[13px] text-bad">{campaign.failure_reason}</p>
                 )}
+                {campaign?.status === 'paused' && (
+                    <p className="rounded-md border border-bad/20 bg-bad-bg px-3 py-2 text-[13px] text-bad">
+                        {campaign.pause_reason ?? 'Paused'}. Resume it from the campaign list.
+                    </p>
+                )}
+                {campaign?.status === 'sending' && campaign.next_batch_at && (
+                    <p className="rounded-md border px-3 py-2 text-[13px] text-muted-foreground">
+                        Waiting: sending continues at {new Date(campaign.next_batch_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}{' '}
+                        (quiet hours or drip sending).
+                    </p>
+                )}
+                {campaign?.notes && <p className="rounded-md bg-muted px-3 py-2 text-[13px] whitespace-pre-wrap text-ink-2">{campaign.notes}</p>}
 
                 {s && (
                     <>
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                             {(
                                 [
-                                    ['Matched segment', s.matched],
+                                    ['Matched audience', s.matched],
                                     ['Eligible (consent)', s.eligible],
-                                    ['Skipped', s.skipped],
                                     ['Waiting to send', s.pending + s.queued],
+                                    ['Replied', s.replied],
                                 ] as [string, number][]
                             ).map(([label, value]) => (
                                 <div key={label} className="rounded-md border px-3 py-2">
@@ -106,11 +121,43 @@ export function CampaignDetailDialog({ campaign, onOpenChange }: { campaign: Cam
                             ))}
                         </div>
                         <Funnel sent={s.sent} delivered={s.delivered} read={s.read} failed={s.failed} />
+                        {reasons.length > 0 && (
+                            <div className="rounded-md border p-3 text-[13px]">
+                                <p className="font-semibold">Why some contacts did not get it</p>
+                                <ul className="mt-1.5 grid gap-1">
+                                    {reasons.slice(0, 8).map((r) => (
+                                        <li key={`${r.stage}-${r.reason}-${r.code ?? ''}`} className="flex justify-between gap-3">
+                                            <span className="text-muted-foreground">
+                                                {r.reason}
+                                                {r.code ? ` (${r.code})` : ''} ·{' '}
+                                                {r.stage === 'skipped'
+                                                    ? 'skipped before sending'
+                                                    : r.stage === 'failed'
+                                                      ? 'rejected by WhatsApp'
+                                                      : 'could not be sent'}
+                                            </span>
+                                            <span className="font-medium tabular-nums">{r.count.toLocaleString()}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
                     </>
                 )}
 
                 <div className="flex items-center justify-between gap-2">
-                    <p className="text-[13px] font-semibold text-ink-2">Recipients</p>
+                    <p className="text-[13px] font-semibold text-ink-2">
+                        Recipients{' '}
+                        {campaign && campaign.status !== 'draft' && campaign.status !== 'scheduled' && (
+                            <a
+                                href={`/api/v1/campaigns/${campaign.id}/export`}
+                                download
+                                className="ml-2 font-normal text-info underline-offset-2 hover:underline"
+                            >
+                                Download report (CSV)
+                            </a>
+                        )}
+                    </p>
                     <Select value={status} onValueChange={setStatus}>
                         <SelectTrigger className="h-8 w-40" aria-label="Recipient status">
                             <SelectValue />

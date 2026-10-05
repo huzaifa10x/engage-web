@@ -146,6 +146,10 @@ function SettingsForm({ initial, canManage }: { initial: ComplianceSettings; can
                 retention_enabled: s.retention_enabled,
                 message_retention_days: s.message_retention_days,
                 media_retention_days: s.media_retention_days,
+                marketing_frequency_cap: s.marketing_frequency_cap,
+                quiet_hours_enabled: s.quiet_hours_enabled,
+                quiet_hours_start: s.quiet_hours_start,
+                quiet_hours_end: s.quiet_hours_end,
             });
             setS(saved);
             void qc.invalidateQueries({ queryKey: ['compliance'] });
@@ -230,6 +234,58 @@ function SettingsForm({ initial, canManage }: { initial: ComplianceSettings; can
                         onChange={(e) => set({ consent_request_text: e.target.value })}
                     />
                 </Field>
+            </Card>
+
+            <Card className="gap-4 p-5">
+                <div>
+                    <p className="text-sm font-semibold">Campaign safeguards</p>
+                    <p className="text-[13px] text-muted-foreground">
+                        These protect your contacts from too many messages and your numbers from a falling quality rating.
+                    </p>
+                </div>
+                <Field
+                    label="Most marketing campaign messages one contact may receive in 7 days"
+                    htmlFor="freq-cap"
+                    hint="0 means no limit. Contacts at the limit are skipped and shown as “Frequency cap reached”."
+                >
+                    <Input
+                        id="freq-cap"
+                        type="number"
+                        min={0}
+                        max={50}
+                        className="sm:w-32"
+                        disabled={!canManage}
+                        value={s.marketing_frequency_cap}
+                        onChange={(e) => set({ marketing_frequency_cap: Math.max(0, Number(e.target.value)) })}
+                    />
+                </Field>
+                <div className="grid gap-2">
+                    <label className="flex items-center justify-between gap-3 text-sm">
+                        Quiet hours: do not send marketing campaigns at night
+                        <Switch checked={s.quiet_hours_enabled} disabled={!canManage} onCheckedChange={(v) => set({ quiet_hours_enabled: v })} />
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2 text-[13px] text-muted-foreground">
+                        From
+                        <Input
+                            type="time"
+                            className="w-32"
+                            aria-label="Quiet hours start"
+                            disabled={!canManage || !s.quiet_hours_enabled}
+                            value={s.quiet_hours_start}
+                            onChange={(e) => set({ quiet_hours_start: e.target.value })}
+                        />
+                        until
+                        <Input
+                            type="time"
+                            className="w-32"
+                            aria-label="Quiet hours end"
+                            disabled={!canManage || !s.quiet_hours_enabled}
+                            value={s.quiet_hours_end}
+                            onChange={(e) => set({ quiet_hours_end: e.target.value })}
+                        />
+                        in your workspace time zone. A campaign started during quiet hours waits and begins by itself when they end.
+                    </div>
+                </div>
             </Card>
 
             <Card className="gap-4 p-5">
@@ -408,7 +464,7 @@ export default function CompliancePage() {
                 <TabsList>
                     <TabsTrigger value="overview">Overview</TabsTrigger>
                     <TabsTrigger value="ledger">Consent ledger</TabsTrigger>
-                    <TabsTrigger value="settings">Keywords, replies & retention</TabsTrigger>
+                    <TabsTrigger value="settings">Keywords, safeguards & retention</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="overview" className="grid gap-4">

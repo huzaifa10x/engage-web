@@ -337,7 +337,9 @@ export type ImportResult = { created: number; updated: number; skipped: number; 
 
 // ── Campaigns ────────────────────────────────────────────────────────────────────────────
 
-export type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'completed' | 'cancelled' | 'failed';
+export type CampaignStatus = 'draft' | 'scheduled' | 'sending' | 'paused' | 'completed' | 'cancelled' | 'failed';
+
+export type CampaignObjective = 'promo' | 'announcement' | 're_engagement' | 'reminder' | 'update' | 'other';
 
 export type CampaignStats = {
     matched: number;
@@ -349,6 +351,7 @@ export type CampaignStats = {
     delivered: number;
     read: number;
     failed: number;
+    replied: number;
 };
 
 export type Campaign = {
@@ -360,6 +363,14 @@ export type Campaign = {
     variables: { header: string[]; body: string[]; buttons: Record<string, string> };
     media_id: string | null;
     segment_id: string | null;
+    audience_tag: string | null;
+    notes: string | null;
+    objective: CampaignObjective | null;
+    batch_per_hour: number | null;
+    next_batch_at: string | null;
+    paused_at: string | null;
+    pause_reason: string | null;
+    failure_reasons?: CampaignFailureReason[];
     audience_name: string | null;
     scheduled_at: string | null;
     started_at: string | null;
@@ -375,10 +386,37 @@ export type CampaignForm = {
     template_id: string;
     segment_id: string | null;
     media_id: string | null;
+    audience_tag: string | null;
+    notes: string | null;
+    objective: CampaignObjective | null;
+    batch_per_hour: number | null;
     variables: { header: string[]; body: string[]; buttons: Record<string, string> };
 };
 
-export type CampaignAudience = { matched: number; eligible: number; category: string | null; reach_limit: number | null; reach_used: number };
+export type CampaignAudience = {
+    matched: number;
+    eligible: number;
+    category: string | null;
+    reach_limit: number | null;
+    reach_used: number;
+    /** Meta's limit of business-initiated conversations for this number per rolling 24 hours (null = unlimited / unknown). */
+    messaging_limit: number | null;
+    quality_rating: string | null;
+    max_mps: number | null;
+    frequency_cap: number;
+    quiet_until: string | null;
+    quiet_hours: { start: string; end: string; timezone: string } | null;
+};
+
+export type CampaignPreview = {
+    contact: { id: string; display_name: string; phone: string | null };
+    header: string | null;
+    body: string;
+    footer: string | null;
+    skipped: boolean;
+};
+
+export type CampaignFailureReason = { reason: string; code: string | null; count: number; stage: 'skipped' | 'not_sent' | 'failed' };
 
 export type CampaignRecipient = {
     id: string;
@@ -425,6 +463,11 @@ export type ComplianceSettings = {
     media_retention_days: number;
     min_message_retention_days: number;
     min_media_retention_days: number;
+    /** Max marketing campaign messages per contact per 7 days (0 = no cap). */
+    marketing_frequency_cap: number;
+    quiet_hours_enabled: boolean;
+    quiet_hours_start: string;
+    quiet_hours_end: string;
 };
 
 export type ConsentEvent = {

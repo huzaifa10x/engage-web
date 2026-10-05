@@ -69,10 +69,13 @@ export function TemplatePicker({
     wabaAccountId,
     value,
     onChange,
+    category = null,
 }: {
     wabaAccountId: string | null;
     value: TemplateSelection;
     onChange: (v: TemplateSelection) => void;
+    /** Only offer templates Meta approved in this category (MARKETING | UTILITY | AUTHENTICATION). */
+    category?: string | null;
 }) {
     const { me } = useSession();
     // Statuses follow Meta automatically: live updates, with a slow poll as a safety net.
@@ -83,7 +86,7 @@ export function TemplatePicker({
     const fileRef = useRef<HTMLInputElement>(null);
 
     const all = templates.data?.data ?? [];
-    const approved = all.filter((t) => t.sendable);
+    const approved = all.filter((t) => t.sendable && (!category || t.category === category));
     const t = value.template;
     const set = (patch: Partial<TemplateSelection>) => onChange({ ...value, ...patch });
 
@@ -138,6 +141,7 @@ export function TemplatePicker({
                             {approved.map((x) => (
                                 <SelectItem key={x.id} value={x.id}>
                                     {x.name} · {x.language}
+                                    {category ? '' : ` · ${(x.category ?? '').toLowerCase()}`}
                                 </SelectItem>
                             ))}
                         </SelectContent>
