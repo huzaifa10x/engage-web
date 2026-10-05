@@ -12,6 +12,7 @@ import { z } from 'zod';
 import { Field, FormError } from '@/components/app/field';
 import { Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
+import { BillingPanel } from '@/components/billing/billing-panel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -182,9 +183,6 @@ function PlanUsage() {
                                 : 'Messaging fees are billed by Meta directly to your business.'}
                         </CardDescription>
                     </div>
-                    <Button disabled title="Online billing arrives with the Billing module">
-                        Change plan
-                    </Button>
                 </CardHeader>
                 <CardContent className="grid gap-5 sm:grid-cols-2">
                     {limits.map(([key, f]) => {
@@ -253,7 +251,8 @@ function Settings() {
                 <TabsContent value="general">
                     {tenant.data ? <GeneralForm tenant={tenant.data} canManage={can(P.SettingsManage)} /> : <Skeleton className="h-72" />}
                 </TabsContent>
-                <TabsContent value="plan">
+                <TabsContent value="plan" className="grid gap-4">
+                    {can(P.BillingView) && <BillingPanel canManage={can(P.BillingManage)} />}
                     <PlanUsage />
                 </TabsContent>
             </Tabs>

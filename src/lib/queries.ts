@@ -4,6 +4,8 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api, upload } from './api';
 import type {
+    Billing,
+    BillingInvoice,
     ComplianceOverview,
     ComplianceSettings,
     ConsentEvent,
@@ -339,3 +341,34 @@ export const useConsentEvents = (filters: { action?: string; q?: string }, enabl
 /** Sends the consent question with Subscribe / No thanks buttons into an open conversation. */
 export const requestConsent = (conversationId: string) =>
     api<Data<Message>>(`conversations/${conversationId}/consent-request`, { method: 'POST' }).then((r) => r.data);
+
+// ── Billing (Stripe) ─────────────────────────────────────────────────────────────────────
+
+/** `awaitingPayment`: just back from Stripe Checkout — poll until Stripe's webhook has confirmed the plan. */
+export const useBilling = (enabled = true, awaitingPayment = false) =>
+    useQuery({
+        queryKey: ['billing'],
+        queryFn: () => api<Data<Billing>>('billing').then((r) => r.data),
+        enabled,
+        refetchInterval: (query) => {
+            const sub = query.state.data?.subscription;
+
+            return awaitingPayment && !(sub?.provider === 'stripe' && sub.status === 'active') ? 2500 : false;
+        },
+    });
+
+export const useInvoices = (enabled = true) =>
+    useQuery({ queryKey: ['billing', 'invoices'], queryFn: () => api<Data<BillingInvoice[]>>('billing/invoices').then((r) => r.data), enabled });
+
+export const updateBillingDetails = (body: { legal_name: string | null; country: string; tax_trn: string | null; billing_email: string | null }) =>
+    api<Data<Billing>>('billing/details', { method: 'PUT', body }).then((r) => r.data);
+
+/** Returns a Stripe Checkout URL to redirect to, or `updated` when the plan was switched in place. */
+export const startCheckout = (plan: string, interval: 'monthly' | 'yearly') =>
+    api<Data<{ url: string | null; updated: boolean }>>('billing/checkout', { method: 'POST', body: { plan, interval } }).then((r) => r.data);
+
+export const openBillingPortal = () => api<Data<{ url: string }>>('billing/portal', { method: 'POST' }).then((r) => r.data.url);
+
+export const cancelSubscription = () => api<Data<Billing>>('billing/cancel', { method: 'POST' }).then((r) => r.data);
+
+export const resumeSubscription = () => api<Data<Billing>>('billing/resume', { method: 'POST' }).then((r) => r.data);

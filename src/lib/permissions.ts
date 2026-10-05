@@ -21,6 +21,7 @@ export const P = {
     TeamView: 'team.view',
     TeamManage: 'team.manage',
     BillingView: 'billing.view',
+    BillingManage: 'billing.manage',
     SettingsView: 'settings.view',
     SettingsManage: 'settings.manage',
     AuditView: 'audit.view',

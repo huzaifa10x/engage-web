@@ -435,3 +435,49 @@ export type ConsentEvent = {
     created_at: string | null;
     contact: { id: string; display_name: string; phone: string | null } | null;
 };
+
+// ── Billing (Stripe) ─────────────────────────────────────────────────────────────────────
+
+export type BillingPlan = {
+    key: string;
+    name: string;
+    description: string | null;
+    currency: string;
+    price_monthly_minor: number | null;
+    price_yearly_minor: number | null;
+    current: boolean;
+    purchasable: boolean;
+};
+
+export type Billing = {
+    stripe_configured: boolean;
+    plan: { key: string; name: string };
+    subscription: {
+        status: 'trialing' | 'active' | 'past_due' | 'canceled' | 'expired';
+        provider: 'manual' | 'stripe';
+        interval: 'monthly' | 'yearly' | null;
+        trial_ends_at: string | null;
+        current_period_end: string | null;
+        cancel_at: string | null;
+    } | null;
+    details: { legal_name: string | null; country: string | null; tax_trn: string | null; billing_email: string | null };
+    vat: { applies: boolean; percent: number; country: string };
+    has_payment_history: boolean;
+    plans: BillingPlan[];
+};
+
+export type BillingInvoice = {
+    id: string;
+    number: string | null;
+    status: 'paid' | 'open' | 'void' | 'uncollectible' | 'refunded' | 'partially_refunded' | (string & {});
+    currency: string;
+    subtotal_minor: number;
+    tax_minor: number;
+    total_minor: number;
+    amount_refunded_minor: number;
+    description: string | null;
+    issued_at: string | null;
+    paid_at: string | null;
+    hosted_invoice_url: string | null;
+    invoice_pdf: string | null;
+};

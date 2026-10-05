@@ -12,6 +12,7 @@ import { Field, FormError } from '@/components/app/field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
+import { COUNTRIES, guessCountry } from '@/lib/countries';
 import { applyServerErrors } from '@/lib/form';
 import { safeNext } from '@/lib/navigation';
 import { keys } from '@/lib/queries';
@@ -22,6 +23,7 @@ const schema = z
     .object({
         name: z.string().trim().min(1, 'Enter your name.').max(120),
         company_name: z.string().trim().min(1, 'Enter your company name.').max(120),
+        country: z.string().length(2, 'Choose your country.'),
         email: z.string().trim().email('Enter a valid email address.').max(190),
         password: z
             .string()
@@ -33,7 +35,7 @@ const schema = z
     })
     .refine((v) => v.password === v.password_confirmation, { path: ['password_confirmation'], message: 'Passwords do not match.' });
 type Values = z.infer<typeof schema>;
-const FIELDS = ['name', 'company_name', 'email', 'password', 'password_confirmation'] as const;
+const FIELDS = ['name', 'company_name', 'country', 'email', 'password', 'password_confirmation'] as const;
 
 function RegisterForm() {
     const router = useRouter();
@@ -42,7 +44,7 @@ function RegisterForm() {
     const [formError, setFormError] = useState<string | null>(null);
     const { register, handleSubmit, setError, formState } = useForm<Values>({
         resolver: zodResolver(schema),
-        defaultValues: { name: '', company_name: '', email: '', password: '', password_confirmation: '' },
+        defaultValues: { name: '', company_name: '', country: guessCountry(), email: '', password: '', password_confirmation: '' },
     });
     const e = formState.errors;
 
@@ -70,6 +72,22 @@ function RegisterForm() {
                 </Field>
                 <Field label="Company name" htmlFor="company_name" error={e.company_name?.message}>
                     <Input id="company_name" autoComplete="organization" aria-invalid={!!e.company_name} {...register('company_name')} />
+                </Field>
+                <Field label="Country" htmlFor="country" error={e.country?.message} hint="Used for billing. UAE businesses are charged 5% VAT on paid plans.">
+                    <select
+                        id="country"
+                        autoComplete="country"
+                        aria-invalid={!!e.country}
+                        className="h-9 w-full rounded-md border border-input bg-card px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20"
+                        {...register('country')}
+                    >
+                        <option value="">Choose your country</option>
+                        {COUNTRIES.map((c) => (
+                            <option key={c.code} value={c.code}>
+                                {c.name}
+                            </option>
+                        ))}
+                    </select>
                 </Field>
                 <Field label="Work email" htmlFor="email" error={e.email?.message}>
                     <Input id="email" type="email" autoComplete="email" aria-invalid={!!e.email} {...register('email')} />
