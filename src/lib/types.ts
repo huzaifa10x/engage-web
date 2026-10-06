@@ -624,3 +624,6 @@ export type DashboardSummary = {
     messages_received_today: number;
     campaign_messages_this_month: number;
 };
+
+/** A conversation with unread customer messages that is this member's to answer (bell + desktop alerts). */
+export type UnreadConversation = { conversation_id: string; contact: string; preview: string; unread_count: number; at: string | null; url: string };

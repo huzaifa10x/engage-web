@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { MessageSquarePlusIcon, RadioIcon, WifiOffIcon } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useState } from 'react';
@@ -19,16 +20,15 @@ import { cn } from '@/lib/utils';
 function Inbox() {
     const { me, can } = useSession();
     const router = useRouter();
+    const qc = useQueryClient();
     const params = useSearchParams();
     const [numberId] = useSelectedNumber();
     const [composeOpen, setComposeOpen] = useState(false);
     const selected = params.get('c');
 
-    const notify = useCallback((e: { conversation_id: string; preview: string }) => {
-        if (typeof document !== 'undefined' && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-            new Notification('New WhatsApp message', { body: e.preview, tag: e.conversation_id });
-        }
-    }, []);
+    // New-message alerts (desktop notification + sound) come from the header bell on every page;
+    // with a live connection the bell is told to check straight away instead of on its next tick.
+    const notify = useCallback(() => void qc.invalidateQueries({ queryKey: ['notifications'] }), [qc]);
     const realtime = useInboxRealtime(me.active_tenant_id ?? '', notify);
     const polling = realtime !== 'live';
 

@@ -4,6 +4,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api, upload } from './api';
 import type {
+    UnreadConversation,
     CannedResponse,
     ConversationNote,
     DashboardSummary,
@@ -467,14 +468,16 @@ export const useInboxSettings = (enabled = true) =>
 export const updateInboxSettings = (body: Pick<InboxSettings, 'business_hours' | 'routing'>) =>
     api<Data<InboxSettings>>('tenant/inbox-settings', { method: 'PUT', body }).then((r) => r.data);
 
-type NotificationFeed = { unread: number; items: MemberNotification[] };
+type NotificationFeed = { unread: number; items: MemberNotification[]; unread_conversations: number; messages: UnreadConversation[] };
 
 export const useNotifications = (enabled = true) =>
     useQuery({
         queryKey: ['notifications'],
         queryFn: () => api<Data<NotificationFeed>>('notifications').then((r) => r.data),
         enabled,
-        refetchInterval: 30_000,
+        // The bell drives its own background-safe ticker; this slower interval is only the fallback.
+        refetchInterval: 60_000,
+        refetchIntervalInBackground: true,
     });
 
 export const readNotifications = (id?: string) =>
