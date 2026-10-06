@@ -21,14 +21,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
 
     const unauthenticated = me.error instanceof ApiError && me.error.status === 401;
+    const unverified = me.data ? !me.data.user.email_verified : false;
     const needsWorkspace = me.data && !me.data.active_tenant_id;
 
     useEffect(() => {
         if (unauthenticated) router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+        // The API refuses every workspace request until the email is verified; send them to the notice.
+        else if (unverified) router.replace('/verify-email');
         else if (needsWorkspace) router.replace('/select-workspace');
-    }, [unauthenticated, needsWorkspace, router, pathname]);
+    }, [unauthenticated, unverified, needsWorkspace, router, pathname]);
 
-    if (me.data && me.data.active_tenant_id) {
+    if (me.data && me.data.active_tenant_id && !unverified) {
         return (
             <SessionProvider me={me.data}>
                 <AppShell>{children}</AppShell>

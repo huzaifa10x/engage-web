@@ -4,6 +4,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api, upload } from './api';
 import type {
+    AutoReplySettings,
     BillingPayments,
     BillingPreview,
     PaymentMethod,
@@ -414,3 +415,14 @@ export const refreshInvoice = (id: string) => api<Data<BillingInvoice[]>>(`billi
 export const cancelSubscription = () => api<Data<Billing>>('billing/cancel', { method: 'POST' }).then((r) => r.data);
 
 export const resumeSubscription = () => api<Data<Billing>>('billing/resume', { method: 'POST' }).then((r) => r.data);
+
+// ── Auto reply ───────────────────────────────────────────────────────────────────────────
+
+export const useAutoReply = (enabled = true) =>
+    useQuery({ queryKey: ['auto-reply'], queryFn: () => api<Data<AutoReplySettings>>('tenant/auto-reply').then((r) => r.data), enabled });
+
+export const updateAutoReply = (body: AutoReplySettings) => api<Data<AutoReplySettings>>('tenant/auto-reply', { method: 'PUT', body }).then((r) => r.data);
+
+/** Switch automatic replies on or off for one conversation. */
+export const setConversationAutoReply = (id: string, enabled: boolean) =>
+    api<Data<Conversation>>(`conversations/${id}`, { method: 'PATCH', body: { auto_reply_enabled: enabled } }).then((r) => r.data);

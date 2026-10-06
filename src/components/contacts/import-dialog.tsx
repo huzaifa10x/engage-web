@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { errorMessage } from '@/lib/api';
 import { fileSize } from '@/lib/format';
 import { importContacts, keys, useContactFields, useTags } from '@/lib/queries';
+import { downloadSampleCsv } from '@/lib/sample-csv';
 import type { ImportResult } from '@/lib/types';
 
 import { TagInput } from './tag-input';
@@ -107,6 +108,13 @@ export function ImportContactsDialog({ open, onOpenChange }: { open: boolean; on
                         >
                             {file ? <FileSpreadsheetIcon className="size-5" /> : <UploadIcon className="size-5" />}
                             {file ? `${file.name} · ${fileSize(file.size)}` : 'Choose a CSV file (up to 10,000 contacts, 5 MB)'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => downloadSampleCsv((fields.data ?? []).map((f) => f.key))}
+                            className="-mt-2 w-fit text-[13px] font-semibold text-info underline-offset-2 hover:underline"
+                        >
+                            Download sample CSV
                         </button>
                         <div className="rounded-md bg-muted px-3 py-2.5 text-[12.5px] text-muted-foreground">
                             <p>

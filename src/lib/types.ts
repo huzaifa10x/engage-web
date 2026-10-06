@@ -217,6 +217,8 @@ export type Contact = {
 };
 
 export type Conversation = {
+    /** false = automatic replies are switched off for this conversation. */
+    auto_reply_enabled: boolean;
     id: string;
     phone_number_id: string;
     status: 'open' | 'closed';
@@ -399,7 +401,6 @@ export type CampaignForm = {
     audience_tag: string | null;
     notes: string | null;
     objective: CampaignObjective | null;
-    batch_per_hour: number | null;
     variables: { header: string[]; body: string[]; buttons: Record<string, string> };
 };
 
@@ -413,6 +414,8 @@ export type CampaignAudience = {
     messaging_limit: number | null;
     quality_rating: string | null;
     max_mps: number | null;
+    /** Campaign sending speed of the workspace's plan (messages per hour); not selectable. */
+    send_rate_per_hour: number;
     frequency_cap: number;
     quiet_until: string | null;
     quiet_hours: { start: string; end: string; timezone: string } | null;
@@ -583,3 +586,5 @@ export type BillingPayment = {
 };
 
 export type BillingPayments = { payments: BillingPayment[]; upcoming: { amount_due_minor: number; currency: string; date: string | null } | null };
+
+export type AutoReplySettings = { enabled: boolean; message: string; cooldown_hours: number };

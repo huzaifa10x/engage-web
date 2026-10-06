@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { EyeIcon, Loader2Icon, UploadIcon } from 'lucide-react';
+import { DownloadIcon, EyeIcon, Loader2Icon, UploadIcon } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -26,6 +26,7 @@ import {
     useTags,
     useTemplates,
 } from '@/lib/queries';
+import { downloadSampleCsv } from '@/lib/sample-csv';
 import type { Campaign, CampaignForm, CampaignObjective, CampaignPreview } from '@/lib/types';
 
 const ALL = '__all__';
@@ -101,7 +102,6 @@ export function CampaignDialog({
     const [previewing, setPreviewing] = useState(false);
     const [when, setWhen] = useState<'now' | 'later'>('now');
     const [at, setAt] = useState(inAnHour);
-    const [drip, setDrip] = useState<number | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [pending, setPending] = useState<'save' | 'launch' | null>(null);
 
@@ -114,7 +114,6 @@ export function CampaignDialog({
         setNumberId(campaign?.phone_number?.id ?? null);
         setSegmentId(campaign?.segment_id ?? null);
         setTag(campaign?.audience_tag ?? null);
-        setDrip(campaign?.batch_per_hour ?? null);
         setSelection(emptySelection);
         setRestore(campaign ?? null);
         setPreviews(null);
@@ -215,7 +214,6 @@ export function CampaignDialog({
             audience_tag: tag,
             notes: notes.trim() || null,
             objective,
-            batch_per_hour: drip,
             media_id: selection.media?.id ?? campaign?.media_id ?? null,
             variables: variables(),
         };
@@ -375,6 +373,9 @@ export function CampaignDialog({
                             <Button type="button" variant="outline" size="sm" onClick={() => csvRef.current?.click()} disabled={uploading}>
                                 {uploading ? <Loader2Icon className="animate-spin" /> : <UploadIcon />} Upload a CSV list
                             </Button>
+                            <Button type="button" variant="ghost" size="sm" onClick={() => downloadSampleCsv()}>
+                                <DownloadIcon /> Download sample CSV
+                            </Button>
                             <div className="flex items-start gap-2">
                                 <Checkbox id="cp-csv-consent" checked={csvConsent} onCheckedChange={(v) => setCsvConsent(v === true)} className="mt-0.5" />
                                 <Label htmlFor="cp-csv-consent" className="text-[12.5px] leading-snug font-normal text-muted-foreground">
@@ -427,7 +428,7 @@ export function CampaignDialog({
                                 {a.messaging_limit !== null && (
                                     <p className={overTier ? 'font-medium' : 'text-muted-foreground'}>
                                         {overTier
-                                            ? `This number can start ${a.messaging_limit.toLocaleString()} conversations per 24 hours (Meta’s limit). Messages beyond that will fail — send in smaller parts or use drip sending below.`
+                                            ? `This number can start ${a.messaging_limit.toLocaleString()} conversations per 24 hours (Meta’s limit). Messages beyond that will fail — send to a smaller audience, or in parts on different days.`
                                             : `Meta’s limit for this number: ${a.messaging_limit.toLocaleString()} new conversations per 24 hours.`}
                                     </p>
                                 )}
@@ -514,22 +515,13 @@ export function CampaignDialog({
                                     <Input id="cp-at" type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} />
                                 </Field>
                             )}
-                            <Field label="Sending speed" htmlFor="cp-drip" hint="Slower sending is gentler on your number’s quality rating">
-                                <Select value={drip === null ? ALL : String(drip)} onValueChange={(v) => setDrip(v === ALL ? null : Number(v))}>
-                                    <SelectTrigger id="cp-drip">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value={ALL}>As fast as the number allows</SelectItem>
-                                        {[100, 250, 500, 1000, 5000, 10000].map((n) => (
-                                            <SelectItem key={n} value={String(n)}>
-                                                {n.toLocaleString()} per hour
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </Field>
                         </div>
+                        {a && (
+                            <p className="-mt-1 text-[12.5px] text-muted-foreground">
+                                Sending speed: up to {a.send_rate_per_hour.toLocaleString()} messages per hour. This is set by your plan to protect your
+                                number’s quality rating and keep delivery reliable.
+                            </p>
+                        )}
                         {marketing && a?.quiet_hours && (
                             <p className="-mt-1 text-[12.5px] text-muted-foreground">
                                 Quiet hours: marketing is not sent between {a.quiet_hours.start} and {a.quiet_hours.end} ({a.quiet_hours.timezone}).

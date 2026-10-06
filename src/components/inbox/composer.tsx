@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { EmojiPicker } from './emoji-picker';
 import { errorMessage, upload } from '@/lib/api';
 import { fileSize } from '@/lib/format';
 import type { SendPayload } from '@/lib/queries';
@@ -50,6 +51,7 @@ export function Composer({
     onTemplate: () => void;
 }) {
     const [text, setText] = useState('');
+    const inputRef = useRef<HTMLTextAreaElement>(null);
     const [attachment, setAttachment] = useState<UploadedMedia | null>(null);
     const [uploading, setUploading] = useState(false);
     const [sending, setSending] = useState(false);
@@ -195,7 +197,21 @@ export function Composer({
                 <Button variant="ghost" size="icon" onClick={onTemplate} aria-label="Send a template">
                     <FileTextIcon />
                 </Button>
+                <EmojiPicker
+                    onPick={(emoji) => {
+                        const el = inputRef.current;
+                        const start = el?.selectionStart ?? text.length;
+                        const end = el?.selectionEnd ?? text.length;
+                        setText(text.slice(0, start) + emoji + text.slice(end));
+                        // Put the cursor right after the inserted emoji.
+                        requestAnimationFrame(() => {
+                            el?.focus();
+                            el?.setSelectionRange(start + emoji.length, start + emoji.length);
+                        });
+                    }}
+                />
                 <textarea
+                    ref={inputRef}
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     onKeyDown={(e) => {

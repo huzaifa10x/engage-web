@@ -90,6 +90,12 @@ export default function DashboardPage() {
     ].filter((c) => c.show);
     const done = checklist.filter((c) => c.done).length;
 
+    // Limits the plan actually counts (numbers, seats, templates, campaign reach, storage …).
+    const usage = Object.entries(entitlements.data?.features ?? {}).filter(
+        ([, f]) => (f.type === 'limit' || f.type === 'metered') && f.enabled && f.used !== null,
+    );
+    const monthly = usage.some(([, f]) => f.type === 'metered');
+
     return (
         <>
             <PageHeader title={`${greeting()}, ${me.user.name.split(' ')[0]}`} description={`Here is what is happening in ${membership.tenant?.name}.`} />
@@ -162,6 +168,55 @@ export default function DashboardPage() {
                     </>
                 )}
             </div>
+
+            {usage.length > 0 && (
+                <Card className="mt-6">
+                    <CardHeader>
+                        <div>
+                            <CardTitle>Plan usage</CardTitle>
+                            <CardDescription>
+                                What you have used and what is left on the {entitlements.data?.plan.name} plan
+                                {monthly ? '. Monthly limits reset on the 1st.' : '.'}
+                            </CardDescription>
+                        </div>
+                        {can(P.BillingView) && (
+                            <Button asChild size="sm" variant="ghost">
+                                <Link href="/billing">
+                                    Plan and billing <ArrowRightIcon />
+                                </Link>
+                            </Button>
+                        )}
+                    </CardHeader>
+                    <CardContent className="grid gap-x-8 gap-y-5 sm:grid-cols-2 xl:grid-cols-3">
+                        {usage.map(([key, f]) => {
+                            const used = f.used ?? 0;
+                            const pct = f.unlimited || !f.limit ? 0 : Math.min(100, Math.round((used / f.limit) * 100));
+                            const left = f.unlimited || f.limit === null ? null : Math.max(0, f.limit - used);
+
+                            return (
+                                <div key={key}>
+                                    <div className="flex items-baseline justify-between gap-2 text-sm">
+                                        <span className="font-medium">{f.label}</span>
+                                        <span className="text-muted-foreground tabular-nums">
+                                            {number(used)} / {f.unlimited ? '∞' : number(f.limit)}
+                                        </span>
+                                    </div>
+                                    {!f.unlimited && (
+                                        <Progress value={pct} className="mt-2" indicatorClassName={pct >= 90 ? 'bg-bad' : pct >= 75 ? 'bg-warn' : undefined} />
+                                    )}
+                                    <p className={cn('mt-1 text-[12.5px]', left === 0 ? 'font-medium text-bad' : 'text-muted-foreground')}>
+                                        {left === null
+                                            ? 'Unlimited'
+                                            : left === 0
+                                              ? 'Limit reached. Upgrade to add more.'
+                                              : `${number(left)} ${f.unit ?? ''} remaining`}
+                                    </p>
+                                </div>
+                            );
+                        })}
+                    </CardContent>
+                </Card>
+            )}
 
             {connected.length > 0 && (
                 <Card className="mt-6">

@@ -41,7 +41,8 @@ function LoginForm() {
         try {
             const res = await api<{ data: Me }>('auth/login', { method: 'POST', body: values });
             qc.setQueryData(keys.me, res.data);
-            router.replace(res.data.active_tenant_id || next.startsWith('/invitations') ? next : '/select-workspace');
+            if (!res.data.user.email_verified && !next.startsWith('/invitations')) router.replace('/verify-email');
+            else router.replace(res.data.active_tenant_id || next.startsWith('/invitations') ? next : '/select-workspace');
         } catch (e) {
             setFormError(applyServerErrors(e, setError, ['email', 'password']));
         }
@@ -69,6 +70,9 @@ function LoginForm() {
                     <Label htmlFor="remember" className="font-normal text-muted-foreground">
                         Keep me signed in
                     </Label>
+                    <Link href="/forgot-password" className="ml-auto text-sm font-semibold text-primary hover:underline">
+                        Forgot password?
+                    </Link>
                 </div>
                 <Button type="submit" disabled={formState.isSubmitting} className="mt-2">
                     {formState.isSubmitting ? 'Signing in…' : 'Sign in'}

@@ -14,7 +14,17 @@ import { api, errorMessage } from '@/lib/api';
 import { newId } from '@/lib/id';
 import { dayLabel, timeLeft } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { keys, requestConsent, sendToConversation, type SendPayload, useConversation, useMembers, usePhoneNumbers, useThread } from '@/lib/queries';
+import {
+    keys,
+    requestConsent,
+    sendToConversation,
+    setConversationAutoReply,
+    type SendPayload,
+    useConversation,
+    useMembers,
+    usePhoneNumbers,
+    useThread,
+} from '@/lib/queries';
 import type { Message } from '@/lib/types';
 
 import { Composer } from './composer';
@@ -129,6 +139,31 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                         </Badge>
                     )}
                     {c.status === 'closed' && <Badge tone="grey">Closed</Badge>}
+                    {can(P.InboxReply) && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            title={
+                                c.auto_reply_enabled
+                                    ? 'Automatic replies are allowed in this conversation. Click to cancel them here.'
+                                    : 'Automatic replies are cancelled for this conversation. Click to allow them again.'
+                            }
+                            onClick={async () => {
+                                try {
+                                    await setConversationAutoReply(c.id, !c.auto_reply_enabled);
+                                    toast.success(
+                                        c.auto_reply_enabled ? 'Auto reply cancelled for this conversation' : 'Auto reply allowed for this conversation',
+                                    );
+                                    void qc.invalidateQueries({ queryKey: keys.conversation(c.id) });
+                                    void qc.invalidateQueries({ queryKey: keys.conversationsAll });
+                                } catch (e) {
+                                    toast.error(errorMessage(e));
+                                }
+                            }}
+                        >
+                            {c.auto_reply_enabled ? 'Cancel auto reply' : 'Auto reply off'}
+                        </Button>
+                    )}
                     {c.window.open && can(P.InboxReply) && contact && contact.consent_state === 'unknown' && (
                         <Button
                             variant="outline"

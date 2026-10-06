@@ -12,12 +12,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { COUNTRIES } from '@/lib/countries';
 import { date } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { keys, useTenant } from '@/lib/queries';
-import type { Tenant } from '@/lib/types';
+import { keys, updateAutoReply, useAutoReply, useTenant } from '@/lib/queries';
+import type { AutoReplySettings, Tenant } from '@/lib/types';
 
 const NONE = '__none__';
 
@@ -274,6 +275,82 @@ function WorkspaceForm({ tenant, canManage }: { tenant: Tenant; canManage: boole
     );
 }
 
+/** The automatic reply customers get when they write in. Can be switched off for a single conversation in the inbox. */
+function AutoReplyCard({ canManage }: { canManage: boolean }) {
+    const qc = useQueryClient();
+    const query = useAutoReply();
+    const [draft, setDraft] = useState<AutoReplySettings | null>(null);
+    const [saving, setSaving] = useState(false);
+    const value = draft ?? query.data ?? null;
+
+    if (!value) return <Skeleton className="h-40" />;
+
+    const save = async () => {
+        setSaving(true);
+        try {
+            qc.setQueryData(['auto-reply'], await updateAutoReply(value));
+            setDraft(null);
+            toast.success(value.enabled ? 'Auto reply is on' : 'Auto reply is off');
+        } catch (e) {
+            toast.error(e instanceof ApiError ? (Object.values(e.fields)[0]?.[0] ?? e.message) : errorMessage(e));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <div>
+                    <CardTitle>Auto reply</CardTitle>
+                    <CardDescription>
+                        Send an automatic reply when a customer messages you. It is sent once per conversation in the chosen period, never in answer to STOP,
+                        and can be switched off for a single conversation from the inbox.
+                    </CardDescription>
+                </div>
+                <Switch checked={value.enabled} disabled={!canManage} aria-label="Auto reply" onCheckedChange={(enabled) => setDraft({ ...value, enabled })} />
+            </CardHeader>
+            <CardContent className="grid gap-4">
+                <Field label="Message" htmlFor="ar-message">
+                    <textarea
+                        id="ar-message"
+                        className="field-sizing-content min-h-20 w-full resize-y rounded-md border border-input bg-card px-3 py-2 text-sm leading-5 outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20 disabled:opacity-60"
+                        maxLength={1000}
+                        disabled={!canManage || !value.enabled}
+                        value={value.message}
+                        onChange={(e) => setDraft({ ...value, message: e.target.value })}
+                    />
+                </Field>
+                <Field label="Send at most once every" htmlFor="ar-cooldown" className="sm:max-w-xs">
+                    <Select
+                        value={String(value.cooldown_hours)}
+                        onValueChange={(v) => setDraft({ ...value, cooldown_hours: Number(v) })}
+                        disabled={!canManage || !value.enabled}
+                    >
+                        <SelectTrigger id="ar-cooldown">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {[1, 4, 12, 24, 48, 168].map((h) => (
+                                <SelectItem key={h} value={String(h)}>
+                                    {h < 24 ? `${h} hour${h === 1 ? '' : 's'}` : h === 168 ? '7 days' : `${h / 24} day${h === 24 ? '' : 's'}`} per conversation
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </Field>
+                {canManage && (
+                    <div className="flex justify-end">
+                        <Button onClick={save} disabled={saving || draft === null || (value.enabled && !value.message.trim())}>
+                            {saving ? 'Saving…' : 'Save auto reply'}
+                        </Button>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
 export default function SettingsPage() {
     const { can } = useSession();
     const tenant = useTenant();
@@ -286,7 +363,14 @@ export default function SettingsPage() {
                 title="Workspace settings"
                 description="Your workspace, company details and address. Plans, cards and invoices are on the Billing page."
             />
-            {tenant.data ? <WorkspaceForm key={tenant.data.id} tenant={tenant.data} canManage={can(P.SettingsManage)} /> : <Skeleton className="h-96" />}
+            {tenant.data ? (
+                <div className="grid gap-4">
+                    <WorkspaceForm key={tenant.data.id} tenant={tenant.data} canManage={can(P.SettingsManage)} />
+                    <AutoReplyCard canManage={can(P.SettingsManage)} />
+                </div>
+            ) : (
+                <Skeleton className="h-96" />
+            )}
         </>
     );
 }
