@@ -1,9 +1,11 @@
 'use client';
 
-import { MenuIcon, XIcon } from 'lucide-react';
+import { MenuIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, XIcon } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 
+import { Logo } from '@/components/brand/logo';
+import { useStored } from '@/hooks/use-stored';
 import { cn } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
@@ -17,6 +19,8 @@ import { WorkspaceSwitcher } from './workspace-switcher';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
     const [mobileOpen, setMobileOpen] = useState(false);
+    // Remembered per browser, so the extra room stays after a reload.
+    const [collapsed, setCollapsed] = useStored<boolean>('engage.sidebar.collapsed', false);
     // The inbox is an app-within-the-app: full height, panes scroll independently.
     const fullBleed = usePathname().startsWith('/inbox');
 
@@ -24,9 +28,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className={cn('flex flex-col', fullBleed ? 'h-dvh overflow-hidden' : 'min-h-dvh')}>
             <ImpersonationBanner />
             <div className={cn('flex flex-1', fullBleed && 'min-h-0')}>
-                <aside className="sticky top-0 hidden h-dvh shrink-0 lg:block">
-                    <Sidebar />
-                </aside>
+                {!collapsed && (
+                    <aside className="sticky top-0 hidden h-dvh shrink-0 lg:block">
+                        <Sidebar />
+                    </aside>
+                )}
 
                 {mobileOpen && (
                     <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
@@ -51,6 +57,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         <Button size="icon-sm" variant="ghost" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
                             <MenuIcon />
                         </Button>
+                        <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            className="hidden lg:inline-flex"
+                            onClick={() => setCollapsed(!collapsed)}
+                            aria-label={collapsed ? 'Show the sidebar' : 'Hide the sidebar'}
+                            aria-pressed={collapsed}
+                            title={collapsed ? 'Show the sidebar' : 'Hide the sidebar for more room'}
+                        >
+                            {collapsed ? <PanelLeftOpenIcon /> : <PanelLeftCloseIcon />}
+                        </Button>
+                        {collapsed && (
+                            <span className="hidden lg:inline-flex">
+                                <Logo />
+                            </span>
+                        )}
                         <WorkspaceSwitcher />
                         <div className="hidden sm:block">
                             <NumberSwitcher />

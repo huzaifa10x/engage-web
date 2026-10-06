@@ -1,7 +1,7 @@
 'use client';
 
 import { FileTextIcon, Loader2Icon, MicIcon, PaperclipIcon, SendHorizontalIcon, SquareIcon, Trash2Icon, XIcon } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -34,6 +34,8 @@ function voiceFormat() {
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 
+export type ComposerHandle = { attach: (file: File) => void };
+
 /**
  * Enter sends, Shift+Enter adds a line. Attachments and voice recordings are uploaded first
  * (validated against WhatsApp limits server-side) and sent with the text as caption.
@@ -44,12 +46,15 @@ export function Composer({
     onClearReply,
     onSend,
     onTemplate,
+    ref,
 }: {
     disabledReason: string | null;
     replyTo: Message | null;
     onClearReply: () => void;
     onSend: (payload: SendPayload) => Promise<void>;
     onTemplate: () => void;
+    /** Lets the chat area hand over a file that was dropped onto it. */
+    ref?: React.Ref<ComposerHandle>;
 }) {
     const [text, setText] = useState('');
     const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -85,6 +90,17 @@ export function Composer({
         } finally {
             setUploading(false);
             if (fileRef.current) fileRef.current.value = '';
+        }
+    };
+
+    useImperativeHandle(ref, () => ({ attach: (file: File) => void pick(file) }));
+
+    /** A screenshot or copied image pasted into the message box becomes the attachment. */
+    const onPaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+        const file = [...e.clipboardData.files][0];
+        if (file) {
+            e.preventDefault();
+            void pick(file);
         }
     };
 
@@ -219,6 +235,7 @@ export function Composer({
                 />
                 <textarea
                     ref={inputRef}
+                    onPaste={onPaste}
                     value={text}
                     onChange={(e) => setText(e.target.value)}
                     onKeyDown={(e) => {
@@ -229,7 +246,7 @@ export function Composer({
                     }}
                     rows={1}
                     maxLength={4096}
-                    placeholder={attachment ? 'Add a caption…' : 'Type a message'}
+                    placeholder={attachment ? 'Add a caption…' : 'Type a message, or drop a file here'}
                     aria-label="Message"
                     className="field-sizing-content max-h-40 min-h-9 flex-1 resize-none rounded-md border border-input bg-card px-3 py-2 text-sm leading-5 outline-none placeholder:text-faint focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20"
                 />

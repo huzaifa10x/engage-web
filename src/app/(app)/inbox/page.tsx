@@ -13,7 +13,9 @@ import { NewConversationDialog } from '@/components/inbox/new-conversation-dialo
 import { Thread } from '@/components/inbox/thread';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { ResizeHandle } from '@/components/app/resize-handle';
 import { useInboxRealtime } from '@/hooks/use-inbox-realtime';
+import { useStored } from '@/hooks/use-stored';
 import { P } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +27,7 @@ function Inbox() {
     const [numberId] = useSelectedNumber();
     const [composeOpen, setComposeOpen] = useState(false);
     const selected = params.get('c');
+    const [listWidth, setListWidth] = useStored<number>('engage.inbox.list-width', 384);
 
     // New-message alerts (desktop notification + sound) come from the header bell on every page;
     // with a live connection the bell is told to check straight away instead of on its next tick.
@@ -38,7 +41,10 @@ function Inbox() {
 
     return (
         <div className="flex h-full min-h-0">
-            <div className={cn('w-full shrink-0 flex-col md:flex md:w-80 lg:w-96', selected ? 'hidden' : 'flex')}>
+            <div
+                className={cn('w-full shrink-0 flex-col md:flex md:w-(--list-width)', selected ? 'hidden' : 'flex')}
+                style={{ '--list-width': `${listWidth}px` } as React.CSSProperties}
+            >
                 <div className="flex items-center gap-2 border-r border-b bg-card px-3 py-2.5">
                     <h1 className="flex-1 text-[15px] font-semibold">Team Inbox</h1>
                     <Tooltip>
@@ -62,6 +68,17 @@ function Inbox() {
                     <ConversationList phoneNumberId={numberId} selectedId={selected} onSelect={(c) => open(c.id)} polling={polling} />
                 </div>
             </div>
+
+            <ResizeHandle
+                className="hidden md:block"
+                label="Resize the conversation list"
+                direction="right"
+                width={listWidth}
+                min={280}
+                max={560}
+                onResize={setListWidth}
+                onReset={() => setListWidth(384)}
+            />
 
             <div className={cn('min-h-0 min-w-0 flex-1', selected ? 'flex' : 'hidden md:flex')}>
                 {selected ? (

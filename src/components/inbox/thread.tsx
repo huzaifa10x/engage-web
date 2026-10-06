@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeftIcon, Loader2Icon } from 'lucide-react';
+import { ArrowLeftIcon, Loader2Icon, UploadCloudIcon } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -27,11 +27,14 @@ import {
 } from '@/lib/queries';
 import type { Message } from '@/lib/types';
 
-import { Composer } from './composer';
+import { Composer, type ComposerHandle } from './composer';
 import { ContactPanel } from './contact-panel';
 import { MessageBubble } from './message-bubble';
 import { NotesButton, SnoozeMenu } from './thread-tools';
 import { TemplateDialog } from './template-dialog';
+
+/** True while something that contains files is being dragged (not text or a link). */
+const hasFiles = (e: React.DragEvent) => [...e.dataTransfer.types].includes('Files');
 
 export function Thread({ conversationId, polling, onBack }: { conversationId: string; polling: boolean; onBack: () => void }) {
     const { can, membership } = useSession();
@@ -42,6 +45,10 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
     const [replyTo, setReplyTo] = useState<Message | null>(null);
     const [templateOpen, setTemplateOpen] = useState(false);
     const [askingConsent, setAskingConsent] = useState(false);
+    // Drag and drop: files dropped anywhere on the chat are handed to the message box.
+    const composer = useRef<ComposerHandle>(null);
+    const dragDepth = useRef(0);
+    const [dropping, setDropping] = useState(false);
     const scroller = useRef<HTMLDivElement>(null);
     const pinnedToBottom = useRef(true);
     const readFor = useRef<string | null>(null);
@@ -117,79 +124,122 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
 
     return (
         <div className="flex min-h-0 min-w-0 flex-1">
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-[#efeae2]">
-                <header className="flex items-center gap-3 border-b bg-card px-4 py-2.5">
+            <div
+                className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-[#efeae2]"
+                onDragEnter={(e) => {
+                    if (!hasFiles(e)) return;
+                    e.preventDefault();
+                    dragDepth.current += 1;
+                    setDropping(true);
+                }}
+                onDragOver={(e) => {
+                    if (!hasFiles(e)) return;
+                    e.preventDefault(); // required, or the browser opens the file instead
+                    e.dataTransfer.dropEffect = disabledReason ? 'none' : 'copy';
+                }}
+                onDragLeave={(e) => {
+                    if (!hasFiles(e)) return;
+                    dragDepth.current = Math.max(0, dragDepth.current - 1);
+                    if (dragDepth.current === 0) setDropping(false);
+                }}
+                onDrop={(e) => {
+                    if (!hasFiles(e)) return;
+                    e.preventDefault();
+                    dragDepth.current = 0;
+                    setDropping(false);
+                    const files = [...e.dataTransfer.files];
+                    if (disabledReason) return void toast.error(disabledReason);
+                    if (files.length === 0) return void toast.error('That item cannot be attached. Drop a file from your computer.');
+                    if (files.length > 1) toast.message('One file per message: the first file was attached.');
+                    composer.current?.attach(files[0]);
+                }}
+            >
+                {dropping && (
+                    <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-primary/15 p-6 backdrop-blur-[1px]">
+                        <div className="rounded-xl border-2 border-dashed border-brand-500 bg-card px-8 py-6 text-center shadow-raised">
+                            <UploadCloudIcon className="mx-auto size-8 text-brand-600" />
+                            <p className="mt-2 text-[15px] font-semibold">{disabledReason ? 'Files cannot be sent right now' : 'Drop to attach'}</p>
+                            <p className="mt-0.5 max-w-xs text-[13px] text-muted-foreground">
+                                {disabledReason ?? 'Images, videos, audio and documents. You can add a caption before sending.'}
+                            </p>
+                        </div>
+                    </div>
+                )}
+                <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-card px-4 py-2.5">
                     <Button variant="ghost" size="icon-sm" className="md:hidden" onClick={onBack} aria-label="Back to conversations">
                         <ArrowLeftIcon />
                     </Button>
                     <Avatar name={contact?.display_name ?? '?'} />
-                    <div className="min-w-0 flex-1">
+                    <div className="min-w-32 flex-1">
                         <p className="truncate text-[14.5px] font-semibold">{contact?.display_name}</p>
                         <p className="truncate text-[12px] text-muted-foreground">
                             {contact?.phone ?? (contact?.username ? `@${contact.username}` : 'WhatsApp user')}
                             {c.phone_number ? ` · via ${c.phone_number.verified_name ?? c.phone_number.display_phone_number}` : ''}
                         </p>
                     </div>
-                    {c.window.open ? (
-                        <Badge tone="good" dot title="The customer wrote in the last 24 hours: you can send text and media.">
-                            Window open · {timeLeft(c.window.expires_at)}
-                        </Badge>
-                    ) : (
-                        <Badge tone="warn" dot title="More than 24 hours since the customer last wrote: only approved templates can be sent.">
-                            Window closed · template only
-                        </Badge>
-                    )}
-                    {c.status === 'closed' && <Badge tone="grey">Closed</Badge>}
-                    {c.snoozed_until && <Badge tone="info">Snoozed</Badge>}
-                    <NotesButton conversation={c} />
-                    {can(P.InboxReply) && <SnoozeMenu conversation={c} />}
-                    {can(P.InboxReply) && (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            title={
-                                c.auto_reply_enabled
-                                    ? 'Automatic replies are allowed in this conversation. Click to cancel them here.'
-                                    : 'Automatic replies are cancelled for this conversation. Click to allow them again.'
-                            }
-                            onClick={async () => {
-                                try {
-                                    await setConversationAutoReply(c.id, !c.auto_reply_enabled);
-                                    toast.success(
-                                        c.auto_reply_enabled ? 'Auto reply cancelled for this conversation' : 'Auto reply allowed for this conversation',
-                                    );
-                                    void qc.invalidateQueries({ queryKey: keys.conversation(c.id) });
-                                    void qc.invalidateQueries({ queryKey: keys.conversationsAll });
-                                } catch (e) {
-                                    toast.error(errorMessage(e));
+                    {/* Status and actions: one group that wraps as a whole row when space is short, so nothing is hidden. */}
+                    <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+                        {c.window.open ? (
+                            <Badge tone="good" dot title="The customer wrote in the last 24 hours: you can send text and media.">
+                                Window open · {timeLeft(c.window.expires_at)}
+                            </Badge>
+                        ) : (
+                            <Badge tone="warn" dot title="More than 24 hours since the customer last wrote: only approved templates can be sent.">
+                                Window closed · template only
+                            </Badge>
+                        )}
+                        {c.status === 'closed' && <Badge tone="grey">Closed</Badge>}
+                        {c.snoozed_until && <Badge tone="info">Snoozed</Badge>}
+                        <NotesButton conversation={c} />
+                        {can(P.InboxReply) && <SnoozeMenu conversation={c} />}
+                        {can(P.InboxReply) && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                title={
+                                    c.auto_reply_enabled
+                                        ? 'Automatic replies are allowed in this conversation. Click to cancel them here.'
+                                        : 'Automatic replies are cancelled for this conversation. Click to allow them again.'
                                 }
-                            }}
-                        >
-                            {c.auto_reply_enabled ? 'Cancel auto reply' : 'Auto reply off'}
-                        </Button>
-                    )}
-                    {c.window.open && can(P.InboxReply) && contact && contact.consent_state === 'unknown' && (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={askingConsent}
-                            title="Sends a question with Subscribe / No thanks buttons. A tap on Subscribe is recorded as marketing consent."
-                            onClick={async () => {
-                                setAskingConsent(true);
-                                try {
-                                    await requestConsent(c.id);
-                                    toast.success('Consent request sent');
-                                    void qc.invalidateQueries({ queryKey: keys.thread(c.id) });
-                                } catch (e) {
-                                    toast.error(errorMessage(e));
-                                } finally {
-                                    setAskingConsent(false);
-                                }
-                            }}
-                        >
-                            {askingConsent ? 'Sending…' : 'Ask for consent'}
-                        </Button>
-                    )}
+                                onClick={async () => {
+                                    try {
+                                        await setConversationAutoReply(c.id, !c.auto_reply_enabled);
+                                        toast.success(
+                                            c.auto_reply_enabled ? 'Auto reply cancelled for this conversation' : 'Auto reply allowed for this conversation',
+                                        );
+                                        void qc.invalidateQueries({ queryKey: keys.conversation(c.id) });
+                                        void qc.invalidateQueries({ queryKey: keys.conversationsAll });
+                                    } catch (e) {
+                                        toast.error(errorMessage(e));
+                                    }
+                                }}
+                            >
+                                {c.auto_reply_enabled ? 'Cancel auto reply' : 'Auto reply off'}
+                            </Button>
+                        )}
+                        {c.window.open && can(P.InboxReply) && contact && contact.consent_state === 'unknown' && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={askingConsent}
+                                title="Sends a question with Subscribe / No thanks buttons. A tap on Subscribe is recorded as marketing consent."
+                                onClick={async () => {
+                                    setAskingConsent(true);
+                                    try {
+                                        await requestConsent(c.id);
+                                        toast.success('Consent request sent');
+                                        void qc.invalidateQueries({ queryKey: keys.thread(c.id) });
+                                    } catch (e) {
+                                        toast.error(errorMessage(e));
+                                    } finally {
+                                        setAskingConsent(false);
+                                    }
+                                }}
+                            >
+                                {askingConsent ? 'Sending…' : 'Ask for consent'}
+                            </Button>
+                        )}
+                    </div>
                 </header>
 
                 <div
@@ -240,6 +290,7 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                 </div>
 
                 <Composer
+                    ref={composer}
                     disabledReason={disabledReason}
                     replyTo={replyTo}
                     onClearReply={() => setReplyTo(null)}
