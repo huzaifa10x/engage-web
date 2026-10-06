@@ -36,7 +36,7 @@ export const NAV: NavSection[] = [
         title: 'Workspace',
         items: [
             { label: 'Dashboard', icon: LayoutDashboardIcon, href: '/dashboard' },
-            { label: 'Team Inbox', icon: InboxIcon, href: '/inbox', permission: P.InboxView },
+            { label: 'Conversations', icon: InboxIcon, href: '/inbox', permission: P.InboxView },
             { label: 'Contacts & CRM', icon: ContactIcon, href: '/contacts', permission: P.ContactsView },
         ],
     },
