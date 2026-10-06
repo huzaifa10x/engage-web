@@ -81,7 +81,7 @@ export default function DashboardPage() {
             show: can(P.TeamView),
         },
         {
-            done: !!me.entitlements && me.entitlements.subscription_status === 'active',
+            done: me.entitlements?.subscription?.status === 'active',
             title: 'Choose your plan',
             body: 'Compare plans and usage before your trial ends.',
             href: '/billing',

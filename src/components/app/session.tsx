@@ -21,7 +21,8 @@ export function SessionProvider({ me, children }: { me: Me; children: React.Reac
         membership,
         can: (p) => canDo(me.permissions, p),
         feature: (key) => {
-            const e = me.entitlements?.entitlements[key];
+            // Never throw from here: a missing feature simply reads as "not included".
+            const e = me.entitlements?.features?.[key];
 
             return { enabled: e?.enabled ?? false, limit: e?.limit ?? null };
         },

@@ -44,14 +44,14 @@ export function ImpersonationBanner() {
 export function TrialBanner() {
     const { me, can } = useSession();
     const e = me.entitlements;
-    if (!e || e.subscription_status !== 'trialing') return null;
-    const days = daysUntil(e.trial_ends_at);
+    if (!e || e.subscription?.status !== 'trialing') return null;
+    const days = daysUntil(e.subscription.trial_ends_at);
 
     return (
         <div className="flex flex-wrap items-center gap-2 border-b border-brand-100 bg-brand-50 px-4 py-2 text-[13px] text-brand-600 sm:px-6">
             <SparklesIcon className="size-4" />
             <span>
-                <span className="font-semibold">{e.plan_name} trial</span> · {days === 0 ? 'ends today' : `${days} day${days === 1 ? '' : 's'} left`}. Your
+                <span className="font-semibold">{e.plan?.name} trial</span> · {days === 0 ? 'ends today' : `${days} day${days === 1 ? '' : 's'} left`}. Your
                 workspace moves to the Free plan when it ends.
             </span>
             {can(P.BillingView) && (

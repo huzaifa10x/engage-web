@@ -70,7 +70,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 })}
             </div>
             <div className="border-t border-white/5 px-4 py-3 text-[12px] text-sidebar-muted">
-                {me.entitlements ? `${me.entitlements.plan_name} plan` : '—'}
+                {me.entitlements?.plan?.name ? `${me.entitlements.plan.name} plan` : '—'}
             </div>
         </nav>
     );

@@ -57,14 +57,11 @@ export type EntitlementValue = {
     config: Record<string, unknown> | unknown[];
 };
 
+/** The plan summary inside /me — the same shape the API sends (`plan`, `subscription`, `features`). */
 export type EntitlementSnapshot = {
-    plan_key: string;
-    plan_name: string;
-    plan_version_id: string;
-    plan_version: number;
-    subscription_status: string | null;
-    trial_ends_at: string | null;
-    entitlements: Record<string, EntitlementValue>;
+    plan: { key: string; name: string; version: number | null };
+    subscription: { status: string | null; trial_ends_at: string | null };
+    features: Record<string, EntitlementValue>;
 };
 
 export type Me = {
