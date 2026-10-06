@@ -4,6 +4,11 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api, upload } from './api';
 import type {
+    CannedResponse,
+    ConversationNote,
+    DashboardSummary,
+    InboxSettings,
+    MemberNotification,
     AutoReplySettings,
     BillingPayments,
     BillingPreview,
@@ -148,6 +153,7 @@ export type ConversationFilters = {
     assigned?: 'me' | 'unassigned' | 'any';
     unread?: boolean;
     q?: string;
+    snoozed?: boolean;
 };
 
 export const useConversations = (filters: ConversationFilters, refetchInterval: number | false = false) =>
@@ -426,3 +432,58 @@ export const updateAutoReply = (body: AutoReplySettings) => api<Data<AutoReplySe
 /** Switch automatic replies on or off for one conversation. */
 export const setConversationAutoReply = (id: string, enabled: boolean) =>
     api<Data<Conversation>>(`conversations/${id}`, { method: 'PATCH', body: { auto_reply_enabled: enabled } }).then((r) => r.data);
+
+// ── Inbox tools: canned responses, notes, snooze, business hours, notifications ──────────
+
+export const useCannedResponses = (enabled = true) =>
+    useQuery({
+        queryKey: ['canned-responses'],
+        queryFn: () => api<Data<CannedResponse[]>>('canned-responses').then((r) => r.data),
+        enabled,
+        staleTime: 60_000,
+    });
+
+export const saveCannedResponse = (id: string | null, body: { shortcut: string; body: string }) =>
+    api<Data<CannedResponse>>(id ? `canned-responses/${id}` : 'canned-responses', { method: id ? 'PUT' : 'POST', body }).then((r) => r.data);
+
+export const deleteCannedResponse = (id: string) => api(`canned-responses/${id}`, { method: 'DELETE' });
+
+export const useConversationNotes = (id: string | null, enabled = true) =>
+    useQuery({
+        queryKey: ['inbox', 'notes', id],
+        queryFn: () => api<Data<ConversationNote[]>>(`conversations/${id}/notes`).then((r) => r.data),
+        enabled: enabled && id !== null,
+    });
+
+export const addConversationNote = (id: string, body: string, mentions: string[]) =>
+    api(`conversations/${id}/notes`, { method: 'POST', body: { body, mentions } });
+
+export const snoozeConversation = (id: string, until: string | null) =>
+    api<Data<Conversation>>(`conversations/${id}/snooze`, until ? { method: 'POST', body: { until } } : { method: 'DELETE' }).then((r) => r.data);
+
+export const useInboxSettings = (enabled = true) =>
+    useQuery({ queryKey: ['inbox-settings'], queryFn: () => api<Data<InboxSettings>>('tenant/inbox-settings').then((r) => r.data), enabled });
+
+export const updateInboxSettings = (body: Pick<InboxSettings, 'business_hours' | 'routing'>) =>
+    api<Data<InboxSettings>>('tenant/inbox-settings', { method: 'PUT', body }).then((r) => r.data);
+
+type NotificationFeed = { unread: number; items: MemberNotification[] };
+
+export const useNotifications = (enabled = true) =>
+    useQuery({
+        queryKey: ['notifications'],
+        queryFn: () => api<Data<NotificationFeed>>('notifications').then((r) => r.data),
+        enabled,
+        refetchInterval: 30_000,
+    });
+
+export const readNotifications = (id?: string) =>
+    api<Data<NotificationFeed>>('notifications/read', { method: 'POST', body: { id: id ?? null } }).then((r) => r.data);
+
+export const useDashboardSummary = (enabled = true) =>
+    useQuery({
+        queryKey: ['dashboard', 'summary'],
+        queryFn: () => api<Data<DashboardSummary>>('dashboard/summary').then((r) => r.data),
+        enabled,
+        refetchInterval: 60_000,
+    });

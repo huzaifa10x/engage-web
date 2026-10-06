@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Field, FormError } from '@/components/app/field';
 import { Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
+import { BusinessHoursCard, CannedResponsesCard } from '@/components/settings/inbox-cards';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -321,6 +322,21 @@ function AutoReplyCard({ canManage }: { canManage: boolean }) {
                         onChange={(e) => setDraft({ ...value, message: e.target.value })}
                     />
                 </Field>
+                <Field label="When" htmlFor="ar-when" className="sm:max-w-xs" hint="“Outside business hours” uses the hours set above.">
+                    <Select
+                        value={value.when}
+                        onValueChange={(v) => setDraft({ ...value, when: v as AutoReplySettings['when'] })}
+                        disabled={!canManage || !value.enabled}
+                    >
+                        <SelectTrigger id="ar-when">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="always">Always</SelectItem>
+                            <SelectItem value="outside_hours">Only outside business hours</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </Field>
                 <Field label="Send at most once every" htmlFor="ar-cooldown" className="sm:max-w-xs">
                     <Select
                         value={String(value.cooldown_hours)}
@@ -352,7 +368,7 @@ function AutoReplyCard({ canManage }: { canManage: boolean }) {
 }
 
 export default function SettingsPage() {
-    const { can } = useSession();
+    const { can, feature } = useSession();
     const tenant = useTenant();
 
     if (!can(P.SettingsView)) return <Forbidden />;
@@ -366,7 +382,9 @@ export default function SettingsPage() {
             {tenant.data ? (
                 <div className="grid gap-4">
                     <WorkspaceForm key={tenant.data.id} tenant={tenant.data} canManage={can(P.SettingsManage)} />
+                    <BusinessHoursCard canManage={can(P.SettingsManage)} />
                     <AutoReplyCard canManage={can(P.SettingsManage)} />
+                    <CannedResponsesCard canManage={can(P.InboxReply)} limit={feature('canned_responses').limit} />
                 </div>
             ) : (
                 <Skeleton className="h-96" />

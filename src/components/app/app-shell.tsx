@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
 import { ImpersonationBanner, TrialBanner } from './banners';
+import { NotificationBell } from './notification-bell';
 import { NumberSwitcher } from './number-switcher';
 import { Sidebar } from './sidebar';
 import { UserMenu } from './user-menu';
@@ -55,6 +56,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                             <NumberSwitcher />
                         </div>
                         <div className="ml-auto flex items-center gap-2">
+                            <NotificationBell />
                             <UserMenu />
                         </div>
                     </header>

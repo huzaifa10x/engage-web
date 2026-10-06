@@ -33,11 +33,15 @@ export function ConversationList({
     const [assigned, setAssigned] = useState<NonNullable<ConversationFilters['assigned']>>('any');
     const [status, setStatus] = useState<'open' | 'closed'>('open');
     const [unread, setUnread] = useState(false);
+    const [snoozed, setSnoozed] = useState(false);
     const [search, setSearch] = useState('');
     const [q, setQ] = useState('');
 
     // Without websockets the list is kept fresh by polling.
-    const list = useConversations({ phone_number_id: phoneNumberId, assigned, status, unread, q: q || undefined }, polling ? 15_000 : false);
+    const list = useConversations(
+        { phone_number_id: phoneNumberId, assigned, status, unread, snoozed: snoozed || undefined, q: q || undefined },
+        polling ? 15_000 : false,
+    );
     const rows = list.data?.pages.flatMap((p) => p.data) ?? [];
 
     return (
@@ -82,6 +86,16 @@ export function ConversationList({
                     >
                         Unread
                     </button>
+                    <button
+                        onClick={() => setSnoozed((v) => !v)}
+                        className={cn(
+                            'rounded-md px-2.5 py-1 text-[12.5px] font-semibold',
+                            snoozed ? 'bg-brand-50 text-brand-600' : 'text-muted-foreground hover:bg-muted',
+                        )}
+                        aria-pressed={snoozed}
+                    >
+                        Snoozed
+                    </button>
                     <Select value={status} onValueChange={(v) => setStatus(v as 'open' | 'closed')}>
                         <SelectTrigger size="sm" className="ml-auto w-24" aria-label="Status">
                             <SelectValue />
@@ -108,7 +122,7 @@ export function ConversationList({
                 {!list.isLoading && rows.length === 0 && (
                     <li className="flex flex-col items-center gap-2 px-6 py-12 text-center text-sm text-muted-foreground">
                         <InboxIcon className="size-6" />
-                        {q || unread || assigned !== 'any'
+                        {q || unread || snoozed || assigned !== 'any'
                             ? 'No conversations match these filters.'
                             : 'No conversations yet. Messages to your WhatsApp numbers appear here.'}
                     </li>

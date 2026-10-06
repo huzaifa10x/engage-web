@@ -12,7 +12,7 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { number } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { useEntitlements, useInvitations, useMembers, usePhoneNumbers } from '@/lib/queries';
+import { useDashboardSummary, useEntitlements, useInvitations, useMembers, usePhoneNumbers } from '@/lib/queries';
 import { qualityLabel, qualityTone, statusLabel, statusTone, tierLabel } from '@/lib/whatsapp';
 import { cn } from '@/lib/utils';
 
@@ -52,6 +52,7 @@ export default function DashboardPage() {
     const { me, membership, can } = useSession();
     const numbers = usePhoneNumbers();
     const entitlements = useEntitlements();
+    const summary = useDashboardSummary(can(P.InboxView));
     const members = useMembers(can(P.TeamView));
     const invitations = useInvitations(can(P.TeamView));
 
@@ -163,8 +164,26 @@ export default function DashboardPage() {
                             progress={seats && !seats.unlimited && seats.limit ? ((seats.used ?? 0) / seats.limit) * 100 : null}
                             hint="Members plus pending invitations"
                         />
-                        <Kpi label="Conversations today" icon={<InboxIcon className="size-4" />} value="—" hint="Available when the Team Inbox launches" />
-                        <Kpi label="Campaigns sent" icon={<MegaphoneIcon className="size-4" />} value="—" hint="Available when Campaigns launch" />
+                        <Kpi
+                            label="Conversations today"
+                            icon={<InboxIcon className="size-4" />}
+                            value={summary.data ? number(summary.data.conversations_today) : '—'}
+                            hint={
+                                summary.data
+                                    ? `${number(summary.data.waiting_for_reply)} waiting for a reply · ${number(summary.data.unassigned)} unassigned`
+                                    : 'Customers who wrote today'
+                            }
+                        />
+                        <Kpi
+                            label="Campaign messages this month"
+                            icon={<MegaphoneIcon className="size-4" />}
+                            value={summary.data ? number(summary.data.campaign_messages_this_month) : '—'}
+                            hint={
+                                summary.data
+                                    ? `${number(summary.data.messages_sent_today)} sent and ${number(summary.data.messages_received_today)} received today`
+                                    : 'Sent through Campaigns'
+                            }
+                        />
                     </>
                 )}
             </div>

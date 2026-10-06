@@ -217,6 +217,8 @@ export type Contact = {
 };
 
 export type Conversation = {
+    /** Set while the conversation is snoozed (hidden from the inbox until then). */
+    snoozed_until: string | null;
     /** false = automatic replies are switched off for this conversation. */
     auto_reply_enabled: boolean;
     id: string;
@@ -587,4 +589,41 @@ export type BillingPayment = {
 
 export type BillingPayments = { payments: BillingPayment[]; upcoming: { amount_due_minor: number; currency: string; date: string | null } | null };
 
-export type AutoReplySettings = { enabled: boolean; message: string; cooldown_hours: number };
+export type AutoReplySettings = { enabled: boolean; message: string; cooldown_hours: number; when: 'always' | 'outside_hours' };
+
+// ── Inbox tools ──────────────────────────────────────────────────────────────────────────
+
+export type CannedResponse = { id: string; shortcut: string; body: string };
+
+export type ConversationNote = { id: string; body: string; author: string; mine: boolean; mentions: string[]; created_at: string | null };
+
+export type DayHours = { open: boolean; from: string; to: string };
+
+export type InboxSettings = {
+    business_hours: { enabled: boolean; days: Record<'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun', DayHours> };
+    routing: 'manual' | 'round_robin';
+    timezone: string;
+    open_now: boolean;
+    can: { business_hours: boolean; auto_routing: boolean };
+};
+
+export type MemberNotification = {
+    id: string;
+    type: 'assigned' | 'mention' | 'snooze_ended' | (string & {});
+    title: string;
+    body: string | null;
+    url: string | null;
+    read: boolean;
+    created_at: string | null;
+};
+
+export type DashboardSummary = {
+    conversations_today: number;
+    open: number;
+    unassigned: number;
+    waiting_for_reply: number;
+    mine: number;
+    messages_sent_today: number;
+    messages_received_today: number;
+    campaign_messages_this_month: number;
+};

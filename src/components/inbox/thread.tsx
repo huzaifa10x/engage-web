@@ -30,6 +30,7 @@ import type { Message } from '@/lib/types';
 import { Composer } from './composer';
 import { ContactPanel } from './contact-panel';
 import { MessageBubble } from './message-bubble';
+import { NotesButton, SnoozeMenu } from './thread-tools';
 import { TemplateDialog } from './template-dialog';
 
 export function Thread({ conversationId, polling, onBack }: { conversationId: string; polling: boolean; onBack: () => void }) {
@@ -139,6 +140,9 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                         </Badge>
                     )}
                     {c.status === 'closed' && <Badge tone="grey">Closed</Badge>}
+                    {c.snoozed_until && <Badge tone="info">Snoozed</Badge>}
+                    <NotesButton conversation={c} />
+                    {can(P.InboxReply) && <SnoozeMenu conversation={c} />}
                     {can(P.InboxReply) && (
                         <Button
                             variant="outline"

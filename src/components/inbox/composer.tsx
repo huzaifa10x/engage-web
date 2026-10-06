@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { CannedPicker } from './canned-picker';
 import { EmojiPicker } from './emoji-picker';
 import { errorMessage, upload } from '@/lib/api';
 import { fileSize } from '@/lib/format';
@@ -197,6 +198,12 @@ export function Composer({
                 <Button variant="ghost" size="icon" onClick={onTemplate} aria-label="Send a template">
                     <FileTextIcon />
                 </Button>
+                <CannedPicker
+                    onPick={(body) => {
+                        setText((current) => (current.trim() ? `${current.trimEnd()}\n${body}` : body));
+                        requestAnimationFrame(() => inputRef.current?.focus());
+                    }}
+                />
                 <EmojiPicker
                     onPick={(emoji) => {
                         const el = inputRef.current;
