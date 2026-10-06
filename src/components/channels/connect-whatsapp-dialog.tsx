@@ -101,10 +101,9 @@ export function ConnectWhatsappDialog({ open, onOpenChange }: { open: boolean; o
 }
 
 function ChooseFlow({ flow, setFlow, cancelled }: { flow: Flow; setFlow: (f: Flow) => void; cancelled: boolean }) {
-    const { feature, me } = useSession();
+    const { feature } = useSession();
     // Decided by the plan (and any per-workspace override); the server enforces the same rule.
     const coexistence = feature('coexistence');
-    const history = (me.entitlements?.features?.coexistence?.config as { history?: boolean } | undefined)?.history === true;
     const options: { id: Flow; icon: React.ReactNode; title: string; body: string; disabled?: boolean }[] = [
         {
             id: 'standard',
@@ -117,10 +116,8 @@ function ChooseFlow({ flow, setFlow, cancelled }: { flow: Flow; setFlow: (f: Flo
             icon: <SmartphoneIcon className="size-5" />,
             title: 'My WhatsApp Business app number',
             body: !coexistence.enabled
-                ? 'Not available on this workspace. Contact support or upgrade your plan to connect a number that stays on the WhatsApp Business app.'
-                : history
-                  ? 'Keep chatting from the app on your phone while your team uses 10X Engage. Your contacts and recent chat history are imported; sending is limited to 20 messages per second.'
-                  : 'Keep chatting from the app on your phone while your team uses 10X Engage. Your contacts are imported and new messages appear from now on; importing past chat history needs a paid plan. Sending is limited to 20 messages per second.',
+                ? 'Not available on this workspace. Contact support to connect a number that stays on the WhatsApp Business app.'
+                : 'Keep chatting from the app on your phone while your team uses 10X Engage. Your contacts and recent chat history are imported. Sending on this number is limited to 20 messages per second on every plan.',
             disabled: !coexistence.enabled,
         },
     ];
@@ -169,7 +166,7 @@ function ChooseFlow({ flow, setFlow, cancelled }: { flow: Flow; setFlow: (f: Flo
                     <>
                         <li>• Keep the WhatsApp Business app (v2.24.17 or later) open on your phone: you will scan a QR code with it.</li>
                         <li>• The number stays on your phone. Messages you send from the app also appear in the team inbox.</li>
-                        {history && <li>• Agree to share chat history when the app asks. This can only be done once, during setup.</li>}
+                        <li>• Agree to share chat history when the app asks. This can only be done once, during setup.</li>
                     </>
                 )}
                 <li>• Allow popups for this site.</li>
