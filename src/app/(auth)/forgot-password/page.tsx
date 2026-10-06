@@ -34,7 +34,7 @@ export default function ForgotPasswordPage() {
                 <h1 className="text-xl font-semibold">Reset your password</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
                     {sent
-                        ? `If ${email.trim()} has an account, a reset link is on its way. It works for 60 minutes.`
+                        ? `If ${email.trim()} has an account, a reset link is on its way. It works for 5 minutes, so use it straight away.`
                         : 'Enter your email and we will send you a link to choose a new password.'}
                 </p>
             </div>

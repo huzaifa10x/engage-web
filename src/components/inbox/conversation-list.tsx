@@ -45,8 +45,8 @@ export function ConversationList({
     const rows = list.data?.pages.flatMap((p) => p.data) ?? [];
 
     return (
-        <div className="flex h-full min-h-0 flex-col border-r bg-card">
-            <div className="grid gap-2 border-b p-3">
+        <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden border-r bg-card">
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-2 border-b p-3">
                 <form
                     onSubmit={(e) => {
                         e.preventDefault();
@@ -63,7 +63,7 @@ export function ConversationList({
                         aria-label="Search conversations"
                     />
                 </form>
-                <div className="flex items-center gap-1">
+                <div className="flex flex-wrap items-center gap-1">
                     {TABS.map((t) => (
                         <button
                             key={t.id}
@@ -97,7 +97,7 @@ export function ConversationList({
                         Snoozed
                     </button>
                     <Select value={status} onValueChange={(v) => setStatus(v as 'open' | 'closed')}>
-                        <SelectTrigger size="sm" className="ml-auto w-24" aria-label="Status">
+                        <SelectTrigger size="sm" className="ml-auto w-24 shrink-0" aria-label="Status">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
