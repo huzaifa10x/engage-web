@@ -70,7 +70,7 @@ function LoginForm() {
                     <Label htmlFor="remember" className="font-normal text-muted-foreground">
                         Keep me signed in
                     </Label>
-                    <Link href="/forgot-password" className="ml-auto text-sm font-semibold text-primary hover:underline">
+                    <Link href="/forgot-password" className="ml-auto text-sm font-semibold text-brand-600 hover:underline">
                         Forgot password?
                     </Link>
                 </div>
@@ -81,7 +81,10 @@ function LoginForm() {
 
             <p className="mt-6 text-sm text-muted-foreground">
                 New to 10X Engage?{' '}
-                <Link href={`/register${params.get('next') ? `?next=${encodeURIComponent(next)}` : ''}`} className="font-semibold text-primary hover:underline">
+                <Link
+                    href={`/register${params.get('next') ? `?next=${encodeURIComponent(next)}` : ''}`}
+                    className="font-semibold text-brand-600 hover:underline"
+                >
                     Create a workspace
                 </Link>
             </p>

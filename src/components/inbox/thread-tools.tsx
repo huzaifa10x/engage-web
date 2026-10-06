@@ -157,7 +157,7 @@ export function NotesButton({ conversation }: { conversation: Conversation }) {
                                             type="button"
                                             aria-pressed={mentions.includes(m.id)}
                                             onClick={() => setMentions((cur) => (cur.includes(m.id) ? cur.filter((x) => x !== m.id) : [...cur, m.id]))}
-                                            className={`rounded-full border px-2 py-0.5 ${mentions.includes(m.id) ? 'border-primary bg-brand-50 font-semibold text-brand-600' : 'hover:bg-muted'}`}
+                                            className={`rounded-full border px-2 py-0.5 ${mentions.includes(m.id) ? 'border-brand-500 bg-brand-50 font-semibold text-brand-600' : 'hover:bg-muted'}`}
                                         >
                                             @{m.user?.name ?? 'Member'}
                                         </button>

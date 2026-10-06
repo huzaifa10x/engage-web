@@ -11,10 +11,12 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
                 <p className="text-[12px] text-muted-foreground">© {new Date().getFullYear()} 10X Digital. WhatsApp is a trademark of Meta Platforms, Inc.</p>
             </div>
             <aside className="relative hidden overflow-hidden bg-sidebar lg:block">
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(79,70,229,.45),transparent_55%),radial-gradient(circle_at_80%_80%,rgba(37,211,102,.25),transparent_50%)]" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_25%_15%,rgba(169,227,36,.34),transparent_52%),radial-gradient(circle_at_85%_85%,rgba(169,227,36,.14),transparent_48%)]" />
                 <div className="relative flex h-full flex-col justify-end p-12 text-white">
-                    <p className="text-sm font-semibold text-sidebar-foreground">WhatsApp Business Platform</p>
-                    <h2 className="mt-2 max-w-md text-3xl leading-tight font-semibold">
+                    <p className="inline-flex w-fit items-center gap-2 rounded-full bg-primary/15 px-3 py-1 text-[12.5px] font-semibold text-brand-600">
+                        WhatsApp Business Platform
+                    </p>
+                    <h2 className="mt-4 max-w-md text-3xl leading-tight font-semibold tracking-tight">
                         One inbox, campaigns and automations for every WhatsApp number your team runs.
                     </h2>
                     <ul className="mt-6 space-y-2 text-sm text-sidebar-foreground">

@@ -18,8 +18,8 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
         <TabsPrimitive.Trigger
             data-slot="tabs-trigger"
             className={cn(
-                '-mb-px inline-flex items-center gap-1.5 border-b-2 border-transparent px-3 py-2 text-sm font-semibold whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground',
-                'focus-visible:outline-none data-[state=active]:border-primary data-[state=active]:text-foreground',
+                '-mb-px inline-flex items-center gap-1.5 rounded-t-md border-b-2 border-transparent px-3 py-2 text-sm font-semibold whitespace-nowrap text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground',
+                'focus-visible:ring-[3px] focus-visible:ring-ring/30 focus-visible:outline-none data-[state=active]:border-brand-500 data-[state=active]:text-foreground',
                 className,
             )}
             {...props}

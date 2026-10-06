@@ -49,7 +49,7 @@ function DropdownMenuCheckItem({ className, checked, children, ...props }: React
     return (
         <DropdownMenuItem className={cn('pr-8', className)} {...props}>
             {children}
-            {checked && <CheckIcon className="absolute right-2 !text-primary" />}
+            {checked && <CheckIcon className="absolute right-2 !text-brand-600" />}
         </DropdownMenuItem>
     );
 }

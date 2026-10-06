@@ -175,7 +175,7 @@ function PlanCard({
     const sameInterval = billing.subscription?.interval === (yearly ? 'yearly' : 'monthly');
 
     return (
-        <div className={`flex flex-col rounded-lg border p-4 ${plan.current ? 'border-primary ring-1 ring-primary' : ''}`}>
+        <div className={`flex flex-col rounded-lg border p-4 ${plan.current ? 'border-brand-500 ring-1 ring-brand-500' : ''}`}>
             <div className="flex items-center justify-between gap-2">
                 <p className="font-semibold">{plan.name}</p>
                 {plan.current && <Badge tone="brand">{billing.subscription?.status === 'trialing' ? 'Trial' : 'Current'}</Badge>}

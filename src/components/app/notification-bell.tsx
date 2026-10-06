@@ -65,7 +65,7 @@ export function NotificationBell() {
                     <div className="flex items-center justify-between border-b px-3 py-2">
                         <p className="text-sm font-semibold">Notifications</p>
                         {unread > 0 && (
-                            <button onClick={() => markRead()} className="text-[12.5px] font-semibold text-primary hover:underline">
+                            <button onClick={() => markRead()} className="text-[12.5px] font-semibold text-brand-600 hover:underline">
                                 Mark all read
                             </button>
                         )}

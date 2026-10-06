@@ -2,40 +2,46 @@
 @import 'tw-animate-css';
 
 /*
- * 10X Engage design tokens (prototype v2). Light theme only. shadcn/ui reads the semantic
- * variables below; change --primary to rebrand.
+ * 10X Engage design tokens — 10X Digital brand (lime #A9E324 on near-black). Light theme only.
+ *
+ * The lime is a FILL colour: it carries dark text (--primary-foreground) and is never used as
+ * text or as a thin line on white, where it would be unreadable. For those there are two darker
+ * steps of the same hue:  --brand-500 (borders, focus rings, selected states, ≥3:1 on white)
+ *                         --brand-600 (text and icons, ≥7:1 on white).
  */
 :root {
-    --radius: 0.625rem;
+    --radius: 0.75rem;
 
-    --background: #f5f6f8;
-    --foreground: #0f172a;
+    --background: #f6f7f3;
+    --foreground: #0d1109;
     --card: #ffffff;
-    --card-foreground: #0f172a;
+    --card-foreground: #0d1109;
     --popover: #ffffff;
-    --popover-foreground: #0f172a;
-    --primary: #4f46e5;
-    --primary-foreground: #ffffff;
-    --secondary: #f1f3f7;
-    --secondary-foreground: #0f172a;
-    --muted: #f1f3f7;
-    --muted-foreground: #64748b;
-    --accent: #eef0ff;
-    --accent-foreground: #4338ca;
+    --popover-foreground: #0d1109;
+    --primary: #a9e324;
+    --primary-hover: #9ad41b;
+    --primary-foreground: #101a02;
+    --secondary: #f0f2ec;
+    --secondary-foreground: #0d1109;
+    --muted: #f0f2ec;
+    --muted-foreground: #5c6459;
+    --accent: #f1fadb;
+    --accent-foreground: #3a5a0c;
     --destructive: #dc2626;
     --destructive-foreground: #ffffff;
-    --border: #e5e8ef;
-    --input: #e5e8ef;
-    --ring: #4f46e5;
+    --border: #e3e6dd;
+    --input: #d6dbcf;
+    --ring: #689d0f;
 
-    --brand-50: #eef0ff;
-    --brand-100: #e0e3ff;
-    --brand-600: #4338ca;
-    --ink-2: #334155;
-    --faint: #94a3b8;
-    --line-2: #eff1f6;
+    --brand-50: #f3fbdf;
+    --brand-100: #e4f5b8;
+    --brand-500: #689d0f;
+    --brand-600: #3f6212;
+    --ink-2: #323a2f;
+    --faint: #798176;
+    --line-2: #eef0e9;
 
-    --good: #16a34a;
+    --good: #15803d;
     --good-bg: #dcfce7;
     --warn: #b45309;
     --warn-bg: #fef3c7;
@@ -43,14 +49,17 @@
     --bad-bg: #fee2e2;
     --info: #1d4ed8;
     --info-bg: #dbeafe;
-    --grey: #64748b;
-    --grey-bg: #f1f3f7;
+    --grey: #5c6459;
+    --grey-bg: #f0f2ec;
     --whatsapp: #25d366;
 
-    --sidebar: #0e1220;
-    --sidebar-2: #181d30;
-    --sidebar-foreground: #c7ccdb;
-    --sidebar-muted: #79839b;
+    --sidebar: #0a0d08;
+    --sidebar-2: #171c13;
+    --sidebar-foreground: #c9cfc4;
+    --sidebar-muted: #7d8678;
+
+    --shadow-card: 0 1px 2px rgba(13, 17, 9, 0.04), 0 1px 3px rgba(13, 17, 9, 0.06);
+    --shadow-raised: 0 4px 12px -2px rgba(13, 17, 9, 0.1), 0 2px 4px -2px rgba(13, 17, 9, 0.06);
 }
 
 @theme inline {
@@ -70,6 +79,7 @@
     --color-popover-foreground: var(--popover-foreground);
     --color-primary: var(--primary);
     --color-primary-foreground: var(--primary-foreground);
+    --color-primary-hover: var(--primary-hover);
     --color-secondary: var(--secondary);
     --color-secondary-foreground: var(--secondary-foreground);
     --color-muted: var(--muted);
@@ -84,6 +94,7 @@
 
     --color-brand-50: var(--brand-50);
     --color-brand-100: var(--brand-100);
+    --color-brand-500: var(--brand-500);
     --color-brand-600: var(--brand-600);
     --color-ink-2: var(--ink-2);
     --color-faint: var(--faint);
@@ -103,6 +114,9 @@
     --color-sidebar-2: var(--sidebar-2);
     --color-sidebar-foreground: var(--sidebar-foreground);
     --color-sidebar-muted: var(--sidebar-muted);
+
+    --shadow-card: var(--shadow-card);
+    --shadow-raised: var(--shadow-raised);
 }
 
 @layer base {
@@ -115,5 +129,30 @@
     body {
         @apply bg-background text-foreground antialiased;
         font-feature-settings: 'cv11', 'ss01';
+        text-rendering: optimizeLegibility;
+    }
+    ::selection {
+        background: var(--primary);
+        color: var(--primary-foreground);
+    }
+    h1,
+    h2,
+    h3 {
+        letter-spacing: -0.015em;
+    }
+    /* Quiet, consistent scrollbars for lists and panels. */
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: #cfd4c8 transparent;
+    }
+    /* Keyboard focus is always visible, in the brand's readable green. */
+    :focus-visible {
+        outline-color: var(--ring);
+    }
+    @media (prefers-reduced-motion: reduce) {
+        * {
+            transition-duration: 0.01ms !important;
+            animation-duration: 0.01ms !important;
+        }
     }
 }

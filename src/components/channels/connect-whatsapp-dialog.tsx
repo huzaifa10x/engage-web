@@ -131,13 +131,13 @@ function ChooseFlow({ flow, setFlow, cancelled }: { flow: Flow; setFlow: (f: Flo
                         onClick={() => setFlow(o.id)}
                         className={cn(
                             'flex gap-3 rounded-lg border p-3.5 text-left transition',
-                            flow === o.id ? 'border-primary bg-brand-50 ring-1 ring-primary' : 'hover:bg-muted',
+                            flow === o.id ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500' : 'hover:bg-muted',
                         )}
                     >
                         <span
                             className={cn(
                                 'mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-md',
-                                flow === o.id ? 'bg-primary text-white' : 'bg-muted text-muted-foreground',
+                                flow === o.id ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground',
                             )}
                         >
                             {o.icon}
@@ -166,7 +166,7 @@ function Progress({ phase, flow, attempt }: { phase: SignupPhase; flow: Flow; at
     if (phase === 'starting' || phase === 'popup') {
         return (
             <div className="flex items-center gap-3 rounded-lg border bg-muted/40 p-4 text-sm">
-                <Loader2Icon className="size-5 animate-spin text-primary" />
+                <Loader2Icon className="size-5 animate-spin text-brand-600" />
                 <div>
                     <p className="font-semibold">{phase === 'starting' ? 'Preparing secure signup…' : 'Complete the steps in the Meta popup'}</p>
                     <p className="text-muted-foreground">Keep this window open. If no popup appeared, allow popups and try again.</p>
@@ -191,7 +191,7 @@ function Progress({ phase, flow, attempt }: { phase: SignupPhase; flow: Flow; at
                         ) : state === 'failed' ? (
                             <XCircleIcon className="size-5 text-bad" />
                         ) : running ? (
-                            <Loader2Icon className="size-5 animate-spin text-primary" />
+                            <Loader2Icon className="size-5 animate-spin text-brand-600" />
                         ) : (
                             <CircleIcon className="size-5 text-faint" />
                         )}

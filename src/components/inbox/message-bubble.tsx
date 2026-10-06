@@ -174,7 +174,7 @@ export function MessageBubble({
                 )}
             >
                 {quoted !== undefined && message.reply_to_wamid && (
-                    <div className="mb-1.5 rounded border-l-4 border-primary/60 bg-black/5 px-2 py-1 text-[12.5px] opacity-80">
+                    <div className="mb-1.5 rounded border-l-4 border-brand-500/60 bg-black/5 px-2 py-1 text-[12.5px] opacity-80">
                         {quoted ? (quoted.body ?? `${quoted.type} message`) : 'Replying to an earlier message'}
                     </div>
                 )}

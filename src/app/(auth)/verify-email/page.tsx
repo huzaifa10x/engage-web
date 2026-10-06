@@ -111,7 +111,7 @@ export default function VerifyEmailPage() {
 
     return (
         <div className="grid gap-5">
-            <MailIcon className="size-9 text-primary" />
+            <MailIcon className="size-9 text-brand-600" />
             <div>
                 <h1 className="text-xl font-semibold">Enter your verification code</h1>
                 <p className="mt-1 text-sm text-muted-foreground">

@@ -46,7 +46,7 @@ export default function AcceptInvitationPage() {
 
     return (
         <CenteredCard>
-            <div className="mb-4 inline-flex size-11 items-center justify-center rounded-full bg-brand-50 text-primary">
+            <div className="mb-4 inline-flex size-11 items-center justify-center rounded-full bg-brand-50 text-brand-600">
                 <MailCheckIcon className="size-5" />
             </div>
             <h1 className="text-xl font-semibold">You have been invited</h1>

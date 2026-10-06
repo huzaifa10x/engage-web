@@ -35,7 +35,7 @@ export function EmptyState({
 }) {
     return (
         <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
-            {icon && <div className="mb-4 inline-flex size-12 items-center justify-center rounded-full bg-brand-50 text-primary">{icon}</div>}
+            {icon && <div className="mb-4 inline-flex size-12 items-center justify-center rounded-full bg-brand-50 text-brand-600">{icon}</div>}
             <p className="text-[15px] font-semibold">{title}</p>
             {description && <p className="mt-1 max-w-md text-sm text-muted-foreground">{description}</p>}
             {action && <div className="mt-5">{action}</div>}

@@ -4,7 +4,7 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
-    'inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[12px] font-semibold whitespace-nowrap [&>svg]:size-3',
+    'inline-flex w-fit shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[12px] leading-4 font-semibold whitespace-nowrap [&>svg]:size-3',
     {
         variants: {
             tone: {
@@ -13,7 +13,7 @@ const badgeVariants = cva(
                 bad: 'bg-bad-bg text-bad',
                 info: 'bg-info-bg text-info',
                 grey: 'bg-grey-bg text-grey',
-                brand: 'bg-brand-50 text-brand-600',
+                brand: 'bg-brand-100 text-brand-600',
                 outline: 'border text-muted-foreground',
             },
         },

@@ -165,7 +165,7 @@ export function Composer({
     return (
         <div className="border-t bg-card px-3 py-2.5">
             {replyTo && (
-                <div className="mb-2 flex items-center gap-2 rounded-md border-l-4 border-primary bg-muted px-3 py-1.5 text-[12.5px]">
+                <div className="mb-2 flex items-center gap-2 rounded-md border-l-4 border-brand-500 bg-muted px-3 py-1.5 text-[12.5px]">
                     <span className="min-w-0 flex-1 truncate">Replying to: {replyTo.body ?? `${replyTo.type} message`}</span>
                     <button onClick={onClearReply} aria-label="Cancel reply" className="text-muted-foreground hover:text-foreground">
                         <XIcon className="size-4" />

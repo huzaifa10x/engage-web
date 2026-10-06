@@ -54,8 +54,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                                                 onClick={onNavigate}
                                                 aria-current={active ? 'page' : undefined}
                                                 className={cn(
-                                                    'flex items-center gap-2.5 rounded-md px-2 py-1.5 text-[13.5px] font-medium transition-colors hover:bg-sidebar-2 hover:text-white',
-                                                    active && 'bg-primary text-white hover:bg-primary',
+                                                    'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13.5px] font-medium transition-colors hover:bg-sidebar-2 hover:text-white',
+                                                    active && 'bg-primary font-semibold text-primary-foreground hover:bg-primary hover:text-primary-foreground',
                                                 )}
                                             >
                                                 <Icon className="size-4" />

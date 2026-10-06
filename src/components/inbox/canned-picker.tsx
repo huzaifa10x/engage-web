@@ -64,7 +64,7 @@ export function CannedPicker({ onPick, disabled }: { onPick: (body: string) => v
                                 }}
                                 className="block w-full rounded-md px-2 py-1.5 text-left hover:bg-muted"
                             >
-                                <span className="block font-mono text-[12px] font-semibold text-primary">/{r.shortcut}</span>
+                                <span className="block font-mono text-[12px] font-semibold text-brand-600">/{r.shortcut}</span>
                                 <span className="line-clamp-2 text-[13px] text-muted-foreground">{r.body}</span>
                             </button>
                         ))}

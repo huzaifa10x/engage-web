@@ -120,7 +120,7 @@ function RegisterForm() {
                 Already have an account?{' '}
                 <Link
                     href={`/login${params.get('next') ? `?next=${encodeURIComponent(safeNext(params.get('next')))}` : ''}`}
-                    className="font-semibold text-primary hover:underline"
+                    className="font-semibold text-brand-600 hover:underline"
                 >
                     Sign in
                 </Link>

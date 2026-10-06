@@ -208,7 +208,7 @@ export function CannedResponsesCard({ canManage, limit }: { canManage: boolean; 
                 {list.map((r) => (
                     <div key={r.id} className="flex items-start gap-3 rounded-md border px-3 py-2">
                         <div className="min-w-0 flex-1">
-                            <p className="font-mono text-[12.5px] font-semibold text-primary">/{r.shortcut}</p>
+                            <p className="font-mono text-[12.5px] font-semibold text-brand-600">/{r.shortcut}</p>
                             <p className="line-clamp-2 text-[13px] text-muted-foreground">{r.body}</p>
                         </div>
                         {canManage && (
