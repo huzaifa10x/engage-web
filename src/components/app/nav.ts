@@ -65,7 +65,7 @@ export const NAV: NavSection[] = [
             { label: 'Compliance', icon: ShieldCheckIcon, href: '/compliance', permission: P.ComplianceView },
             { label: 'Integrations', icon: PlugIcon },
             { label: 'Developer', icon: CodeIcon },
-            { label: 'Billing', icon: CreditCardIcon, href: '/settings?tab=plan', permission: P.BillingView },
+            { label: 'Billing', icon: CreditCardIcon, href: '/billing', permission: P.BillingView },
             { label: 'Settings', icon: SettingsIcon, href: '/settings', permission: P.SettingsView },
             { label: 'Audit log', icon: ListChecksIcon, href: '/audit-log', permission: P.AuditView },
         ],

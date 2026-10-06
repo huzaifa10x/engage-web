@@ -55,7 +55,7 @@ export function TrialBanner() {
                 workspace moves to the Free plan when it ends.
             </span>
             {can(P.BillingView) && (
-                <Link href="/settings?tab=plan" className="ml-auto font-semibold hover:underline">
+                <Link href="/billing" className="ml-auto font-semibold hover:underline">
                     View plan
                 </Link>
             )}

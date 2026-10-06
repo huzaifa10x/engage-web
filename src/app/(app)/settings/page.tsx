@@ -1,269 +1,292 @@
 'use client';
 
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckIcon, MinusIcon } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useMemo, useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { z } from 'zod';
 
 import { Field, FormError } from '@/components/app/field';
 import { Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
-import { BillingPanel } from '@/components/billing/billing-panel';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Progress } from '@/components/ui/progress';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { api } from '@/lib/api';
-import { applyServerErrors } from '@/lib/form';
-import { date, daysUntil, humanize, number } from '@/lib/format';
+import { api, ApiError, errorMessage } from '@/lib/api';
+import { COUNTRIES } from '@/lib/countries';
+import { date } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { keys, useEntitlements, useTenant } from '@/lib/queries';
-import type { FeatureUsage, Tenant } from '@/lib/types';
+import { keys, useTenant } from '@/lib/queries';
+import type { Tenant } from '@/lib/types';
 
-const schema = z.object({
-    name: z.string().trim().min(1, 'Enter a workspace name.').max(120),
-    timezone: z.string().min(1),
-    locale: z.enum(['en', 'ar']),
-    country: z
-        .string()
-        .trim()
-        .toUpperCase()
-        .refine((v) => v === '' || /^[A-Z]{2}$/.test(v), 'Use a 2-letter country code, e.g. AE.'),
-    billing_email: z.union([z.literal(''), z.string().trim().email('Enter a valid email address.')]),
+const NONE = '__none__';
+
+const INDUSTRIES = [
+    'Retail & e-commerce',
+    'Real estate',
+    'Healthcare',
+    'Education',
+    'Hospitality & travel',
+    'Food & beverage',
+    'Fitness & wellness',
+    'Automotive',
+    'Financial services',
+    'Professional services',
+    'Marketing & agencies',
+    'Technology',
+    'Logistics',
+    'Non-profit',
+    'Other',
+];
+
+const SIZES = ['1', '2-10', '11-50', '51-200', '201-500', '500+'];
+
+type Form = Record<
+    | 'name'
+    | 'timezone'
+    | 'locale'
+    | 'legal_name'
+    | 'industry'
+    | 'company_size'
+    | 'website'
+    | 'phone'
+    | 'country'
+    | 'address_line1'
+    | 'address_line2'
+    | 'city'
+    | 'region'
+    | 'postal_code',
+    string
+>;
+
+const fromTenant = (t: Tenant): Form => ({
+    name: t.name,
+    timezone: t.timezone,
+    locale: t.locale === 'ar' ? 'ar' : 'en',
+    legal_name: t.legal_name ?? '',
+    industry: t.industry ?? '',
+    company_size: t.company_size ?? '',
+    website: t.website ?? '',
+    phone: t.phone ?? '',
+    country: t.country ?? '',
+    address_line1: t.address_line1 ?? '',
+    address_line2: t.address_line2 ?? '',
+    city: t.city ?? '',
+    region: t.region ?? '',
+    postal_code: t.postal_code ?? '',
 });
-type Values = z.infer<typeof schema>;
-const FIELDS = ['name', 'timezone', 'locale', 'country', 'billing_email'] as const;
 
-function GeneralForm({ tenant, canManage }: { tenant: Tenant; canManage: boolean }) {
+/** Workspace and company details. Billing (plan, cards, invoices, VAT number) lives on the Billing page. */
+function WorkspaceForm({ tenant, canManage }: { tenant: Tenant; canManage: boolean }) {
     const qc = useQueryClient();
+    const [form, setForm] = useState<Form>(() => fromTenant(tenant));
+    const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [formError, setFormError] = useState<string | null>(null);
+    const [saving, setSaving] = useState(false);
     const timezones = useMemo(() => (typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [tenant.timezone]), [tenant.timezone]);
-    const { register, control, handleSubmit, setError, reset, formState } = useForm<Values>({
-        resolver: zodResolver(schema),
-        values: {
-            name: tenant.name,
-            timezone: tenant.timezone,
-            locale: tenant.locale === 'ar' ? 'ar' : 'en',
-            country: tenant.country ?? '',
-            billing_email: tenant.billing_email ?? '',
-        },
-    });
-    const e = formState.errors;
+    const dirty = JSON.stringify(form) !== JSON.stringify(fromTenant(tenant));
+    const set = (key: keyof Form) => (value: string) => setForm((f) => ({ ...f, [key]: value }));
+    const text = (key: keyof Form, props: React.ComponentProps<typeof Input> = {}) => (
+        <Input
+            id={`ws-${key}`}
+            value={form[key]}
+            disabled={!canManage}
+            aria-invalid={Boolean(errors[key])}
+            onChange={(e) => set(key)(e.target.value)}
+            {...props}
+        />
+    );
 
-    const onSubmit = handleSubmit(async (values) => {
+    const save = async () => {
+        if (!form.name.trim()) return setErrors({ name: ['Enter a workspace name.'] });
+        setSaving(true);
+        setErrors({});
         setFormError(null);
         try {
-            const res = await api<{ data: Tenant }>('tenant', {
-                method: 'PATCH',
-                body: { ...values, country: values.country || null, billing_email: values.billing_email || null },
-            });
+            const website = form.website.trim() && !/^https?:\/\//i.test(form.website.trim()) ? `https://${form.website.trim()}` : form.website.trim();
+            const body = Object.fromEntries(
+                Object.entries({ ...form, website }).map(([k, v]) => [k, v.trim() === '' && !['name', 'timezone', 'locale'].includes(k) ? null : v.trim()]),
+            );
+            const res = await api<{ data: Tenant }>('tenant', { method: 'PATCH', body });
             qc.setQueryData(keys.tenant, res.data);
+            setForm(fromTenant(res.data));
             void qc.invalidateQueries({ queryKey: keys.me });
-            reset(values);
+            void qc.invalidateQueries({ queryKey: ['billing'] });
             toast.success('Workspace settings saved');
-        } catch (err) {
-            setFormError(applyServerErrors(err, setError, FIELDS));
+        } catch (e) {
+            if (e instanceof ApiError && Object.keys(e.fields).length) setErrors(e.fields);
+            else setFormError(errorMessage(e));
+        } finally {
+            setSaving(false);
         }
-    });
+    };
 
-    return (
-        <Card>
-            <CardHeader>
-                <div>
-                    <CardTitle>Workspace</CardTitle>
-                    <CardDescription>Shown to your team. Timezone drives reports and scheduled campaigns.</CardDescription>
-                </div>
-            </CardHeader>
-            <form onSubmit={onSubmit} noValidate>
-                <CardContent className="grid gap-4 sm:grid-cols-2">
-                    <div className="sm:col-span-2">
-                        <FormError message={formError} />
-                    </div>
-                    <Field label="Workspace name" htmlFor="name" error={e.name?.message} className="sm:col-span-2">
-                        <Input id="name" disabled={!canManage} aria-invalid={!!e.name} {...register('name')} />
-                    </Field>
-                    <Field label="Timezone" htmlFor="timezone" error={e.timezone?.message}>
-                        <Controller
-                            control={control}
-                            name="timezone"
-                            render={({ field }) => (
-                                <Select value={field.value} onValueChange={field.onChange} disabled={!canManage}>
-                                    <SelectTrigger id="timezone">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent className="max-h-72">
-                                        {timezones.map((tz) => (
-                                            <SelectItem key={tz} value={tz}>
-                                                {tz.replace(/_/g, ' ')}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            )}
-                        />
-                    </Field>
-                    <Field label="Language" htmlFor="locale" error={e.locale?.message}>
-                        <Controller
-                            control={control}
-                            name="locale"
-                            render={({ field }) => (
-                                <Select value={field.value} onValueChange={field.onChange} disabled={!canManage}>
-                                    <SelectTrigger id="locale">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="en">English</SelectItem>
-                                        <SelectItem value="ar">العربية (Arabic)</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            )}
-                        />
-                    </Field>
-                    <Field label="Country" htmlFor="country" error={e.country?.message} hint="2-letter code, e.g. AE">
-                        <Input id="country" maxLength={2} className="uppercase" disabled={!canManage} aria-invalid={!!e.country} {...register('country')} />
-                    </Field>
-                    <Field label="Billing email" htmlFor="billing_email" error={e.billing_email?.message}>
-                        <Input id="billing_email" type="email" disabled={!canManage} aria-invalid={!!e.billing_email} {...register('billing_email')} />
-                    </Field>
-                </CardContent>
-                {canManage && (
-                    <CardFooter className="justify-end">
-                        <Button type="submit" disabled={formState.isSubmitting || !formState.isDirty}>
-                            {formState.isSubmitting ? 'Saving…' : 'Save changes'}
-                        </Button>
-                    </CardFooter>
-                )}
-            </form>
-        </Card>
-    );
-}
-
-function configSummary(f: FeatureUsage): string | null {
-    const c = f.config ?? {};
-    const parts = Object.entries(c)
-        .filter(([, v]) => typeof v === 'string' || typeof v === 'boolean' || typeof v === 'number')
-        .map(([k, v]) => (typeof v === 'boolean' ? `${humanize(k)}: ${v ? 'yes' : 'no'}` : `${humanize(String(v))}`));
-
-    return parts.length ? parts.join(' · ') : null;
-}
-
-function PlanUsage() {
-    const q = useEntitlements();
-    if (q.isLoading) return <Skeleton className="h-64" />;
-    if (!q.data) return null;
-
-    const { plan, subscription, features } = q.data;
-    const entries = Object.entries(features);
-    const limits = entries.filter(([, f]) => f.type === 'limit' || f.type === 'metered');
-    const toggles = entries.filter(([, f]) => f.type !== 'limit' && f.type !== 'metered');
-    const trialDays = subscription.status === 'trialing' ? daysUntil(subscription.trial_ends_at) : null;
+    const err = (key: keyof Form) => errors[key]?.[0];
 
     return (
         <div className="grid gap-4">
+            <FormError message={formError} />
             <Card>
                 <CardHeader>
                     <div>
-                        <CardTitle className="flex items-center gap-2">
-                            {plan.name} plan
-                            <Badge tone={subscription.status === 'active' ? 'good' : subscription.status === 'trialing' ? 'brand' : 'warn'}>
-                                {humanize(subscription.status ?? 'free')}
-                            </Badge>
-                        </CardTitle>
-                        <CardDescription>
-                            {trialDays !== null
-                                ? `Trial ends ${date(subscription.trial_ends_at)} (${trialDays} day${trialDays === 1 ? '' : 's'} left). You move to the Free plan unless you subscribe.`
-                                : 'Messaging fees are billed by Meta directly to your business.'}
-                        </CardDescription>
+                        <CardTitle>Workspace</CardTitle>
+                        <CardDescription>Shown to your team. The time zone drives reports, quiet hours and scheduled campaigns.</CardDescription>
                     </div>
                 </CardHeader>
-                <CardContent className="grid gap-5 sm:grid-cols-2">
-                    {limits.map(([key, f]) => {
-                        const pct = f.unlimited || !f.limit ? 0 : Math.min(100, Math.round(((f.used ?? 0) / f.limit) * 100));
-
-                        return (
-                            <div key={key}>
-                                <div className="flex items-baseline justify-between gap-2 text-sm">
-                                    <span className="font-medium">{f.label}</span>
-                                    <span className="text-muted-foreground tabular-nums">
-                                        {!f.enabled
-                                            ? 'Not included'
-                                            : f.used === null
-                                              ? f.unlimited
-                                                  ? 'Unlimited'
-                                                  : `${number(f.limit)} ${f.unit ?? ''}`
-                                              : `${number(f.used)} / ${f.unlimited ? '∞' : number(f.limit)}`}
-                                    </span>
-                                </div>
-                                {f.enabled && f.used !== null && !f.unlimited && (
-                                    <Progress value={pct} className="mt-2" indicatorClassName={pct >= 90 ? 'bg-bad' : pct >= 75 ? 'bg-warn' : undefined} />
-                                )}
-                            </div>
-                        );
-                    })}
+                <CardContent className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Workspace name" htmlFor="ws-name" error={err('name')} className="sm:col-span-2">
+                        {text('name', { maxLength: 120 })}
+                    </Field>
+                    <Field label="Time zone" htmlFor="ws-timezone" error={err('timezone')}>
+                        <Select value={form.timezone} onValueChange={set('timezone')} disabled={!canManage}>
+                            <SelectTrigger id="ws-timezone">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-72">
+                                {timezones.map((tz) => (
+                                    <SelectItem key={tz} value={tz}>
+                                        {tz.replace(/_/g, ' ')}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </Field>
+                    <Field label="Language" htmlFor="ws-locale" error={err('locale')}>
+                        <Select value={form.locale} onValueChange={set('locale')} disabled={!canManage}>
+                            <SelectTrigger id="ws-locale">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="en">English</SelectItem>
+                                <SelectItem value="ar">العربية (Arabic)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </Field>
+                    <p className="text-[12.5px] text-muted-foreground sm:col-span-2">
+                        Workspace ID <span className="font-mono">{tenant.slug}</span> · created {date(tenant.created_at)}
+                    </p>
                 </CardContent>
             </Card>
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Features</CardTitle>
+                    <div>
+                        <CardTitle>Company</CardTitle>
+                        <CardDescription>Your business details. The legal name and address are printed on your invoices.</CardDescription>
+                    </div>
                 </CardHeader>
-                <ul className="grid divide-y divide-line-2 sm:grid-cols-2 sm:divide-y-0">
-                    {toggles.map(([key, f]) => (
-                        <li key={key} className="flex items-start gap-3 px-5 py-3">
-                            {f.enabled ? <CheckIcon className="mt-0.5 size-4 text-good" /> : <MinusIcon className="mt-0.5 size-4 text-faint" />}
-                            <span className={f.enabled ? undefined : 'text-muted-foreground'}>
-                                <span className="block text-sm">{f.label}</span>
-                                {f.enabled && configSummary(f) && <span className="block text-[12px] text-muted-foreground">{configSummary(f)}</span>}
-                            </span>
-                        </li>
-                    ))}
-                </ul>
+                <CardContent className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Legal company name" htmlFor="ws-legal_name" error={err('legal_name')} hint="Leave empty to use the workspace name">
+                        {text('legal_name', { maxLength: 190 })}
+                    </Field>
+                    <Field label="Industry" htmlFor="ws-industry" error={err('industry')}>
+                        <Select value={form.industry || NONE} onValueChange={(v) => set('industry')(v === NONE ? '' : v)} disabled={!canManage}>
+                            <SelectTrigger id="ws-industry">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-72">
+                                <SelectItem value={NONE}>Not set</SelectItem>
+                                {form.industry && !INDUSTRIES.includes(form.industry) && <SelectItem value={form.industry}>{form.industry}</SelectItem>}
+                                {INDUSTRIES.map((i) => (
+                                    <SelectItem key={i} value={i}>
+                                        {i}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </Field>
+                    <Field label="Company size" htmlFor="ws-company_size" error={err('company_size')}>
+                        <Select value={form.company_size || NONE} onValueChange={(v) => set('company_size')(v === NONE ? '' : v)} disabled={!canManage}>
+                            <SelectTrigger id="ws-company_size">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value={NONE}>Not set</SelectItem>
+                                {SIZES.map((size) => (
+                                    <SelectItem key={size} value={size}>
+                                        {size === '1' ? 'Just me' : `${size} people`}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </Field>
+                    <Field label="Website" htmlFor="ws-website" error={err('website')}>
+                        {text('website', { placeholder: 'https://example.com', inputMode: 'url', maxLength: 190 })}
+                    </Field>
+                    <Field label="Phone" htmlFor="ws-phone" error={err('phone')}>
+                        {text('phone', { placeholder: '+971 4 123 4567', inputMode: 'tel', maxLength: 32 })}
+                    </Field>
+                </CardContent>
             </Card>
+
+            <Card>
+                <CardHeader>
+                    <div>
+                        <CardTitle>Address</CardTitle>
+                        <CardDescription>The country decides whether VAT is added to your subscription (UAE businesses are charged 5%).</CardDescription>
+                    </div>
+                </CardHeader>
+                <CardContent className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Country" htmlFor="ws-country" error={err('country')}>
+                        <Select value={form.country || NONE} onValueChange={(v) => set('country')(v === NONE ? '' : v)} disabled={!canManage}>
+                            <SelectTrigger id="ws-country">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-72">
+                                <SelectItem value={NONE}>Not set</SelectItem>
+                                {COUNTRIES.map((c) => (
+                                    <SelectItem key={c.code} value={c.code}>
+                                        {c.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </Field>
+                    <Field label="City" htmlFor="ws-city" error={err('city')}>
+                        {text('city', { maxLength: 100 })}
+                    </Field>
+                    <Field label="Address line 1" htmlFor="ws-address_line1" error={err('address_line1')} className="sm:col-span-2">
+                        {text('address_line1', { maxLength: 190 })}
+                    </Field>
+                    <Field label="Address line 2" htmlFor="ws-address_line2" error={err('address_line2')} className="sm:col-span-2">
+                        {text('address_line2', { maxLength: 190 })}
+                    </Field>
+                    <Field label="State / emirate / region" htmlFor="ws-region" error={err('region')}>
+                        {text('region', { maxLength: 100 })}
+                    </Field>
+                    <Field label="Postal code / P.O. box" htmlFor="ws-postal_code" error={err('postal_code')}>
+                        {text('postal_code', { maxLength: 20 })}
+                    </Field>
+                </CardContent>
+            </Card>
+
+            {canManage && (
+                <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setForm(fromTenant(tenant))} disabled={!dirty || saving}>
+                        Discard changes
+                    </Button>
+                    <Button onClick={save} disabled={!dirty || saving}>
+                        {saving ? 'Saving…' : 'Save changes'}
+                    </Button>
+                </div>
+            )}
         </div>
     );
 }
 
-function Settings() {
+export default function SettingsPage() {
     const { can } = useSession();
-    const router = useRouter();
-    const params = useSearchParams();
     const tenant = useTenant();
-    const tab = params.get('tab') === 'plan' ? 'plan' : 'general';
 
-    if (!can(P.SettingsView) && !can(P.BillingView)) return <Forbidden />;
+    if (!can(P.SettingsView)) return <Forbidden />;
 
     return (
         <>
-            <PageHeader title="Settings" description="Workspace details, plan and usage." />
-            <Tabs value={tab} onValueChange={(v) => router.replace(v === 'plan' ? '/settings?tab=plan' : '/settings')}>
-                <TabsList>
-                    {can(P.SettingsView) && <TabsTrigger value="general">General</TabsTrigger>}
-                    <TabsTrigger value="plan">Plan & usage</TabsTrigger>
-                </TabsList>
-                <TabsContent value="general">
-                    {tenant.data ? <GeneralForm tenant={tenant.data} canManage={can(P.SettingsManage)} /> : <Skeleton className="h-72" />}
-                </TabsContent>
-                <TabsContent value="plan" className="grid gap-4">
-                    {can(P.BillingView) && <BillingPanel canManage={can(P.BillingManage)} />}
-                    <PlanUsage />
-                </TabsContent>
-            </Tabs>
+            <PageHeader
+                title="Workspace settings"
+                description="Your workspace, company details and address. Plans, cards and invoices are on the Billing page."
+            />
+            {tenant.data ? <WorkspaceForm key={tenant.data.id} tenant={tenant.data} canManage={can(P.SettingsManage)} /> : <Skeleton className="h-96" />}
         </>
-    );
-}
-
-export default function SettingsPage() {
-    return (
-        <Suspense>
-            <Settings />
-        </Suspense>
     );
 }

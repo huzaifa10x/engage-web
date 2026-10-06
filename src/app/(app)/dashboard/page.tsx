@@ -83,7 +83,7 @@ export default function DashboardPage() {
             done: !!me.entitlements && me.entitlements.subscription_status === 'active',
             title: 'Choose your plan',
             body: 'Compare plans and usage before your trial ends.',
-            href: '/settings?tab=plan',
+            href: '/billing',
             cta: 'Review',
             show: can(P.BillingView),
         },

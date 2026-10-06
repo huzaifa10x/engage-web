@@ -12,8 +12,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Switch } from '@/components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ApiError, errorMessage } from '@/lib/api';
 import { COUNTRIES, VAT_COUNTRY } from '@/lib/countries';
 import { date } from '@/lib/format';
@@ -25,18 +25,20 @@ import {
     refreshInvoice,
     removePaymentMethod,
     resumeSubscription,
-    setAutoPay,
     setDefaultPaymentMethod,
     subscribeToPlan,
     updateBillingDetails,
     useBilling,
     useInvoices,
     usePaymentMethods,
+    usePayments,
 } from '@/lib/queries';
 import { getStripe } from '@/lib/stripe';
 import type { Billing, BillingPlan } from '@/lib/types';
 
 import { AddCardDialog } from './add-card-dialog';
+import { PlanChangeDialog } from './plan-change-dialog';
+import { PlanUsage } from './plan-usage';
 
 const money = (minor: number, currency: string) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency, minimumFractionDigits: minor % 100 === 0 ? 0 : 2 }).format(minor / 100);
@@ -218,19 +220,35 @@ function PlanCard({
     );
 }
 
+const PAYMENT: Record<string, { label: string; tone: Tone }> = {
+    succeeded: { label: 'Paid', tone: 'good' },
+    pending: { label: 'Processing', tone: 'warn' },
+    failed: { label: 'Failed', tone: 'bad' },
+    refunded: { label: 'Refunded', tone: 'info' },
+    partially_refunded: { label: 'Partly refunded', tone: 'info' },
+};
+
+const STATUS: Record<string, { label: string; tone: Tone }> = {
+    active: { label: 'Active', tone: 'good' },
+    trialing: { label: 'Trial', tone: 'brand' },
+    past_due: { label: 'Payment failed', tone: 'bad' },
+};
+
 /**
- * Plan, payment methods, auto-pay, billing details and invoices — all inside the platform.
- * Stripe processes the money; its card field and bank verification step appear in our own pages.
+ * The Billing page: Overview · Plans · Payment methods · Invoices · Payments · Billing details.
+ * Everything happens inside the platform; Stripe processes the money behind it.
  */
 export function BillingPanel({ canManage }: { canManage: boolean }) {
     const qc = useQueryClient();
     const billing = useBilling();
     const invoices = useInvoices();
     const cards = usePaymentMethods(billing.data?.stripe_configured ?? false);
+    const payments = usePayments(billing.data?.stripe_configured ?? false);
+    const [tab, setTab] = useState('overview');
     const [yearly, setYearly] = useState(false);
     const [busy, setBusy] = useState<string | null>(null);
     const [addingCard, setAddingCard] = useState(false);
-    const [pendingPlan, setPendingPlan] = useState<BillingPlan | null>(null); // chosen before a card existed
+    const [choosing, setChoosing] = useState<BillingPlan | null>(null); // plan waiting in the confirmation dialog
     const b = billing.data;
 
     if (billing.isLoading) return <Skeleton className="h-72" />;
@@ -239,7 +257,10 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
     const sub = b.subscription;
     const stripeSub = sub?.provider === 'stripe';
     const methods = cards.data ?? [];
+    const defaultCard = methods.find((m) => m.is_default) ?? methods[0] ?? null;
     const key = b.stripe_publishable_key;
+    const upcoming = payments.data?.upcoming ?? null;
+    const openInvoices = (invoices.data ?? []).filter((i) => i.status === 'open');
 
     const refreshAll = () => {
         void qc.invalidateQueries({ queryKey: ['billing'] });
@@ -267,36 +288,42 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
         return result.error ? (result.error.message ?? 'The payment did not go through.') : null;
     };
 
-    const choose = (plan: BillingPlan, paymentMethod?: string | null) =>
-        run(plan.key, async () => {
-            if (!b.details.country) {
-                toast.error('Choose your billing country below first, so the correct tax is applied.');
-
-                return;
-            }
-            if (!stripeSub && methods.length === 0 && !paymentMethod) {
-                setPendingPlan(plan); // add a card first, then continue with this plan
-                setAddingCard(true);
-
-                return;
-            }
-
-            const step = await subscribeToPlan(plan.key, yearly ? 'yearly' : 'monthly', paymentMethod);
+    /** Runs after the customer pressed Confirm in the billing summary. Returns an error message or null. */
+    const confirmPlan = async (plan: BillingPlan): Promise<string | null> => {
+        try {
+            const step = await subscribeToPlan(plan.key, yearly ? 'yearly' : 'monthly', defaultCard?.id);
             if (step.status === 'requires_confirmation' && step.client_secret) {
                 const problem = await confirmInPage(step.client_secret, step.payment_method);
                 if (problem) {
-                    await refreshBilling(true); // cancel the unpaid attempt
-                    toast.error(`${problem} Your plan was not changed.`);
+                    await refreshBilling(true); // withdraw the unpaid attempt
+                    refreshAll();
 
-                    return;
+                    return `${problem} Your plan was not changed.`;
                 }
                 const status = await refreshBilling();
                 toast.success(status === 'active' ? `You are now on the ${plan.name} plan` : 'Payment received. Your plan will update in a moment.');
             } else {
-                toast.success(step.updated ? `Plan changed to ${plan.name}` : `You are now on the ${plan.name} plan`);
+                toast.success(`You are now on the ${plan.name} plan (${yearly ? 'yearly' : 'monthly'})`);
             }
             refreshAll();
-        });
+
+            return null;
+        } catch (e) {
+            const first = e instanceof ApiError ? Object.values(e.fields)[0]?.[0] : undefined;
+
+            return first ?? errorMessage(e);
+        }
+    };
+
+    const choose = (plan: BillingPlan) => {
+        if (!b.details.country) {
+            toast.error('Choose your billing country first (Billing details), so the correct tax is applied.');
+            setTab('details');
+
+            return;
+        }
+        setChoosing(plan);
+    };
 
     const pay = (invoiceId: string) =>
         run(`pay-${invoiceId}`, async () => {
@@ -314,11 +341,81 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
             refreshAll();
         });
 
+    const cancel = () =>
+        window.confirm(
+            `Cancel your plan? You keep ${b.plan.name} until ${date(sub?.current_period_end)}. After that the workspace moves to the Free plan and nothing more is charged.`,
+        ) && run('cancel', async () => qc.setQueryData(['billing'], await cancelSubscription()));
+
+    const invoiceTable = (
+        <Card className="overflow-hidden p-0">
+            <Table>
+                <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                        <TableHead>Invoice</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead className="text-right">Amount</TableHead>
+                        <TableHead className="text-right">VAT</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="w-28" />
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {(invoices.data ?? []).map((i) => (
+                        <TableRow key={i.id}>
+                            <TableCell>
+                                <p className="font-medium">{i.number ?? '—'}</p>
+                                <p className="max-w-64 truncate text-[12.5px] text-muted-foreground">{i.description}</p>
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-muted-foreground">{date(i.issued_at)}</TableCell>
+                            <TableCell className="text-right tabular-nums">{money(i.subtotal_minor, i.currency)}</TableCell>
+                            <TableCell className="text-right tabular-nums">{i.tax_minor ? money(i.tax_minor, i.currency) : '—'}</TableCell>
+                            <TableCell className="text-right font-medium tabular-nums">{money(i.total_minor, i.currency)}</TableCell>
+                            <TableCell>
+                                <Badge tone={INVOICE[i.status]?.tone ?? 'grey'}>{INVOICE[i.status]?.label ?? i.status}</Badge>
+                                {i.amount_refunded_minor > 0 && (
+                                    <p className="mt-0.5 text-[12px] text-muted-foreground">{money(i.amount_refunded_minor, i.currency)} refunded</p>
+                                )}
+                            </TableCell>
+                            <TableCell>
+                                <div className="flex items-center justify-end gap-1">
+                                    {canManage && i.status === 'open' && (
+                                        <Button
+                                            size="sm"
+                                            disabled={busy === `pay-${i.id}`}
+                                            onClick={() => (methods.length === 0 ? setAddingCard(true) : pay(i.id))}
+                                        >
+                                            {busy === `pay-${i.id}` ? 'Paying…' : 'Pay now'}
+                                        </Button>
+                                    )}
+                                    {i.invoice_pdf && (
+                                        <Button asChild variant="ghost" size="icon-sm">
+                                            <a href={i.invoice_pdf} target="_blank" rel="noreferrer" aria-label={`Download invoice ${i.number ?? ''}`}>
+                                                <DownloadIcon />
+                                            </a>
+                                        </Button>
+                                    )}
+                                </div>
+                            </TableCell>
+                        </TableRow>
+                    ))}
+                    {(invoices.data ?? []).length === 0 && (
+                        <TableRow className="hover:bg-transparent">
+                            <TableCell colSpan={7} className="py-6 text-center text-muted-foreground">
+                                {invoices.isLoading ? 'Loading…' : 'No invoices yet. They appear here after your first payment.'}
+                            </TableCell>
+                        </TableRow>
+                    )}
+                </TableBody>
+            </Table>
+        </Card>
+    );
+
     return (
         <div className="grid gap-4">
             {sub?.status === 'past_due' && (
                 <div className="rounded-lg border border-bad/20 bg-bad-bg px-4 py-3 text-sm text-bad" role="alert">
-                    Your last payment failed. Update your card or pay the open invoice below to keep your plan; otherwise the workspace moves to the Free plan.
+                    Your last payment failed. Update your card or pay the open invoice to keep your plan; otherwise the workspace moves to the Free plan.
                 </div>
             )}
             {!b.stripe_configured && (
@@ -327,240 +424,313 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
                 </div>
             )}
 
-            <Card>
-                <CardHeader>
-                    <div>
-                        <CardTitle>Plans</CardTitle>
-                        <CardDescription>
-                            Prices are in USD.{' '}
-                            {b.vat.applies
-                                ? `${b.vat.percent}% UAE VAT is added to each payment.`
-                                : b.details.country
-                                  ? 'No VAT applies to your country.'
-                                  : 'Tax depends on your billing country.'}{' '}
-                            {stripeSub && sub.cancel_at
-                                ? `Your subscription ends on ${date(sub.cancel_at)}; after that you move to the Free plan.`
-                                : stripeSub && sub.current_period_end
-                                  ? `${sub.auto_pay ? 'Renews' : 'Next invoice'} on ${date(sub.current_period_end)}.`
-                                  : ''}
-                        </CardDescription>
-                    </div>
-                    <div className="flex rounded-md border p-0.5 text-[13px]" role="group" aria-label="Billing period">
-                        {[false, true].map((y) => (
-                            <button
-                                key={String(y)}
-                                onClick={() => setYearly(y)}
-                                aria-pressed={yearly === y}
-                                className={`rounded px-3 py-1 ${yearly === y ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
-                            >
-                                {y ? 'Yearly' : 'Monthly'}
-                            </button>
-                        ))}
-                    </div>
-                </CardHeader>
-                <CardContent className="grid gap-4">
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                        {b.plans.map((plan) => (
-                            <PlanCard
-                                key={plan.key}
-                                plan={plan}
-                                yearly={yearly}
-                                billing={b}
-                                canManage={canManage}
-                                busy={busy === plan.key}
-                                onChoose={() => choose(plan)}
-                            />
-                        ))}
-                    </div>
-                    {canManage && stripeSub && (
-                        <div className="flex flex-wrap gap-2">
-                            {sub.cancel_at ? (
-                                <Button
-                                    variant="outline"
-                                    disabled={busy === 'resume'}
-                                    onClick={() => run('resume', async () => qc.setQueryData(['billing'], await resumeSubscription()))}
-                                >
-                                    Keep my subscription
+            <Tabs value={tab} onValueChange={setTab}>
+                <TabsList>
+                    <TabsTrigger value="overview">Overview</TabsTrigger>
+                    <TabsTrigger value="plans">Plans</TabsTrigger>
+                    <TabsTrigger value="methods">Payment methods</TabsTrigger>
+                    <TabsTrigger value="invoices">Invoices</TabsTrigger>
+                    <TabsTrigger value="payments">Payments</TabsTrigger>
+                    <TabsTrigger value="details">Billing details</TabsTrigger>
+                </TabsList>
+
+                <TabsContent value="overview" className="grid gap-4">
+                    <div className="grid gap-3 lg:grid-cols-3">
+                        <Card className="gap-2 p-5">
+                            <p className="text-[12.5px] text-muted-foreground">Current plan</p>
+                            <p className="flex flex-wrap items-center gap-2 text-xl font-semibold">
+                                {b.plan.name}
+                                {sub && STATUS[sub.status] && <Badge tone={STATUS[sub.status].tone}>{STATUS[sub.status].label}</Badge>}
+                            </p>
+                            <p className="text-[13px] text-muted-foreground">
+                                {sub?.status === 'trialing' && sub.trial_ends_at
+                                    ? `Free trial until ${date(sub.trial_ends_at)}. Choose a plan to keep these features; otherwise you move to Free.`
+                                    : stripeSub && sub.cancel_at
+                                      ? `Cancelled. You keep ${b.plan.name} until ${date(sub.cancel_at)}, then move to the Free plan.`
+                                      : stripeSub
+                                        ? `Billed ${sub.interval === 'yearly' ? 'yearly' : 'monthly'}. Renews automatically.`
+                                        : 'No paid subscription.'}
+                            </p>
+                            <div className="mt-1 flex flex-wrap gap-2">
+                                <Button size="sm" onClick={() => setTab('plans')}>
+                                    {stripeSub ? 'Change plan' : 'Choose a plan'}
                                 </Button>
-                            ) : (
-                                <Button
-                                    variant="ghost"
-                                    disabled={busy === 'cancel'}
-                                    onClick={() =>
-                                        window.confirm(
-                                            `Cancel your subscription? You keep ${b.plan.name} until ${date(sub.current_period_end)}, then move to the Free plan.`,
-                                        ) && run('cancel', async () => qc.setQueryData(['billing'], await cancelSubscription()))
-                                    }
-                                >
-                                    Cancel subscription
+                                {canManage && stripeSub && sub.cancel_at && (
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        disabled={busy === 'resume'}
+                                        onClick={() => run('resume', async () => qc.setQueryData(['billing'], await resumeSubscription()))}
+                                    >
+                                        Keep my plan
+                                    </Button>
+                                )}
+                            </div>
+                        </Card>
+                        <Card className="gap-2 p-5">
+                            <p className="text-[12.5px] text-muted-foreground">Next payment</p>
+                            <p className="text-xl font-semibold tabular-nums">{upcoming ? money(upcoming.amount_due_minor, upcoming.currency) : '—'}</p>
+                            <p className="text-[13px] text-muted-foreground">
+                                {upcoming?.date
+                                    ? `On ${date(upcoming.date)}${b.vat.applies ? `, including ${b.vat.percent}% VAT` : ''}.`
+                                    : stripeSub && sub.cancel_at
+                                      ? 'Nothing more will be charged.'
+                                      : 'Nothing scheduled.'}
+                            </p>
+                        </Card>
+                        <Card className="gap-2 p-5">
+                            <p className="text-[12.5px] text-muted-foreground">Payment method</p>
+                            <p className="text-xl font-semibold capitalize">{defaultCard ? `${defaultCard.brand} •••• ${defaultCard.last4}` : 'No card'}</p>
+                            <p className="text-[13px] text-muted-foreground">
+                                {defaultCard
+                                    ? `Expires ${String(defaultCard.exp_month).padStart(2, '0')}/${defaultCard.exp_year}.`
+                                    : 'Add a card to subscribe to a paid plan.'}
+                            </p>
+                            <div className="mt-1">
+                                <Button size="sm" variant="outline" onClick={() => setTab('methods')}>
+                                    Manage cards
                                 </Button>
-                            )}
+                            </div>
+                        </Card>
+                    </div>
+                    {openInvoices.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-warn/30 bg-warn-bg px-4 py-3 text-sm">
+                            {openInvoices.length === 1 ? 'One invoice is' : `${openInvoices.length} invoices are`} waiting for payment.
+                            <Button size="sm" variant="outline" className="ml-auto" onClick={() => setTab('invoices')}>
+                                View invoices
+                            </Button>
                         </div>
                     )}
-                </CardContent>
-            </Card>
+                    <PlanUsage />
+                </TabsContent>
 
-            {b.stripe_configured && (
-                <Card>
-                    <CardHeader>
-                        <div>
-                            <CardTitle>Payment methods</CardTitle>
-                            <CardDescription>Cards are stored securely by Stripe. The default card is used for your subscription.</CardDescription>
-                        </div>
-                        {canManage && (
-                            <Button variant="outline" onClick={() => setAddingCard(true)}>
-                                <PlusIcon /> Add payment method
-                            </Button>
-                        )}
-                    </CardHeader>
-                    <CardContent className="grid gap-3">
-                        {cards.isLoading ? (
-                            <Skeleton className="h-12" />
-                        ) : methods.length === 0 ? (
-                            <p className="text-[13px] text-muted-foreground">No card saved yet. Add one to subscribe to a paid plan.</p>
-                        ) : (
-                            methods.map((m) => (
-                                <div key={m.id} className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2.5">
-                                    <CreditCardIcon className="size-5 text-muted-foreground" />
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-medium capitalize">
-                                            {m.brand} •••• {m.last4} {m.is_default && <Badge tone="brand">Default</Badge>}
-                                        </p>
-                                        <p className="text-[12.5px] text-muted-foreground">
-                                            Expires {String(m.exp_month).padStart(2, '0')}/{m.exp_year}
-                                        </p>
-                                    </div>
-                                    {canManage && !m.is_default && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            disabled={busy === m.id}
-                                            onClick={() =>
-                                                run(m.id, async () => qc.setQueryData(['billing', 'payment-methods'], await setDefaultPaymentMethod(m.id)))
-                                            }
-                                        >
-                                            Make default
-                                        </Button>
-                                    )}
-                                    {canManage && (
-                                        <Button
-                                            variant="ghost"
-                                            size="icon-sm"
-                                            aria-label={`Remove card ending ${m.last4}`}
-                                            disabled={busy === `rm-${m.id}`}
-                                            onClick={() =>
-                                                window.confirm(`Remove the card ending ${m.last4}?`) &&
-                                                run(`rm-${m.id}`, async () => qc.setQueryData(['billing', 'payment-methods'], await removePaymentMethod(m.id)))
-                                            }
-                                        >
-                                            <Trash2Icon />
-                                        </Button>
-                                    )}
-                                </div>
-                            ))
-                        )}
-                        {stripeSub && (
-                            <label className="flex items-start justify-between gap-4 rounded-md border px-3 py-2.5">
-                                <span>
-                                    <span className="block text-sm font-medium">Auto-pay</span>
-                                    <span className="block text-[12.5px] text-muted-foreground">
-                                        {sub.auto_pay
-                                            ? 'On: your default card is charged automatically at each renewal.'
-                                            : 'Off: at each renewal you receive an invoice and pay it here within 7 days. Unpaid invoices move the workspace to the Free plan.'}
-                                    </span>
-                                </span>
-                                <Switch
-                                    checked={sub.auto_pay}
-                                    disabled={!canManage || busy === 'autopay'}
-                                    aria-label="Auto-pay"
-                                    onCheckedChange={(v) => run('autopay', async () => qc.setQueryData(['billing'], await setAutoPay(v)))}
-                                />
-                            </label>
-                        )}
-                    </CardContent>
-                </Card>
-            )}
+                <TabsContent value="plans" className="grid gap-4">
+                    <Card>
+                        <CardHeader>
+                            <div>
+                                <CardTitle>Plans</CardTitle>
+                                <CardDescription>
+                                    Prices are in USD.{' '}
+                                    {b.vat.applies
+                                        ? `${b.vat.percent}% UAE VAT is added to each payment.`
+                                        : b.details.country
+                                          ? 'No VAT applies to your country.'
+                                          : 'Tax depends on your billing country.'}{' '}
+                                    When you change plan, the unused part of your current period is credited and you see the exact amount before confirming.
+                                </CardDescription>
+                            </div>
+                            <div className="flex rounded-md border p-0.5 text-[13px]" role="group" aria-label="Billing period">
+                                {[false, true].map((y) => (
+                                    <button
+                                        key={String(y)}
+                                        onClick={() => setYearly(y)}
+                                        aria-pressed={yearly === y}
+                                        className={`rounded px-3 py-1 ${yearly === y ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+                                    >
+                                        {y ? 'Yearly' : 'Monthly'}
+                                    </button>
+                                ))}
+                            </div>
+                        </CardHeader>
+                        <CardContent className="grid gap-4">
+                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                                {b.plans.map((plan) => (
+                                    <PlanCard
+                                        key={plan.key}
+                                        plan={plan}
+                                        yearly={yearly}
+                                        billing={b}
+                                        canManage={canManage}
+                                        busy={false}
+                                        onChoose={() => choose(plan)}
+                                    />
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                    {stripeSub && (
+                        <Card className="flex-row flex-wrap items-center gap-3 p-5">
+                            <div className="min-w-0 flex-1">
+                                <p className="text-sm font-semibold">{sub.cancel_at ? 'Your plan is cancelled' : 'Cancel plan'}</p>
+                                <p className="text-[13px] text-muted-foreground">
+                                    {sub.cancel_at
+                                        ? `You keep ${b.plan.name} until ${date(sub.cancel_at)}. After that the workspace moves to the Free plan.`
+                                        : `Your subscription renews automatically on ${date(sub.current_period_end)}. If you cancel, you keep ${b.plan.name} until then and move to the Free plan afterwards.`}
+                                </p>
+                            </div>
+                            {canManage &&
+                                (sub.cancel_at ? (
+                                    <Button
+                                        variant="outline"
+                                        disabled={busy === 'resume'}
+                                        onClick={() => run('resume', async () => qc.setQueryData(['billing'], await resumeSubscription()))}
+                                    >
+                                        Keep my plan
+                                    </Button>
+                                ) : (
+                                    <Button variant="outline" className="text-bad" disabled={busy === 'cancel'} onClick={cancel}>
+                                        Cancel plan
+                                    </Button>
+                                ))}
+                        </Card>
+                    )}
+                </TabsContent>
 
-            <DetailsForm key={JSON.stringify(b.details)} billing={b} canManage={canManage} />
-
-            <Card className="overflow-hidden p-0">
-                <p className="px-5 pt-4 pb-2 text-sm font-semibold">Billing history</p>
-                <Table>
-                    <TableHeader>
-                        <TableRow className="hover:bg-transparent">
-                            <TableHead>Invoice</TableHead>
-                            <TableHead>Date</TableHead>
-                            <TableHead className="text-right">Amount</TableHead>
-                            <TableHead className="text-right">VAT</TableHead>
-                            <TableHead className="text-right">Total</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead className="w-28" />
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {(invoices.data ?? []).map((i) => (
-                            <TableRow key={i.id}>
-                                <TableCell>
-                                    <p className="font-medium">{i.number ?? '—'}</p>
-                                    <p className="max-w-64 truncate text-[12.5px] text-muted-foreground">{i.description}</p>
-                                </TableCell>
-                                <TableCell className="whitespace-nowrap text-muted-foreground">{date(i.issued_at)}</TableCell>
-                                <TableCell className="text-right tabular-nums">{money(i.subtotal_minor, i.currency)}</TableCell>
-                                <TableCell className="text-right tabular-nums">{i.tax_minor ? money(i.tax_minor, i.currency) : '—'}</TableCell>
-                                <TableCell className="text-right font-medium tabular-nums">{money(i.total_minor, i.currency)}</TableCell>
-                                <TableCell>
-                                    <Badge tone={INVOICE[i.status]?.tone ?? 'grey'}>{INVOICE[i.status]?.label ?? i.status}</Badge>
-                                    {i.amount_refunded_minor > 0 && (
-                                        <p className="mt-0.5 text-[12px] text-muted-foreground">{money(i.amount_refunded_minor, i.currency)} refunded</p>
-                                    )}
-                                </TableCell>
-                                <TableCell>
-                                    <div className="flex items-center justify-end gap-1">
-                                        {canManage && i.status === 'open' && (
+                <TabsContent value="methods">
+                    <Card>
+                        <CardHeader>
+                            <div>
+                                <CardTitle>Payment methods</CardTitle>
+                                <CardDescription>
+                                    Cards are stored securely by Stripe. The default card is charged for renewals and plan changes.
+                                </CardDescription>
+                            </div>
+                            {canManage && b.stripe_configured && (
+                                <Button variant="outline" onClick={() => setAddingCard(true)}>
+                                    <PlusIcon /> Add payment method
+                                </Button>
+                            )}
+                        </CardHeader>
+                        <CardContent className="grid gap-3">
+                            {cards.isLoading ? (
+                                <Skeleton className="h-12" />
+                            ) : methods.length === 0 ? (
+                                <p className="text-[13px] text-muted-foreground">No card saved yet. Add one to subscribe to a paid plan.</p>
+                            ) : (
+                                methods.map((m) => (
+                                    <div key={m.id} className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2.5">
+                                        <CreditCardIcon className="size-5 text-muted-foreground" />
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-sm font-medium capitalize">
+                                                {m.brand} •••• {m.last4} {m.is_default && <Badge tone="brand">Default</Badge>}
+                                            </p>
+                                            <p className="text-[12.5px] text-muted-foreground">
+                                                Expires {String(m.exp_month).padStart(2, '0')}/{m.exp_year}
+                                            </p>
+                                        </div>
+                                        {canManage && !m.is_default && (
                                             <Button
+                                                variant="outline"
                                                 size="sm"
-                                                disabled={busy === `pay-${i.id}`}
-                                                onClick={() => (methods.length === 0 ? setAddingCard(true) : pay(i.id))}
+                                                disabled={busy === m.id}
+                                                onClick={() =>
+                                                    run(m.id, async () => qc.setQueryData(['billing', 'payment-methods'], await setDefaultPaymentMethod(m.id)))
+                                                }
                                             >
-                                                {busy === `pay-${i.id}` ? 'Paying…' : 'Pay now'}
+                                                Make default
                                             </Button>
                                         )}
-                                        {i.invoice_pdf && (
-                                            <Button asChild variant="ghost" size="icon-sm">
-                                                <a href={i.invoice_pdf} target="_blank" rel="noreferrer" aria-label={`Download invoice ${i.number ?? ''}`}>
-                                                    <DownloadIcon />
-                                                </a>
+                                        {canManage && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                aria-label={`Remove card ending ${m.last4}`}
+                                                disabled={busy === `rm-${m.id}`}
+                                                onClick={() =>
+                                                    window.confirm(`Remove the card ending ${m.last4}?`) &&
+                                                    run(`rm-${m.id}`, async () =>
+                                                        qc.setQueryData(['billing', 'payment-methods'], await removePaymentMethod(m.id)),
+                                                    )
+                                                }
+                                            >
+                                                <Trash2Icon />
                                             </Button>
                                         )}
                                     </div>
-                                </TableCell>
-                            </TableRow>
-                        ))}
-                        {(invoices.data ?? []).length === 0 && (
-                            <TableRow className="hover:bg-transparent">
-                                <TableCell colSpan={7} className="py-6 text-center text-muted-foreground">
-                                    {invoices.isLoading ? 'Loading…' : 'No invoices yet. They appear here after your first payment.'}
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
-            </Card>
+                                ))
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="invoices">{invoiceTable}</TabsContent>
+
+                <TabsContent value="payments">
+                    <Card className="overflow-hidden p-0">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="hover:bg-transparent">
+                                    <TableHead>Date</TableHead>
+                                    <TableHead>Card</TableHead>
+                                    <TableHead className="text-right">Amount</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead className="w-24" />
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {(payments.data?.payments ?? []).map((pmt) => (
+                                    <TableRow key={pmt.id}>
+                                        <TableCell className="whitespace-nowrap">
+                                            {pmt.created_at
+                                                ? new Date(pmt.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+                                                : '—'}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground capitalize">
+                                            {pmt.card_last4 ? `${pmt.card_brand ?? 'card'} •••• ${pmt.card_last4}` : '—'}
+                                        </TableCell>
+                                        <TableCell className="text-right font-medium tabular-nums">{money(pmt.amount_minor, pmt.currency)}</TableCell>
+                                        <TableCell>
+                                            <Badge tone={PAYMENT[pmt.status]?.tone ?? 'grey'}>{PAYMENT[pmt.status]?.label ?? pmt.status}</Badge>
+                                            {pmt.amount_refunded_minor > 0 && (
+                                                <p className="mt-0.5 text-[12px] text-muted-foreground">
+                                                    {money(pmt.amount_refunded_minor, pmt.currency)} refunded
+                                                </p>
+                                            )}
+                                            {pmt.status === 'failed' && pmt.failure_message && (
+                                                <p className="mt-0.5 max-w-64 text-[12px] text-bad">{pmt.failure_message}</p>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="text-right">
+                                            {pmt.receipt_url && (
+                                                <a
+                                                    href={pmt.receipt_url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="text-[13px] font-medium text-info underline-offset-2 hover:underline"
+                                                >
+                                                    Receipt
+                                                </a>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                                {(payments.data?.payments ?? []).length === 0 && (
+                                    <TableRow className="hover:bg-transparent">
+                                        <TableCell colSpan={5} className="py-6 text-center text-muted-foreground">
+                                            {payments.isLoading ? 'Loading…' : 'No payments yet.'}
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </Card>
+                </TabsContent>
+
+                <TabsContent value="details">
+                    <DetailsForm key={JSON.stringify(b.details)} billing={b} canManage={canManage} />
+                </TabsContent>
+            </Tabs>
+
+            <PlanChangeDialog
+                plan={addingCard ? null : choosing}
+                yearly={yearly}
+                card={defaultCard}
+                onClose={() => setChoosing(null)}
+                onAddCard={() => setAddingCard(true)}
+                onConfirm={confirmPlan}
+            />
 
             {key && (
                 <AddCardDialog
                     open={addingCard}
-                    onOpenChange={(o) => {
-                        setAddingCard(o);
-                        if (!o) setPendingPlan(null);
-                    }}
+                    onOpenChange={setAddingCard}
                     publishableKey={key}
                     onAdded={(paymentMethodId) => {
                         toast.success('Card saved');
-                        void qc.invalidateQueries({ queryKey: ['billing', 'payment-methods'] });
-                        const plan = pendingPlan;
-                        setPendingPlan(null);
-                        if (plan) void choose(plan, paymentMethodId); // continue with the plan they picked
+                        // A card added from the billing summary is the one the customer wants to pay with.
+                        const refresh = () => void qc.invalidateQueries({ queryKey: ['billing', 'payment-methods'] });
+                        if (choosing && paymentMethodId) void setDefaultPaymentMethod(paymentMethodId).then(refresh, refresh);
+                        else refresh();
                     }}
                 />
             )}

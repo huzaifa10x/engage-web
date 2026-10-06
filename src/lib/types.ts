@@ -27,6 +27,16 @@ export type Tenant = {
     currency: string;
     country: string | null;
     billing_email: string | null;
+    legal_name: string | null;
+    website: string | null;
+    phone: string | null;
+    industry: string | null;
+    company_size: string | null;
+    address_line1: string | null;
+    address_line2: string | null;
+    city: string | null;
+    region: string | null;
+    postal_code: string | null;
     created_at: string;
 };
 
@@ -504,8 +514,6 @@ export type Billing = {
         trial_ends_at: string | null;
         current_period_end: string | null;
         cancel_at: string | null;
-        /** true = the saved card is charged at each renewal; false = an invoice is issued and paid by hand. */
-        auto_pay: boolean;
     } | null;
     details: { legal_name: string | null; country: string | null; tax_trn: string | null; billing_email: string | null };
     vat: { applies: boolean; percent: number; country: string };
@@ -538,3 +546,40 @@ export type PaymentStep = {
     client_secret: string | null;
     payment_method: string | null;
 };
+
+/** What Stripe will invoice if the customer confirms this plan or interval change. */
+export type BillingPreview = {
+    plan: { key: string; name: string };
+    interval: 'monthly' | 'yearly';
+    price_minor: number;
+    currency: string;
+    change: boolean;
+    from: { plan: string | null; interval: string | null } | null;
+    lines: { description: string; amount_minor: number; proration: boolean }[];
+    unused_credit_minor: number;
+    subtotal_minor: number;
+    tax_minor: number;
+    tax_percent: number;
+    total_minor: number;
+    balance_applied_minor: number;
+    amount_due_minor: number;
+    credit_kept_minor: number;
+    renews_at: string;
+    has_payment_method: boolean;
+};
+
+export type BillingPayment = {
+    id: string;
+    amount_minor: number;
+    amount_refunded_minor: number;
+    currency: string;
+    status: 'succeeded' | 'failed' | 'pending' | 'refunded' | 'partially_refunded' | (string & {});
+    failure_message: string | null;
+    card_brand: string | null;
+    card_last4: string | null;
+    description: string | null;
+    receipt_url: string | null;
+    created_at: string | null;
+};
+
+export type BillingPayments = { payments: BillingPayment[]; upcoming: { amount_due_minor: number; currency: string; date: string | null } | null };

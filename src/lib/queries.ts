@@ -4,6 +4,8 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api, upload } from './api';
 import type {
+    BillingPayments,
+    BillingPreview,
     PaymentMethod,
     PaymentStep,
     CampaignPreview,
@@ -398,7 +400,12 @@ export const setDefaultPaymentMethod = (id: string) =>
 
 export const removePaymentMethod = (id: string) => api<Data<PaymentMethod[]>>(`billing/payment-methods/${id}`, { method: 'DELETE' }).then((r) => r.data);
 
-export const setAutoPay = (enabled: boolean) => api<Data<Billing>>('billing/auto-pay', { method: 'PUT', body: { enabled } }).then((r) => r.data);
+/** The billing summary for a plan the customer is about to choose: Stripe's own calculation, nothing is charged. */
+export const previewPlan = (plan: string, interval: 'monthly' | 'yearly') =>
+    api<Data<BillingPreview>>('billing/preview', { method: 'POST', body: { plan, interval } }).then((r) => r.data);
+
+export const usePayments = (enabled = true) =>
+    useQuery({ queryKey: ['billing', 'payments'], queryFn: () => api<Data<BillingPayments>>('billing/payments').then((r) => r.data), enabled });
 
 export const payInvoice = (id: string) => api<Data<PaymentStep>>(`billing/invoices/${id}/pay`, { method: 'POST' }).then((r) => r.data);
 
