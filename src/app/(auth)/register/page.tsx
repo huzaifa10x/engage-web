@@ -54,7 +54,7 @@ function RegisterForm() {
             const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
             const res = await api<{ data: Me }>('auth/register', { method: 'POST', body: { ...values, timezone } });
             qc.setQueryData(keys.me, res.data);
-            // The account exists; it becomes usable once the emailed link is opened.
+            // The account exists; it becomes usable once the emailed code is entered on the next screen.
             router.replace('/verify-email');
         } catch (err) {
             setFormError(applyServerErrors(err, setError, FIELDS));

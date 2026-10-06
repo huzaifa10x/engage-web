@@ -1,9 +1,9 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2Icon, MailIcon } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { MailIcon } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { FormError } from '@/components/app/field';
@@ -11,53 +11,89 @@ import { Button } from '@/components/ui/button';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { keys, useMe } from '@/lib/queries';
 
+const LENGTH = 6;
+
+const firstError = (e: unknown) => (e instanceof ApiError ? (Object.values(e.fields)[0]?.[0] ?? e.message) : errorMessage(e));
+
 /**
- * Two jobs: (1) opened from the link in the email → confirms the address; (2) shown after
- * registration or sign-in while the address is still unconfirmed → "check your inbox" + resend.
+ * Shown right after registration (and after signing in with an unverified account): enter the
+ * 6-digit code we emailed. A correct code verifies the account and goes straight into the app,
+ * because the session is already signed in.
  */
-function VerifyEmail() {
-    const params = useSearchParams();
+export default function VerifyEmailPage() {
     const router = useRouter();
     const qc = useQueryClient();
     const me = useMe();
-    const id = params.get('id');
-    const expires = params.get('expires');
-    const token = params.get('token');
-    const fromLink = Boolean(id && expires && token);
-
-    const [state, setState] = useState<'idle' | 'verifying' | 'done' | 'failed'>(fromLink ? 'verifying' : 'idle');
+    const [digits, setDigits] = useState<string[]>(() => Array<string>(LENGTH).fill(''));
     const [error, setError] = useState<string | null>(null);
+    const [verifying, setVerifying] = useState(false);
     const [sending, setSending] = useState(false);
-    const started = useRef(false);
+    const [wait, setWait] = useState(60); // seconds until another code may be requested
+    const inputs = useRef<(HTMLInputElement | null)[]>([]);
 
-    useEffect(() => {
-        if (!fromLink || started.current) return;
-        started.current = true;
-        api('auth/email/verify', { method: 'POST', body: { id, expires: Number(expires), token } })
-            .then(() => {
-                setState('done');
-                void qc.invalidateQueries({ queryKey: keys.me });
-            })
-            .catch((e: unknown) => {
-                setState('failed');
-                setError(e instanceof ApiError ? (Object.values(e.fields)[0]?.[0] ?? e.message) : errorMessage(e));
-            });
-    }, [fromLink, id, expires, token, qc]);
-
-    // Already verified (for example in another tab): nothing to do here.
+    const unauthenticated = me.error instanceof ApiError && me.error.status === 401;
     const verified = me.data?.user.email_verified === true;
+
     useEffect(() => {
-        if (!fromLink && verified) router.replace('/dashboard');
-    }, [fromLink, verified, router]);
+        if (unauthenticated) router.replace('/login?next=/verify-email');
+        else if (verified) router.replace(me.data?.active_tenant_id ? '/dashboard' : '/select-workspace');
+    }, [unauthenticated, verified, me.data?.active_tenant_id, router]);
+
+    useEffect(() => {
+        if (wait <= 0) return;
+        const timer = setTimeout(() => setWait((w) => w - 1), 1000);
+
+        return () => clearTimeout(timer);
+    }, [wait]);
+
+    const submit = async (code: string) => {
+        setVerifying(true);
+        setError(null);
+        try {
+            await api('auth/email/verify', { method: 'POST', body: { code } });
+            toast.success('Email verified. Welcome to 10X Engage!');
+            await qc.invalidateQueries({ queryKey: keys.me }); // the redirect above takes over once /me says "verified"
+        } catch (e) {
+            setError(firstError(e));
+            setDigits(Array<string>(LENGTH).fill(''));
+            inputs.current[0]?.focus();
+        } finally {
+            setVerifying(false);
+        }
+    };
+
+    /** Accepts typing, and a whole code pasted into any box. */
+    const change = (index: number, raw: string) => {
+        const clean = raw.replace(/\D/g, '');
+        if (clean === '' && raw !== '') return;
+        const next = [...digits];
+        if (clean.length <= 1) {
+            next[index] = clean;
+        } else {
+            clean
+                .slice(0, LENGTH - index)
+                .split('')
+                .forEach((d, i) => (next[index + i] = d));
+        }
+        setDigits(next);
+        setError(null);
+
+        const filled = next.findIndex((d) => d === '');
+        inputs.current[filled === -1 ? LENGTH - 1 : filled]?.focus();
+        if (filled === -1) void submit(next.join(''));
+    };
 
     const resend = async () => {
         setSending(true);
         setError(null);
         try {
-            await api('auth/email/resend', { method: 'POST' });
-            toast.success('Verification email sent');
+            const res = await api<{ data: { retry_in: number } }>('auth/email/resend', { method: 'POST' });
+            setWait(res.data.retry_in || 60);
+            setDigits(Array<string>(LENGTH).fill(''));
+            inputs.current[0]?.focus();
+            toast.success('A new code is on its way');
         } catch (e) {
-            setError(e instanceof ApiError ? (Object.values(e.fields)[0]?.[0] ?? e.message) : errorMessage(e));
+            setError(firstError(e));
         } finally {
             setSending(false);
         }
@@ -66,66 +102,78 @@ function VerifyEmail() {
     const signOut = async () => {
         await api('auth/logout', { method: 'POST' }).catch(() => undefined);
         qc.clear();
-        router.replace('/login');
+        router.replace('/register');
     };
 
-    if (state === 'verifying') {
-        return <p className="text-sm text-muted-foreground">Confirming your email address…</p>;
+    if (!me.data || verified) {
+        return <p className="text-sm text-muted-foreground">One moment…</p>;
     }
-
-    if (state === 'done') {
-        return (
-            <div className="grid gap-4 text-center">
-                <CheckCircle2Icon className="mx-auto size-10 text-good" />
-                <div>
-                    <h1 className="text-xl font-semibold">Email verified</h1>
-                    <p className="mt-1 text-sm text-muted-foreground">Your account is active. You can start using 10X Engage.</p>
-                </div>
-                <Button onClick={() => router.replace(me.data ? '/dashboard' : '/login')}>{me.data ? 'Go to my workspace' : 'Sign in'}</Button>
-            </div>
-        );
-    }
-
-    const signedIn = Boolean(me.data);
 
     return (
-        <div className="grid gap-4">
+        <div className="grid gap-5">
             <MailIcon className="size-9 text-primary" />
             <div>
-                <h1 className="text-xl font-semibold">{state === 'failed' ? 'This link did not work' : 'Verify your email'}</h1>
+                <h1 className="text-xl font-semibold">Enter your verification code</h1>
                 <p className="mt-1 text-sm text-muted-foreground">
-                    {state === 'failed'
-                        ? 'The verification link is not valid or has expired.'
-                        : signedIn
-                          ? `We sent a verification link to ${me.data?.user.email}. Open it to activate your account. You cannot use the app until your email is verified.`
-                          : 'Sign in to get a new verification link.'}
+                    We sent a 6-digit code to <span className="font-medium text-foreground">{me.data.user.email}</span>. It expires in 10 minutes.
                 </p>
             </div>
             <FormError message={error} />
-            {signedIn ? (
-                <>
-                    <Button onClick={resend} disabled={sending}>
-                        {sending ? 'Sending…' : 'Send the email again'}
-                    </Button>
-                    <p className="text-[13px] text-muted-foreground">
-                        Check your spam folder too. Wrong address?{' '}
-                        <button onClick={signOut} className="font-semibold text-foreground underline-offset-2 hover:underline">
-                            Sign out
-                        </button>{' '}
-                        and register again.
-                    </p>
-                </>
-            ) : (
-                <Button onClick={() => router.replace('/login?next=/verify-email')}>Sign in</Button>
-            )}
+            <form
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    if (digits.every(Boolean)) void submit(digits.join(''));
+                }}
+                className="grid gap-4"
+            >
+                <div className="flex justify-between gap-2" role="group" aria-label="Verification code">
+                    {digits.map((digit, i) => (
+                        <input
+                            key={i}
+                            ref={(el) => {
+                                inputs.current[i] = el;
+                            }}
+                            value={digit}
+                            onChange={(e) => change(i, e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Backspace' && !digit && i > 0) inputs.current[i - 1]?.focus();
+                            }}
+                            onFocus={(e) => e.target.select()}
+                            inputMode="numeric"
+                            autoComplete={i === 0 ? 'one-time-code' : 'off'}
+                            autoFocus={i === 0}
+                            maxLength={LENGTH}
+                            disabled={verifying}
+                            aria-label={`Digit ${i + 1}`}
+                            className="h-12 w-full min-w-0 rounded-md border border-input bg-card text-center font-mono text-xl outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20 disabled:opacity-60"
+                        />
+                    ))}
+                </div>
+                <Button type="submit" disabled={verifying || !digits.every(Boolean)}>
+                    {verifying ? 'Verifying…' : 'Verify and continue'}
+                </Button>
+            </form>
+            <div className="grid gap-1 text-[13px] text-muted-foreground">
+                <p>
+                    Didn’t get it? Check your spam folder, or{' '}
+                    <button
+                        type="button"
+                        onClick={resend}
+                        disabled={wait > 0 || sending}
+                        className="font-semibold text-foreground underline-offset-2 hover:underline disabled:font-normal disabled:text-muted-foreground disabled:no-underline"
+                    >
+                        {sending ? 'sending…' : wait > 0 ? `send a new code in ${wait}s` : 'send a new code'}
+                    </button>
+                    .
+                </p>
+                <p>
+                    Wrong email address?{' '}
+                    <button type="button" onClick={signOut} className="font-semibold text-foreground underline-offset-2 hover:underline">
+                        Start again
+                    </button>
+                    .
+                </p>
+            </div>
         </div>
-    );
-}
-
-export default function VerifyEmailPage() {
-    return (
-        <Suspense>
-            <VerifyEmail />
-        </Suspense>
     );
 }
