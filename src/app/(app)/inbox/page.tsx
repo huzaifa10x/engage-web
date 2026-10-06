@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { MessageSquarePlusIcon, RadioIcon, WifiOffIcon } from 'lucide-react';
+import { Loader2Icon, MessageSquarePlusIcon, RadioIcon, WifiOffIcon } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useState } from 'react';
 
@@ -17,6 +17,7 @@ import { ResizeHandle } from '@/components/app/resize-handle';
 import { useInboxRealtime } from '@/hooks/use-inbox-realtime';
 import { useStored } from '@/hooks/use-stored';
 import { P } from '@/lib/permissions';
+import { usePhoneNumbers } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 
 function Inbox() {
@@ -28,6 +29,10 @@ function Inbox() {
     const [composeOpen, setComposeOpen] = useState(false);
     const selected = params.get('c');
     const [listWidth, setListWidth] = useStored<number>('engage.inbox.list-width', 384);
+    // A WhatsApp Business app number whose chat history import has not finished yet.
+    const syncing = (usePhoneNumbers().data ?? []).find(
+        (n) => (!numberId || n.id === numberId) && ['sync_pending', 'history_syncing'].includes(n.coexistence_status),
+    );
 
     // New-message alerts (desktop notification + sound) come from the header bell on every page;
     // with a live connection the bell is told to check straight away instead of on its next tick.
@@ -64,6 +69,13 @@ function Inbox() {
                         </Button>
                     )}
                 </div>
+                {syncing && (
+                    <p role="status" className="flex items-center gap-2 border-r border-b bg-info-bg px-3 py-2 text-[12.5px] text-info">
+                        <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
+                        History syncing… Older chats from the WhatsApp Business app are still arriving for{' '}
+                        {syncing.verified_name ?? syncing.display_phone_number}.
+                    </p>
+                )}
                 <div className="min-h-0 flex-1">
                     <ConversationList phoneNumberId={numberId} selectedId={selected} onSelect={(c) => open(c.id)} polling={polling} />
                 </div>

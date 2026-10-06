@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangleIcon, CheckCircle2Icon, CircleIcon, ExternalLinkIcon, Loader2Icon, SmartphoneIcon, XCircleIcon, ZapIcon } from 'lucide-react';
 import { useState } from 'react';
 
+import { useSession } from '@/components/app/session';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useEmbeddedSignup, type SignupPhase } from '@/hooks/use-embedded-signup';
@@ -100,7 +101,11 @@ export function ConnectWhatsappDialog({ open, onOpenChange }: { open: boolean; o
 }
 
 function ChooseFlow({ flow, setFlow, cancelled }: { flow: Flow; setFlow: (f: Flow) => void; cancelled: boolean }) {
-    const options: { id: Flow; icon: React.ReactNode; title: string; body: string }[] = [
+    const { feature, me } = useSession();
+    // Decided by the plan (and any per-workspace override); the server enforces the same rule.
+    const coexistence = feature('coexistence');
+    const history = (me.entitlements?.features?.coexistence?.config as { history?: boolean } | undefined)?.history === true;
+    const options: { id: Flow; icon: React.ReactNode; title: string; body: string; disabled?: boolean }[] = [
         {
             id: 'standard',
             icon: <ZapIcon className="size-5" />,
@@ -111,7 +116,12 @@ function ChooseFlow({ flow, setFlow, cancelled }: { flow: Flow; setFlow: (f: Flo
             id: 'coexistence',
             icon: <SmartphoneIcon className="size-5" />,
             title: 'My WhatsApp Business app number',
-            body: 'Keep chatting from the app on your phone while your team uses 10X Engage. Chat history can be imported; sending is limited to 20 messages per second.',
+            body: !coexistence.enabled
+                ? 'Not available on this workspace. Contact support or upgrade your plan to connect a number that stays on the WhatsApp Business app.'
+                : history
+                  ? 'Keep chatting from the app on your phone while your team uses 10X Engage. Your contacts and recent chat history are imported; sending is limited to 20 messages per second.'
+                  : 'Keep chatting from the app on your phone while your team uses 10X Engage. Your contacts are imported and new messages appear from now on; importing past chat history needs a paid plan. Sending is limited to 20 messages per second.',
+            disabled: !coexistence.enabled,
         },
     ];
 
@@ -128,9 +138,11 @@ function ChooseFlow({ flow, setFlow, cancelled }: { flow: Flow; setFlow: (f: Flo
                         key={o.id}
                         role="radio"
                         aria-checked={flow === o.id}
+                        aria-disabled={o.disabled}
+                        disabled={o.disabled}
                         onClick={() => setFlow(o.id)}
                         className={cn(
-                            'flex gap-3 rounded-lg border p-3.5 text-left transition',
+                            'flex gap-3 rounded-lg border p-3.5 text-left transition disabled:cursor-not-allowed disabled:opacity-60',
                             flow === o.id ? 'border-brand-500 bg-brand-50 ring-1 ring-brand-500' : 'hover:bg-muted',
                         )}
                     >
@@ -154,7 +166,11 @@ function ChooseFlow({ flow, setFlow, cancelled }: { flow: Flow; setFlow: (f: Flo
                 {flow === 'standard' ? (
                     <li>• The phone number must receive an SMS or voice call for verification.</li>
                 ) : (
-                    <li>• Keep the WhatsApp Business app (v2.24.17 or later) open on your phone during setup.</li>
+                    <>
+                        <li>• Keep the WhatsApp Business app (v2.24.17 or later) open on your phone: you will scan a QR code with it.</li>
+                        <li>• The number stays on your phone. Messages you send from the app also appear in the team inbox.</li>
+                        {history && <li>• Agree to share chat history when the app asks. This can only be done once, during setup.</li>}
+                    </>
                 )}
                 <li>• Allow popups for this site.</li>
             </ul>

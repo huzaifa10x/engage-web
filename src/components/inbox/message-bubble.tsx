@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircleIcon, CheckCheckIcon, CheckIcon, ClockIcon, FileIcon, MapPinIcon, ReplyIcon, SmartphoneIcon } from 'lucide-react';
+import { AlertCircleIcon, CheckCheckIcon, CheckIcon, ClockIcon, FileIcon, HistoryIcon, MapPinIcon, ReplyIcon, SmartphoneIcon } from 'lucide-react';
 
 import { clockTime, fileSize } from '@/lib/format';
 import type { Message } from '@/lib/types';
@@ -189,6 +189,11 @@ export function MessageBubble({
                     </div>
                 )}
                 <div className="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-500">
+                    {message.origin === 'history' && (
+                        <span className="inline-flex items-center gap-0.5" title="Imported from the WhatsApp Business app's chat history">
+                            <HistoryIcon className="size-3" /> Imported
+                        </span>
+                    )}
                     {message.origin === 'app_echo' && (
                         <span className="inline-flex items-center gap-0.5" title="Sent from the WhatsApp Business app">
                             <SmartphoneIcon className="size-3" /> App
