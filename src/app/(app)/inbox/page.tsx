@@ -14,6 +14,7 @@ import { Thread } from '@/components/inbox/thread';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ResizeHandle } from '@/components/app/resize-handle';
+import { syncSummary, timeLeft } from '@/components/channels/sync-progress';
 import { useInboxRealtime } from '@/hooks/use-inbox-realtime';
 import { useStored } from '@/hooks/use-stored';
 import { P } from '@/lib/permissions';
@@ -31,7 +32,7 @@ function Inbox() {
     const [listWidth, setListWidth] = useStored<number>('engage.inbox.list-width', 384);
     // A WhatsApp Business app number whose chat history import has not finished yet.
     const syncing = (usePhoneNumbers().data ?? []).find(
-        (n) => (!numberId || n.id === numberId) && ['sync_pending', 'history_syncing'].includes(n.coexistence_status),
+        (n) => (!numberId || n.id === numberId) && n.sync !== null && ['waiting', 'importing'].includes(n.sync.state),
     );
 
     // New-message alerts (desktop notification + sound) come from the header bell on every page;
@@ -69,12 +70,23 @@ function Inbox() {
                         </Button>
                     )}
                 </div>
-                {syncing && (
-                    <p role="status" className="flex items-center gap-2 border-r border-b bg-info-bg px-3 py-2 text-[12.5px] text-info">
-                        <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
-                        History syncing… Older chats from the WhatsApp Business app are still arriving for{' '}
-                        {syncing.verified_name ?? syncing.display_phone_number}.
-                    </p>
+                {syncing?.sync && (
+                    <div role="status" className="border-r border-b bg-brand-50 px-3 py-2.5">
+                        <p className="flex items-center gap-2 text-[12.5px] font-semibold text-brand-600">
+                            <Loader2Icon className="size-3.5 shrink-0 animate-spin" />
+                            Importing older chats for {syncing.verified_name ?? syncing.display_phone_number}
+                        </p>
+                        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-brand-100" aria-hidden>
+                            <div
+                                className="h-full rounded-full bg-primary transition-[width] duration-700"
+                                style={{ width: `${Math.max(2, syncing.sync.percent)}%` }}
+                            />
+                        </div>
+                        <p className="mt-1.5 text-[12px] text-ink-2">
+                            {syncSummary(syncing.sync)}
+                            {syncing.sync.state === 'importing' && ` · ${timeLeft(syncing.sync.minutes_left)} left`}
+                        </p>
+                    </div>
                 )}
                 <div className="min-h-0 flex-1">
                     <ConversationList phoneNumberId={numberId} selectedId={selected} onSelect={(c) => open(c.id)} polling={polling} />

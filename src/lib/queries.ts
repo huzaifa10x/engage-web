@@ -112,10 +112,25 @@ export const useGrants = (membershipId: string, enabled = true) =>
     });
 
 export const useWabaAccounts = (enabled = true) =>
-    useQuery({ queryKey: keys.accounts, queryFn: () => api<Data<WabaAccount[]>>('whatsapp/accounts').then((r) => r.data), enabled });
+    useQuery({
+        queryKey: keys.accounts,
+        queryFn: () => api<Data<WabaAccount[]>>('whatsapp/accounts').then((r) => r.data),
+        enabled,
+        // While an import from the WhatsApp Business app is running, keep its progress fresh.
+        refetchInterval: (query) =>
+            (query.state.data ?? []).some((a) => (a.phone_numbers ?? []).some((n) => n.sync && ['waiting', 'importing'].includes(n.sync.state)))
+                ? 30_000
+                : false,
+    });
 
 export const usePhoneNumbers = () =>
-    useQuery({ queryKey: keys.numbers, queryFn: () => api<Data<PhoneNumber[]>>('phone-numbers').then((r) => r.data), staleTime: 30_000 });
+    useQuery({
+        queryKey: keys.numbers,
+        queryFn: () => api<Data<PhoneNumber[]>>('phone-numbers').then((r) => r.data),
+        staleTime: 30_000,
+        // While an import from the WhatsApp Business app is running, keep its progress fresh.
+        refetchInterval: (query) => ((query.state.data ?? []).some((n) => n.sync && ['waiting', 'importing'].includes(n.sync.state)) ? 30_000 : false),
+    });
 
 export const useSignupAttempt = (id: string | null, poll: boolean) =>
     useQuery({

@@ -15,6 +15,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { SyncProgress, syncSummary } from '@/components/channels/sync-progress';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
@@ -97,50 +98,65 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
             {numbers.length === 0 ? (
                 <p className="px-5 py-6 text-sm text-muted-foreground">No phone number yet. Add one in WhatsApp Manager, then refresh.</p>
             ) : (
-                <Table>
-                    <TableHeader>
-                        <TableRow className="hover:bg-transparent">
-                            <TableHead>Number</TableHead>
-                            <TableHead>Quality</TableHead>
-                            <TableHead>Messaging limit</TableHead>
-                            <TableHead>Connection</TableHead>
-                            <TableHead>Status</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {numbers.map((n) => (
-                            <TableRow key={n.id}>
-                                <TableCell>
-                                    <div className="font-mono text-[13px] font-semibold">{n.display_phone_number ?? n.phone_number_id}</div>
-                                    <div className="text-[12.5px] text-muted-foreground">
-                                        {n.verified_name ?? 'Display name pending'}
-                                        {n.name_status && n.name_status !== 'APPROVED' ? ` · name ${humanize(n.name_status).toLowerCase()}` : ''}
-                                    </div>
-                                </TableCell>
-                                <TableCell>
-                                    <Badge tone={qualityTone(n.quality_rating)} dot>
-                                        {qualityLabel(n.quality_rating)}
-                                    </Badge>
-                                </TableCell>
-                                <TableCell className="text-[13px] tabular-nums">{tierLabel(n.messaging_limit_tier)}</TableCell>
-                                <TableCell className="text-[13px]">
-                                    {onboardingLabel(n.onboarding_type)}
-                                    <div className="text-[12px] text-muted-foreground">{coexistenceLabel(n.coexistence_status) ?? `${n.max_mps} msg/s`}</div>
-                                </TableCell>
-                                <TableCell>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <span>
-                                                <Badge tone={statusTone(n.status)}>{statusLabel(n.status)}</Badge>
-                                            </span>
-                                        </TooltipTrigger>
-                                        <TooltipContent>Last synced {relative(n.last_synced_at)}</TooltipContent>
-                                    </Tooltip>
-                                </TableCell>
+                <>
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="hover:bg-transparent">
+                                <TableHead>Number</TableHead>
+                                <TableHead>Quality</TableHead>
+                                <TableHead>Messaging limit</TableHead>
+                                <TableHead>Connection</TableHead>
+                                <TableHead>Status</TableHead>
                             </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {numbers.map((n) => (
+                                <TableRow key={n.id}>
+                                    <TableCell>
+                                        <div className="font-mono text-[13px] font-semibold">{n.display_phone_number ?? n.phone_number_id}</div>
+                                        <div className="text-[12.5px] text-muted-foreground">
+                                            {n.verified_name ?? 'Display name pending'}
+                                            {n.name_status && n.name_status !== 'APPROVED' ? ` · name ${humanize(n.name_status).toLowerCase()}` : ''}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Badge tone={qualityTone(n.quality_rating)} dot>
+                                            {qualityLabel(n.quality_rating)}
+                                        </Badge>
+                                    </TableCell>
+                                    <TableCell className="text-[13px] tabular-nums">{tierLabel(n.messaging_limit_tier)}</TableCell>
+                                    <TableCell className="text-[13px]">
+                                        {onboardingLabel(n.onboarding_type)}
+                                        <div className="text-[12px] text-muted-foreground">
+                                            {n.sync && n.sync.state !== 'complete'
+                                                ? syncSummary(n.sync)
+                                                : (coexistenceLabel(n.coexistence_status) ?? `${n.max_mps} msg/s`)}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <span>
+                                                    <Badge tone={statusTone(n.status)}>{statusLabel(n.status)}</Badge>
+                                                </span>
+                                            </TooltipTrigger>
+                                            <TooltipContent>Last synced {relative(n.last_synced_at)}</TooltipContent>
+                                        </Tooltip>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
+                    {/* Import from the WhatsApp Business app: exact counts, pace and time left, per number. */}
+                    {numbers
+                        .filter((n) => n.sync && n.sync.state !== 'complete')
+                        .map((n) => (
+                            <div key={n.id} className="border-t bg-muted/40 px-5 py-4">
+                                <p className="mb-2.5 text-[12.5px] font-semibold text-muted-foreground">{n.verified_name ?? n.display_phone_number}</p>
+                                {n.sync && <SyncProgress sync={n.sync} />}
+                            </div>
                         ))}
-                    </TableBody>
-                </Table>
+                </>
             )}
 
             <AlertDialog open={confirm} onOpenChange={setConfirm}>

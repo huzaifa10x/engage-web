@@ -126,6 +126,8 @@ export type PhoneNumber = {
     onboarding_type: 'new_number' | 'migrated' | 'coexistence';
     coexistence_status: 'none' | 'sync_pending' | 'history_syncing' | 'synced' | 'sync_failed' | 'offboarded';
     app_sync_expires_at: string | null;
+    /** Import from the WhatsApp Business app; null for numbers that are not shared with the app. */
+    sync: PhoneNumberSync | null;
     max_mps: number;
     capabilities: Record<string, boolean>;
     is_official_business_account: boolean;
@@ -679,4 +681,23 @@ export type WebhookDelivery = {
     delivered_at: string | null;
     created_at: string | null;
     payload: Record<string, unknown>;
+};
+
+/** Progress of the one-off import of contacts and chat history from the WhatsApp Business app. */
+export type PhoneNumberSync = {
+    state: 'waiting' | 'importing' | 'complete' | 'failed';
+    history_declined: boolean;
+    /** How much of the history WhatsApp has sent so far (0–100); null when no history sync exists. */
+    whatsapp_progress: number | null;
+    whatsapp_finished: boolean;
+    received: number;
+    imported: number;
+    remaining: number;
+    /** Imported as a share of what has been received so far. */
+    percent: number;
+    contacts: { received: number; imported: number; remaining: number };
+    messages: { received: number; imported: number; remaining: number };
+    per_hour: number;
+    minutes_left: number;
+    last_imported_at: string | null;
 };
