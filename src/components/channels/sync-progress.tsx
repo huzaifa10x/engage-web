@@ -13,15 +13,13 @@ export function syncSummary(sync: PhoneNumberSync): string {
     if (sync.state === 'complete') return `Import complete: ${n(sync.imported)} records`;
     if (sync.state === 'failed') return 'The import could not be started';
 
-    return `${sync.percent}% of your history received · ${n(sync.imported)} records imported`;
+    return `${n(sync.imported)} of ${n(sync.received)}${sync.whatsapp_finished ? '' : '+'} records imported · ${n(sync.waiting)} waiting`;
 }
 
 /**
- * Progress of the import from the WhatsApp Business app.
- *
- * WhatsApp sends the data in batches at its own pace and reports what share of the history it has
- * sent so far; that share is the bar. Every batch is imported the moment it arrives, and the
- * counts show exactly how many contacts and messages are in.
+ * Progress of the import from the WhatsApp Business app. Two things happen, and both are shown:
+ * WhatsApp sends the data in batches (it reports what share it has sent), and what has arrived
+ * is imported into the inbox in steady batches so the rest of the app stays fast.
  */
 export function SyncProgress({ sync }: { sync: PhoneNumberSync }) {
     if (sync.state === 'failed') {
@@ -37,7 +35,7 @@ export function SyncProgress({ sync }: { sync: PhoneNumberSync }) {
         return (
             <p className="flex items-center gap-2 text-[13px] text-good">
                 <CheckCircle2Icon className="size-4 shrink-0" />
-                Import complete: {n(sync.contacts)} contacts and {n(sync.messages)} messages
+                Import complete: {n(sync.contacts.imported)} contacts and {n(sync.messages.imported)} messages
                 {sync.history_declined && ' (chat history was not shared from the phone)'}.
             </p>
         );
@@ -52,7 +50,12 @@ export function SyncProgress({ sync }: { sync: PhoneNumberSync }) {
                     <Loader2Icon className="size-4 shrink-0 animate-spin text-brand-600" />
                     {waiting ? 'Waiting for WhatsApp to start sending your data' : 'Importing from the WhatsApp Business app'}
                 </p>
-                {!waiting && <p className="text-[13.5px] font-semibold tabular-nums">{sync.percent}%</p>}
+                {!waiting && (
+                    <p className="text-[13.5px] font-semibold tabular-nums">
+                        {n(sync.imported)} / {n(sync.received)}
+                        {!sync.whatsapp_finished && '+'}
+                    </p>
+                )}
             </div>
 
             <div
@@ -71,11 +74,12 @@ export function SyncProgress({ sync }: { sync: PhoneNumberSync }) {
 
             {!waiting && (
                 <>
-                    <dl className="grid grid-cols-3 gap-2 text-[13px] sm:grid-cols-[repeat(3,minmax(0,10rem))]">
+                    <dl className="grid grid-cols-2 gap-2 text-[13px] sm:grid-cols-[repeat(4,minmax(0,9.5rem))]">
                         {[
-                            ['Received from WhatsApp', `${sync.percent}%`],
-                            ['Contacts imported', n(sync.contacts)],
-                            ['Messages imported', n(sync.messages)],
+                            ['Imported', n(sync.imported)],
+                            ['Waiting to import', n(sync.waiting)],
+                            ['Received so far', n(sync.received)],
+                            ['Sent by WhatsApp', `${sync.whatsapp_percent}%`],
                         ].map(([label, value]) => (
                             <div key={label} className="rounded-lg border bg-card px-3 py-2">
                                 <dt className="text-[11.5px] text-muted-foreground">{label}</dt>
@@ -84,13 +88,13 @@ export function SyncProgress({ sync }: { sync: PhoneNumberSync }) {
                         ))}
                     </dl>
                     <p className="text-[12.5px] leading-relaxed text-muted-foreground">
+                        {n(sync.contacts.imported)} of {n(sync.contacts.received)} contacts and {n(sync.messages.imported)} of {n(sync.messages.received)}{' '}
+                        messages are in.{' '}
                         {sync.whatsapp_finished
-                            ? 'WhatsApp has finished sending; the last records are being imported.'
-                            : `WhatsApp sends your history in batches and has sent ${sync.percent}% so far, so ${100 - sync.percent}% is still to come. Each batch is imported as soon as it arrives.`}
-                        {sync.waiting > 0 && ` ${n(sync.waiting)} received records are being imported now.`}
-                        {sync.last_imported_at &&
-                            ` Last batch: ${new Date(sync.last_imported_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}.`}{' '}
-                        New messages are not affected and arrive straight away.
+                            ? 'WhatsApp has finished sending, so these totals are final.'
+                            : `WhatsApp has sent ${sync.whatsapp_percent}% of your history so far; the totals grow as more arrives.`}{' '}
+                        Records are imported in steady batches in the background so the inbox stays fast. New messages are not affected and arrive straight
+                        away.
                     </p>
                 </>
             )}

@@ -3,7 +3,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2Icon, MessageSquarePlusIcon, RadioIcon, WifiOffIcon } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 
 import { EmptyState, Forbidden } from '@/components/app/page-header';
 import { useSelectedNumber } from '@/components/app/number-switcher';
@@ -18,7 +18,7 @@ import { syncSummary } from '@/components/channels/sync-progress';
 import { useInboxRealtime } from '@/hooks/use-inbox-realtime';
 import { useStored } from '@/hooks/use-stored';
 import { P } from '@/lib/permissions';
-import { usePhoneNumbers } from '@/lib/queries';
+import { keys, usePhoneNumbers } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 
 function Inbox() {
@@ -37,6 +37,13 @@ function Inbox() {
 
     // New-message alerts (desktop notification + sound) come from the header bell on every page;
     // with a live connection the bell is told to check straight away instead of on its next tick.
+    // Imported history arrives without realtime pushes (thousands of them would be a storm), so the
+    // list is refreshed when the import counter moves instead: at most once per progress check.
+    const importedSoFar = syncing?.sync?.imported ?? null;
+    useEffect(() => {
+        if (importedSoFar !== null) void qc.invalidateQueries({ queryKey: keys.conversationsAll });
+    }, [importedSoFar, qc]);
+
     const notify = useCallback(() => void qc.invalidateQueries({ queryKey: ['notifications'] }), [qc]);
     const realtime = useInboxRealtime(me.active_tenant_id ?? '', notify);
     const polling = realtime !== 'live';

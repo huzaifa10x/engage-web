@@ -2,7 +2,7 @@
 
 import { ArrowRightIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 
 import { CenteredCard } from '@/components/app/centered-card';
@@ -16,6 +16,7 @@ import { useMe, useSwitchTenant } from '@/lib/queries';
 export default function SelectWorkspacePage() {
     const router = useRouter();
     const me = useMe();
+    const { refetch } = me;
     const switchTenant = useSwitchTenant();
 
     useEffect(() => {
@@ -23,6 +24,29 @@ export default function SelectWorkspacePage() {
     }, [me.error, router]);
 
     const memberships = (me.data?.memberships ?? []).filter((m) => m.status === 'active' && m.tenant?.status !== 'suspended');
+    // Anything but "not signed in" (which redirects above): a server error, an overloaded server, a rate limit.
+    const failed = me.isError && !(me.error instanceof ApiError && me.error.status === 401);
+
+    // Come back by itself once the server answers again.
+    useEffect(() => {
+        if (!failed) return;
+        const timer = setInterval(() => void refetch(), 8000);
+
+        return () => clearInterval(timer);
+    }, [failed, refetch]);
+
+    // Only one workspace to choose from: open it instead of asking.
+    const only = !failed && memberships.length === 1 ? (memberships[0].tenant?.id ?? null) : null;
+    const opened = useRef(false);
+    useEffect(() => {
+        if (only !== null && !opened.current && me.data?.active_tenant_id !== only) {
+            opened.current = true;
+            switchTenant.mutate(only, { onSuccess: () => router.replace('/dashboard') });
+        } else if (only !== null && me.data?.active_tenant_id === only && !opened.current) {
+            opened.current = true;
+            router.replace('/dashboard');
+        }
+    }, [only, me.data?.active_tenant_id, router, switchTenant]);
 
     const choose = (tenantId: string) =>
         switchTenant.mutate(tenantId, {
@@ -33,7 +57,13 @@ export default function SelectWorkspacePage() {
     return (
         <CenteredCard>
             <h1 className="text-xl font-semibold">Choose a workspace</h1>
-            <p className="mt-1 text-sm text-muted-foreground">You belong to more than one workspace. Pick the one to open.</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+                {failed
+                    ? 'We could not load your workspaces.'
+                    : memberships.length > 1
+                      ? 'You belong to more than one workspace. Pick the one to open.'
+                      : 'Pick the workspace to open.'}
+            </p>
 
             <div className="mt-6 grid gap-2">
                 {me.isLoading && [0, 1].map((i) => <Skeleton key={i} className="h-14" />)}
@@ -53,6 +83,19 @@ export default function SelectWorkspacePage() {
                         <ArrowRightIcon className="size-4 text-muted-foreground" />
                     </button>
                 ))}
+                {failed && (
+                    <div role="alert" className="rounded-lg border border-bad/30 bg-bad-bg p-4 text-sm">
+                        <p className="font-semibold text-bad">Your workspaces could not be loaded</p>
+                        <p className="mt-1 text-ink-2">
+                            {me.error instanceof ApiError && me.error.status === 429
+                                ? 'Too many requests were made in the last minute. Please wait a moment and try again.'
+                                : 'The server did not answer properly. This is usually temporary.'}
+                        </p>
+                        <Button size="sm" className="mt-3" onClick={() => me.refetch()} disabled={me.isFetching}>
+                            {me.isFetching ? 'Trying…' : 'Try again'}
+                        </Button>
+                    </div>
+                )}
                 {me.data && memberships.length === 0 && (
                     <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
                         You are not an active member of any workspace. Ask an admin to invite you, or create your own workspace.
