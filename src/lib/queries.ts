@@ -4,6 +4,10 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api, upload } from './api';
 import type {
+    ApiKey,
+    DeveloperOverview,
+    WebhookDelivery,
+    WebhookEndpoint,
     UnreadConversation,
     CannedResponse,
     ConversationNote,
@@ -490,3 +494,40 @@ export const useDashboardSummary = (enabled = true) =>
         enabled,
         refetchInterval: 60_000,
     });
+
+// ── Developer: API keys, webhook endpoints, delivery log ─────────────────────────────────
+
+export const useDeveloperOverview = () =>
+    useQuery({ queryKey: ['developer', 'overview'], queryFn: () => api<Data<DeveloperOverview>>('developer').then((r) => r.data) });
+
+export const useApiKeys = (enabled = true) =>
+    useQuery({ queryKey: ['developer', 'keys'], queryFn: () => api<Data<ApiKey[]>>('developer/api-keys').then((r) => r.data), enabled });
+
+export const createApiKey = (body: { name: string; scopes: string[]; expires_in_days: number | null }) =>
+    api<Data<ApiKey>>('developer/api-keys', { method: 'POST', body }).then((r) => r.data);
+
+export const revokeApiKey = (id: string) => api(`developer/api-keys/${id}`, { method: 'DELETE' });
+
+export const useWebhookEndpoints = (enabled = true) =>
+    useQuery({ queryKey: ['developer', 'webhooks'], queryFn: () => api<Data<WebhookEndpoint[]>>('developer/webhooks').then((r) => r.data), enabled });
+
+export const saveWebhookEndpoint = (
+    id: string | null,
+    body: Partial<Pick<WebhookEndpoint, 'url' | 'description' | 'events'>> & { status?: 'active' | 'paused' },
+) => api<Data<WebhookEndpoint>>(id ? `developer/webhooks/${id}` : 'developer/webhooks', { method: id ? 'PATCH' : 'POST', body }).then((r) => r.data);
+
+export const deleteWebhookEndpoint = (id: string) => api(`developer/webhooks/${id}`, { method: 'DELETE' });
+
+export const rotateWebhookSecret = (id: string) => api<Data<WebhookEndpoint>>(`developer/webhooks/${id}/rotate-secret`, { method: 'POST' }).then((r) => r.data);
+
+export const testWebhookEndpoint = (id: string) => api<Data<WebhookDelivery>>(`developer/webhooks/${id}/test`, { method: 'POST' }).then((r) => r.data);
+
+export const useWebhookDeliveries = (filters: { endpoint_id?: string; status?: string }, enabled = true) =>
+    useQuery({
+        queryKey: ['developer', 'deliveries', filters],
+        queryFn: () => api<{ data: WebhookDelivery[]; meta: { total: number } }>('developer/deliveries', { query: filters }),
+        enabled,
+        refetchInterval: 15_000,
+    });
+
+export const resendWebhookDelivery = (id: string) => api<Data<WebhookDelivery>>(`developer/deliveries/${id}/resend`, { method: 'POST' }).then((r) => r.data);

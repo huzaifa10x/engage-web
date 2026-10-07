@@ -627,3 +627,56 @@ export type DashboardSummary = {
 
 /** A conversation with unread customer messages that is this member's to answer (bell + desktop alerts). */
 export type UnreadConversation = { conversation_id: string; contact: string; preview: string; unread_count: number; at: string | null; url: string };
+
+// ── Developer: API keys and webhooks ─────────────────────────────────────────────────────
+
+export type DeveloperOverview = {
+    base_url: string;
+    can: { api: boolean; webhooks: boolean };
+    rate_limit_per_minute: number | null;
+    scopes: { key: string; label: string }[];
+    events: { key: string; label: string }[];
+};
+
+export type ApiKey = {
+    id: string;
+    name: string;
+    prefix: string;
+    scopes: string[];
+    status: 'active' | 'revoked' | 'expired';
+    expires_at: string | null;
+    last_used_at: string | null;
+    last_used_ip: string | null;
+    created_at: string | null;
+    /** Present only in the response that creates the key. */
+    key?: string;
+};
+
+export type WebhookEndpoint = {
+    id: string;
+    url: string;
+    description: string | null;
+    events: string[];
+    status: 'active' | 'paused' | 'disabled';
+    consecutive_failures: number;
+    last_success_at: string | null;
+    last_failure_at: string | null;
+    created_at: string | null;
+    /** Present only when the endpoint is created or its secret is rotated. */
+    secret?: string;
+};
+
+export type WebhookDelivery = {
+    id: string;
+    endpoint_id: string;
+    event: string;
+    status: 'pending' | 'delivered' | 'failed';
+    attempts: number;
+    response_status: number | null;
+    response_excerpt: string | null;
+    duration_ms: number | null;
+    next_attempt_at: string | null;
+    delivered_at: string | null;
+    created_at: string | null;
+    payload: Record<string, unknown>;
+};

@@ -64,7 +64,7 @@ export const NAV: NavSection[] = [
             { label: 'Team & Roles', icon: UsersIcon, href: '/team', permission: P.TeamView },
             { label: 'Compliance', icon: ShieldCheckIcon, href: '/compliance', permission: P.ComplianceView },
             { label: 'Integrations', icon: PlugIcon },
-            { label: 'Developer', icon: CodeIcon },
+            { label: 'Developer', icon: CodeIcon, href: '/developer', permission: P.DeveloperView },
             { label: 'Billing', icon: CreditCardIcon, href: '/billing', permission: P.BillingView },
             { label: 'Settings', icon: SettingsIcon, href: '/settings', permission: P.SettingsView },
             { label: 'Audit log', icon: ListChecksIcon, href: '/audit-log', permission: P.AuditView },

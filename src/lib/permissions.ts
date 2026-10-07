@@ -27,6 +27,8 @@ export const P = {
     AuditView: 'audit.view',
     ComplianceView: 'compliance.view',
     ComplianceManage: 'compliance.manage',
+    DeveloperView: 'developer.view',
+    DeveloperManage: 'developer.manage',
 } as const;
 
 export type PermissionKey = (typeof P)[keyof typeof P];
