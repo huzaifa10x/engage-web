@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckIcon, CopyIcon, KeyRoundIcon, PlusIcon, RefreshCwIcon, SendIcon, Trash2Icon, WebhookIcon } from 'lucide-react';
+import { BookOpenIcon, CheckIcon, CopyIcon, DownloadIcon, KeyRoundIcon, PlusIcon, RefreshCwIcon, SendIcon, Trash2Icon, WebhookIcon } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -600,22 +600,6 @@ function LogsTab({ canManage }: { canManage: boolean }) {
 
 // ── Reference ──────────────────────────────────────────────────────────────────────────────
 
-const ENDPOINTS: [string, string, string, string][] = [
-    ['GET', '/me', '—', 'The workspace and key in use. A quick way to check a key works.'],
-    ['POST', '/messages', 'messages:send', 'Send a text (inside the 24-hour window) or an approved template.'],
-    ['GET', '/messages/{id}', 'messages:read', 'One message with its current status.'],
-    ['GET', '/conversations', 'messages:read', 'Conversations, newest first. Filter with ?status=open|closed.'],
-    ['GET', '/conversations/{id}/messages', 'messages:read', 'Messages in a conversation, newest first.'],
-    ['GET', '/contacts', 'contacts:read', 'Contacts. Find one with ?phone=+9715… or filter with ?tag=.'],
-    ['GET', '/contacts/{id}', 'contacts:read', 'One contact.'],
-    ['POST', '/contacts', 'contacts:write', 'Add a contact.'],
-    ['PATCH', '/contacts/{id}', 'contacts:write', 'Change name, email, tags or attributes.'],
-    ['POST', '/contacts/{id}/opt-in', 'contacts:write', 'Record that the contact agreed to messages.'],
-    ['POST', '/contacts/{id}/opt-out', 'contacts:write', 'Record that the contact refused messages.'],
-    ['GET', '/templates', 'templates:read', 'Your message templates. Filter with ?status=approved.'],
-    ['GET', '/phone-numbers', 'templates:read', 'Your connected numbers and their ids.'],
-];
-
 function ReferenceTab({ overview }: { overview: DeveloperOverview }) {
     const base = overview.base_url;
 
@@ -644,6 +628,7 @@ function ReferenceTab({ overview }: { overview: DeveloperOverview }) {
                         <li>Messages to opted-out contacts are refused. Sending speed per number is limited automatically.</li>
                         <li>Repeat a request with the same Idempotency-Key and the message is not sent twice.</li>
                         <li>If the workspace has several numbers, add &quot;from&quot; with the number&apos;s id (GET /phone-numbers).</li>
+                        <li>Images, videos, audio and documents can be sent too: upload with POST /media, or pass a public &quot;media_url&quot;.</li>
                         <li>Lists return a next_cursor; pass it as ?cursor= to get the next page.</li>
                     </ul>
                 </CardContent>
@@ -651,52 +636,30 @@ function ReferenceTab({ overview }: { overview: DeveloperOverview }) {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Endpoints</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Request</TableHead>
-                                <TableHead>Permission</TableHead>
-                                <TableHead>What it does</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {ENDPOINTS.map(([method, path, scope, what]) => (
-                                <TableRow key={method + path}>
-                                    <TableCell className="font-mono text-[12.5px] whitespace-nowrap">
-                                        <span className="mr-2 font-semibold text-brand-600">{method}</span>
-                                        {path}
-                                    </TableCell>
-                                    <TableCell className="font-mono text-[12px] text-muted-foreground">{scope}</TableCell>
-                                    <TableCell className="text-[13.5px]">{what}</TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-
-            <Card>
-                <CardHeader>
                     <div>
-                        <CardTitle>Verifying webhooks</CardTitle>
+                        <CardTitle>Full documentation</CardTitle>
                         <CardDescription>
-                            Each request carries an X-Engage-Signature header: <span className="font-mono">t=&lt;unix time&gt;,v1=&lt;signature&gt;</span>. The
-                            signature is the HMAC-SHA256 of <span className="font-mono">&lt;t&gt;.&lt;raw body&gt;</span> with your endpoint&apos;s signing
-                            secret.
+                            Every endpoint with its parameters, example requests in cURL, Node.js, Python and PHP, example responses, error codes, rate limits
+                            and webhook events. It is generated from the live API, so it is always current.
                         </CardDescription>
                     </div>
                 </CardHeader>
-                <CardContent className="grid gap-4">
-                    <Code>{`// Node.js\nconst crypto = require('crypto');\n\nfunction isFromEngage(rawBody, header, secret) {\n  const { t, v1 } = Object.fromEntries(header.split(',').map((p) => p.split('=')));\n  const expected = crypto.createHmac('sha256', secret).update(t + '.' + rawBody).digest('hex');\n  const fresh = Math.abs(Date.now() / 1000 - Number(t)) < 300; // reject old requests\n  return fresh && crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(v1));\n}`}</Code>
-                    <ul className="grid list-disc gap-1.5 pl-5 text-[13.5px] text-muted-foreground">
-                        <li>Answer with any 2xx status within 10 seconds; do slow work after answering.</li>
-                        <li>A failed delivery is retried after 1 minute, 5 minutes, 30 minutes, 2 hours and 6 hours.</li>
-                        <li>After 15 failures in a row the endpoint is switched off and the workspace owners are emailed.</li>
-                        <li>The same event can arrive more than once: use its &quot;id&quot; to ignore repeats.</li>
-                    </ul>
+                <CardContent className="flex flex-wrap gap-2">
+                    <Button asChild>
+                        <a href="/docs/api" target="_blank" rel="noreferrer">
+                            <BookOpenIcon /> Open the API documentation
+                        </a>
+                    </Button>
+                    <Button asChild variant="outline">
+                        <a href="/api/public/v1/postman.json" download>
+                            <DownloadIcon /> Postman collection
+                        </a>
+                    </Button>
+                    <Button asChild variant="outline">
+                        <a href="/api/public/v1/openapi.json" target="_blank" rel="noreferrer">
+                            OpenAPI (JSON)
+                        </a>
+                    </Button>
                 </CardContent>
             </Card>
         </div>
