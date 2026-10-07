@@ -687,17 +687,15 @@ export type WebhookDelivery = {
 export type PhoneNumberSync = {
     state: 'waiting' | 'importing' | 'complete' | 'failed';
     history_declined: boolean;
-    /** How much of the history WhatsApp has sent so far (0–100); null when no history sync exists. */
-    whatsapp_progress: number | null;
-    whatsapp_finished: boolean;
-    received: number;
-    imported: number;
-    remaining: number;
-    /** Imported as a share of what has been received so far. */
+    /** How much of the history WhatsApp has sent so far (0–100): the only measure of what is left. */
     percent: number;
-    contacts: { received: number; imported: number; remaining: number };
-    messages: { received: number; imported: number; remaining: number };
-    per_hour: number;
-    minutes_left: number;
+    whatsapp_finished: boolean;
+    /** Records imported so far (contacts + messages). */
+    imported: number;
+    /** Received but not yet imported. Normally 0: records are imported as they arrive. */
+    waiting: number;
+    contacts: number;
+    messages: number;
+    started_at: string | null;
     last_imported_at: string | null;
 };

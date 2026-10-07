@@ -14,7 +14,7 @@ import { Thread } from '@/components/inbox/thread';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ResizeHandle } from '@/components/app/resize-handle';
-import { syncSummary, timeLeft } from '@/components/channels/sync-progress';
+import { syncSummary } from '@/components/channels/sync-progress';
 import { useInboxRealtime } from '@/hooks/use-inbox-realtime';
 import { useStored } from '@/hooks/use-stored';
 import { P } from '@/lib/permissions';
@@ -82,10 +82,7 @@ function Inbox() {
                                 style={{ width: `${Math.max(2, syncing.sync.percent)}%` }}
                             />
                         </div>
-                        <p className="mt-1.5 text-[12px] text-ink-2">
-                            {syncSummary(syncing.sync)}
-                            {syncing.sync.state === 'importing' && ` · ${timeLeft(syncing.sync.minutes_left)} left`}
-                        </p>
+                        <p className="mt-1.5 text-[12px] text-ink-2">{syncSummary(syncing.sync)}</p>
                     </div>
                 )}
                 <div className="min-h-0 flex-1">
