@@ -42,9 +42,13 @@ function RegisterForm() {
     const params = useSearchParams();
     const qc = useQueryClient();
     const [formError, setFormError] = useState<string | null>(null);
+    // Arriving from the website's "Start free trial": the email and the plan they were looking at come along.
+    const prefilledEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(params.get('email') ?? '') ? (params.get('email') ?? '') : '';
+    const chosenPlan = /^[a-z][a-z0-9-]{1,30}$/.test(params.get('plan') ?? '') ? (params.get('plan') ?? '') : '';
+    const chosenInterval = params.get('interval') === 'yearly' ? 'yearly' : 'monthly';
     const { register, handleSubmit, setError, formState } = useForm<Values>({
         resolver: zodResolver(schema),
-        defaultValues: { name: '', company_name: '', country: guessCountry(), email: '', password: '', password_confirmation: '' },
+        defaultValues: { name: '', company_name: '', country: guessCountry(), email: prefilledEmail, password: '', password_confirmation: '' },
     });
     const e = formState.errors;
 
@@ -65,6 +69,13 @@ function RegisterForm() {
         <>
             <h1 className="text-2xl font-semibold tracking-tight">Create your workspace</h1>
             <p className="mt-1 text-sm text-muted-foreground">Start a 14-day Pro trial. No card required.</p>
+            {chosenPlan && chosenPlan !== 'pro' && chosenPlan !== 'free' && (
+                <p className="mt-4 rounded-lg border border-brand-500/30 bg-brand-50 px-3 py-2.5 text-[13px] leading-relaxed text-foreground">
+                    You chose <span className="font-semibold capitalize">{chosenPlan}</span>, billed {chosenInterval}. Your trial gives you everything in Pro
+                    first; choose <span className="font-semibold capitalize">{chosenPlan}</span> under Billing whenever you are ready. Nothing is charged until
+                    you do.
+                </p>
+            )}
 
             <form onSubmit={onSubmit} className="mt-8 grid gap-4" noValidate>
                 <FormError message={formError} />
