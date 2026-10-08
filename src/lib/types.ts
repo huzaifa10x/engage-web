@@ -230,7 +230,13 @@ export type Conversation = {
     last_message_direction: 'inbound' | 'outbound' | null;
     window: { open: boolean; expires_at: string | null };
     contact?: Contact;
-    phone_number?: { id: string; display_phone_number: string | null; verified_name: string | null };
+    /** `status` is "disconnected" once the number was offboarded: the chat stays readable, nothing can be sent. */
+    phone_number?: {
+        id: string;
+        display_phone_number: string | null;
+        verified_name: string | null;
+        status?: 'pending' | 'connected' | 'disconnected' | (string & {});
+    };
     created_at: string | null;
 };
 

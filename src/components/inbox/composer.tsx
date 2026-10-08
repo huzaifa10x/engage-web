@@ -46,6 +46,7 @@ export function Composer({
     onClearReply,
     onSend,
     onTemplate,
+    canSendTemplate = true,
     ref,
 }: {
     disabledReason: string | null;
@@ -53,6 +54,8 @@ export function Composer({
     onClearReply: () => void;
     onSend: (payload: SendPayload) => Promise<void>;
     onTemplate: () => void;
+    /** False when not even a template can be sent (the number is disconnected). */
+    canSendTemplate?: boolean;
     /** Lets the chat area hand over a file that was dropped onto it. */
     ref?: React.Ref<ComposerHandle>;
 }) {
@@ -171,9 +174,11 @@ export function Composer({
         return (
             <div className="flex flex-wrap items-center gap-3 border-t bg-card px-4 py-3">
                 <p className="flex-1 text-[13px] text-muted-foreground">{disabledReason}</p>
-                <Button size="sm" onClick={onTemplate}>
-                    <FileTextIcon /> Send template
-                </Button>
+                {canSendTemplate && (
+                    <Button size="sm" onClick={onTemplate}>
+                        <FileTextIcon /> Send template
+                    </Button>
+                )}
             </div>
         );
     }

@@ -163,6 +163,11 @@ export function ConversationList({
                                             </span>
                                         )}
                                     </span>
+                                    {c.phone_number?.status === 'disconnected' && (
+                                        <span className="mt-1 inline-flex w-fit items-center rounded-full bg-bad-bg px-1.5 py-px text-[10.5px] font-semibold text-bad">
+                                            Number disconnected
+                                        </span>
+                                    )}
                                     {!phoneNumberId && c.phone_number && (
                                         <span className="mt-0.5 block truncate text-[11.5px] text-faint">
                                             via {c.phone_number.verified_name ?? c.phone_number.display_phone_number}

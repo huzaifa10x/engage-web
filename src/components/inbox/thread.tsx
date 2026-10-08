@@ -113,13 +113,17 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
     }
 
     const contact = c.contact;
-    const disabledReason = !can(P.InboxReply)
-        ? 'Your role can read this conversation but not reply.'
-        : contact?.consent_state === 'opted_out'
-          ? 'This contact opted out. They must send START before you can message them.'
-          : !c.window.open
-            ? 'The 24-hour window is closed, so normal messages cannot be sent. Send an approved template; when the customer replies, the window opens again.'
-            : null;
+    // The number was offboarded: its history is kept and readable, but there is nothing to send from.
+    const numberGone = c.phone_number?.status === 'disconnected';
+    const disabledReason = numberGone
+        ? `This conversation is on ${c.phone_number?.verified_name ?? c.phone_number?.display_phone_number ?? 'a number'}, which is no longer connected. You can read the history, but messages cannot be sent or received here. Reconnect the number in Channels to continue.`
+        : !can(P.InboxReply)
+          ? 'Your role can read this conversation but not reply.'
+          : contact?.consent_state === 'opted_out'
+            ? 'This contact opted out. They must send START before you can message them.'
+            : !c.window.open
+              ? 'The 24-hour window is closed, so normal messages cannot be sent. Send an approved template; when the customer replies, the window opens again.'
+              : null;
     const optedOut = contact?.consent_state === 'opted_out';
 
     return (
@@ -179,13 +183,18 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                     </div>
                     {/* Status and actions: one group that wraps as a whole row when space is short, so nothing is hidden. */}
                     <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
-                        {c.window.open ? (
+                        {numberGone ? null : c.window.open ? (
                             <Badge tone="good" dot title="The customer wrote in the last 24 hours: you can send text and media.">
                                 Window open · {timeLeft(c.window.expires_at)}
                             </Badge>
                         ) : (
                             <Badge tone="warn" dot title="More than 24 hours since the customer last wrote: only approved templates can be sent.">
                                 Window closed · template only
+                            </Badge>
+                        )}
+                        {numberGone && (
+                            <Badge tone="bad" title="The WhatsApp number this conversation belongs to was disconnected. The history is kept.">
+                                Number disconnected
                             </Badge>
                         )}
                         {c.status === 'closed' && <Badge tone="grey">Closed</Badge>}
@@ -291,6 +300,7 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
 
                 <Composer
                     ref={composer}
+                    canSendTemplate={!numberGone}
                     disabledReason={disabledReason}
                     replyTo={replyTo}
                     onClearReply={() => setReplyTo(null)}
