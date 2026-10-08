@@ -208,6 +208,8 @@ export type Contact = {
     attributes: Record<string, unknown>;
     tags: string[];
     source: string;
+    /** The number this contact was synced from (WhatsApp Business app); null when it did not come from a sync. */
+    synced_from?: { id: string; display_phone_number: string | null; verified_name: string | null; status: string } | null;
     consent_state: ConsentState;
     opted_out_at: string | null;
     marketing_opted_out: boolean;

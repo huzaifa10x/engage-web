@@ -9,6 +9,7 @@ import {
     PencilIcon,
     SearchIcon,
     SlidersHorizontalIcon,
+    SmartphoneIcon,
     Trash2Icon,
     UploadIcon,
     UserPlusIcon,
@@ -46,7 +47,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api, errorMessage } from '@/lib/api';
 import { humanize, relative } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { type ContactFilters, keys, useContacts, useSegments, useTags } from '@/lib/queries';
+import { type ContactFilters, keys, useContacts, usePhoneNumbers, useSegments, useTags } from '@/lib/queries';
 import type { ConsentState, Contact, Segment } from '@/lib/types';
 
 const ALL = '__all__';
@@ -65,7 +66,9 @@ export default function ContactsPage() {
     const [segmentEditing, setSegmentEditing] = useState<Segment | null | undefined>(undefined); // undefined = closed, null = new
     const segments = useSegments(can(P.ContactsView));
     const tags = useTags(can(P.ContactsView));
-    const filtered = Boolean(filters.q || filters.consent || filters.tag || filters.segment_id);
+    const filtered = Boolean(filters.q || filters.consent || filters.tag || filters.segment_id || filters.synced_from);
+    // Numbers shared with the WhatsApp Business app: the only ones contacts can have been synced from.
+    const syncNumbers = (usePhoneNumbers().data ?? []).filter((n) => n.onboarding_type === 'coexistence');
     const exportUrl = `/api/v1/contacts/export?${new URLSearchParams(
         Object.entries({ segment_id: filters.segment_id, tag: filters.tag }).filter((e): e is [string, string] => Boolean(e[1])),
     ).toString()}`;
@@ -146,6 +149,21 @@ export default function ContactsPage() {
                         <SelectItem value="opted_out">Opted out</SelectItem>
                     </SelectContent>
                 </Select>
+                {syncNumbers.length > 0 && (
+                    <Select value={filters.synced_from ?? ALL} onValueChange={(v) => setFilters((f) => ({ ...f, synced_from: v === ALL ? undefined : v }))}>
+                        <SelectTrigger className="w-56" aria-label="Synced from">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value={ALL}>Any source</SelectItem>
+                            {syncNumbers.map((n) => (
+                                <SelectItem key={n.id} value={n.id}>
+                                    Synced from {n.verified_name ?? n.display_phone_number}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                )}
                 <Select value={filters.segment_id ?? ALL} onValueChange={(v) => setFilters((f) => ({ ...f, segment_id: v === ALL ? undefined : v }))}>
                     <SelectTrigger className="w-48" aria-label="Segment">
                         <SelectValue />
@@ -234,7 +252,26 @@ export default function ContactsPage() {
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-muted-foreground">{c.last_inbound_at ? relative(c.last_inbound_at) : '—'}</TableCell>
-                                    <TableCell className="text-muted-foreground">{humanize(c.source)}</TableCell>
+                                    <TableCell className="text-muted-foreground">
+                                        {c.synced_from ? (
+                                            <span
+                                                className="inline-flex max-w-52 flex-col rounded-md border border-brand-500/30 bg-brand-50 px-2 py-1 leading-tight"
+                                                title={`Synced from the WhatsApp Business app on ${c.synced_from.display_phone_number ?? 'this number'}${c.synced_from.status === 'disconnected' ? ' (number now disconnected)' : ''}`}
+                                            >
+                                                <span className="flex items-center gap-1 text-[11px] font-semibold text-brand-600">
+                                                    <SmartphoneIcon className="size-3" /> Synced from
+                                                </span>
+                                                <span className="truncate text-[12.5px] font-medium text-foreground">
+                                                    {c.synced_from.verified_name ?? c.synced_from.display_phone_number}
+                                                </span>
+                                                {c.synced_from.verified_name && (
+                                                    <span className="truncate font-mono text-[11px]">{c.synced_from.display_phone_number}</span>
+                                                )}
+                                            </span>
+                                        ) : (
+                                            humanize(c.source)
+                                        )}
+                                    </TableCell>
                                     <TableCell>
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>

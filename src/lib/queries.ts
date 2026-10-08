@@ -207,7 +207,7 @@ export const useThread = (id: string | null, refetchInterval: number | false = f
         enabled: id !== null,
     });
 
-export type ContactFilters = { q?: string; consent?: ConsentState; tag?: string; segment_id?: string };
+export type ContactFilters = { q?: string; consent?: ConsentState; tag?: string; segment_id?: string; synced_from?: string };
 
 export const useContacts = (filters: ContactFilters) =>
     useInfiniteQuery({
