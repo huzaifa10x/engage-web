@@ -86,8 +86,12 @@ export function ChannelDisconnectedBanner() {
                 cannot be sent or received on {lost.length === 1 ? 'this number' : 'these numbers'} until {lost.length === 1 ? 'it is' : 'they are'}{' '}
                 reconnected.
             </span>
-            <Link href="/channels" className="ml-auto font-semibold text-bad underline-offset-2 hover:underline">
-                {can(P.ChannelsManage) ? 'Reconnect in Channels' : 'See Channels'}
+            {/* For those who can fix it: straight into the connection window (also when already on Channels). */}
+            <Link
+                href={can(P.ChannelsManage) ? '/channels?connect=1' : '/channels'}
+                className="ml-auto font-semibold text-bad underline-offset-2 hover:underline"
+            >
+                {can(P.ChannelsManage) ? 'Reconnect' : 'See Channels'}
             </Link>
         </div>
     );

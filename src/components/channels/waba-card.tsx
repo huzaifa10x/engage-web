@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { MoreHorizontalIcon, RefreshCwIcon, UnplugIcon } from 'lucide-react';
+import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -80,7 +81,12 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                     {lostAccess && (
                         <p role="alert" className="mt-2.5 rounded-lg border border-bad/30 bg-bad-bg px-3 py-2 text-[13px] leading-relaxed text-ink-2">
                             <span className="font-semibold text-bad">Messages cannot be sent or received.</span> {lostAccess} Your conversations and contacts
-                            are kept. Use “Connect a WhatsApp number” above to reconnect and carry on.
+                            are kept.{' '}
+                            {canManage && (
+                                <Link href="/channels?connect=1" className="font-semibold text-bad underline underline-offset-2">
+                                    Reconnect now
+                                </Link>
+                            )}
                         </p>
                     )}
                 </div>
@@ -140,7 +146,7 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                                                 ? 'Disconnected in the WhatsApp Business app'
                                                 : n.sync && n.sync.state !== 'complete'
                                                   ? syncSummary(n.sync)
-                                                  : (coexistenceLabel(n.coexistence_status) ?? `${n.max_mps} msg/s`)}
+                                                  : (coexistenceLabel(n.coexistence_status) ?? 'Cloud API')}
                                         </div>
                                     </TableCell>
                                     <TableCell>

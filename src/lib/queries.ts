@@ -116,11 +116,10 @@ export const useWabaAccounts = (enabled = true) =>
         queryKey: keys.accounts,
         queryFn: () => api<Data<WabaAccount[]>>('whatsapp/accounts').then((r) => r.data),
         enabled,
-        // While an import from the WhatsApp Business app is running, keep its progress fresh.
-        refetchInterval: (query) =>
-            (query.state.data ?? []).some((a) => (a.phone_numbers ?? []).some((n) => n.sync && ['waiting', 'importing'].includes(n.sync.state)))
-                ? 30_000
-                : false,
+        // Kept fresh by itself, so a number that is disconnected at Meta (or reconnected, or whose import
+        // moves on) shows without anyone pressing a refresh button. Also refreshed when the tab regains focus.
+        refetchInterval: 30_000,
+        refetchOnWindowFocus: true,
     });
 
 export const usePhoneNumbers = () =>
@@ -128,8 +127,10 @@ export const usePhoneNumbers = () =>
         queryKey: keys.numbers,
         queryFn: () => api<Data<PhoneNumber[]>>('phone-numbers').then((r) => r.data),
         staleTime: 30_000,
-        // While an import from the WhatsApp Business app is running, keep its progress fresh.
-        refetchInterval: (query) => ((query.state.data ?? []).some((n) => n.sync && ['waiting', 'importing'].includes(n.sync.state)) ? 30_000 : false),
+        // Every page uses this (number switcher, disconnected banner): a change of status at Meta, or an
+        // import's progress, appears by itself within a minute. Faster while an import is running.
+        refetchInterval: (query) => ((query.state.data ?? []).some((n) => n.sync && ['waiting', 'importing'].includes(n.sync.state)) ? 30_000 : 60_000),
+        refetchOnWindowFocus: true,
     });
 
 export const useSignupAttempt = (id: string | null, poll: boolean) =>

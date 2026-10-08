@@ -1,6 +1,7 @@
 'use client';
 
 import { PhoneIcon, PlusIcon } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
@@ -16,7 +17,12 @@ import { useEntitlements, useWabaAccounts } from '@/lib/queries';
 
 export default function ChannelsPage() {
     const { can } = useSession();
-    const [open, setOpen] = useState(false);
+    const [opened, setOpen] = useState(false);
+    // "Reconnect" links (the banner on every page, a disconnected account's card) point at
+    // /channels?connect=1, which opens the connection window directly instead of just landing here.
+    const router = useRouter();
+    const wantsConnect = useSearchParams().get('connect') === '1';
+    const open = opened || (wantsConnect && can(P.ChannelsManage));
     const canView = can(P.ChannelsView);
     const canManage = can(P.ChannelsManage);
     const accounts = useWabaAccounts(canView);
@@ -85,7 +91,13 @@ export default function ChannelsPage() {
                 </div>
             )}
 
-            <ConnectWhatsappDialog open={open} onOpenChange={setOpen} />
+            <ConnectWhatsappDialog
+                open={open}
+                onOpenChange={(next) => {
+                    setOpen(next);
+                    if (!next && wantsConnect) router.replace('/channels'); // closing it clears the link's request
+                }}
+            />
         </>
     );
 }
