@@ -120,6 +120,9 @@ export type PhoneNumber = {
     verified_name: string | null;
     name_status: string | null;
     status: 'pending' | 'connected' | 'disconnected';
+    /** Why it is disconnected: the customer removed our access at Meta, took the number off the Business app, or did it here. */
+    disconnect_reason?: DisconnectReason | null;
+    disconnected_at?: string | null;
     quality_rating: 'GREEN' | 'YELLOW' | 'RED' | 'UNKNOWN' | null;
     messaging_limit_tier: string | null;
     throughput_level: string | null;
@@ -144,6 +147,7 @@ export type WabaAccount = {
     account_review_status: string | null;
     ban_state: string | null;
     status: 'connected' | 'disconnected';
+    disconnect_reason?: DisconnectReason | null;
     is_subscribed_to_webhooks: boolean;
     connected_at: string | null;
     disconnected_at: string | null;
@@ -709,3 +713,5 @@ export type PhoneNumberSync = {
     started_at: string | null;
     last_imported_at: string | null;
 };
+
+export type DisconnectReason = 'manual' | 'partner_removed' | 'offboarded' | 'access_revoked' | (string & {});

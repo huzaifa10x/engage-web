@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 
-import { ImpersonationBanner, TrialBanner } from './banners';
+import { ChannelDisconnectedBanner, ImpersonationBanner, TrialBanner } from './banners';
 import { NotificationBell } from './notification-bell';
 import { NumberSwitcher } from './number-switcher';
 import { Sidebar } from './sidebar';
@@ -83,6 +83,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         </div>
                     </header>
                     <TrialBanner />
+                    <ChannelDisconnectedBanner />
                     <main className={cn(fullBleed ? 'min-h-0 flex-1' : 'mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:py-8')}>{children}</main>
                 </div>
             </div>

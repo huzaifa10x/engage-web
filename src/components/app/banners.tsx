@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { ShieldAlertIcon, SparklesIcon } from 'lucide-react';
+import { ShieldAlertIcon, SparklesIcon, TriangleAlertIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { daysUntil } from '@/lib/format';
 import { P } from '@/lib/permissions';
+import { usePhoneNumbers } from '@/lib/queries';
+import { disconnectExplanation } from '@/lib/whatsapp';
 
 import { useSession } from './session';
 
@@ -59,6 +61,34 @@ export function TrialBanner() {
                     View plan
                 </Link>
             )}
+        </div>
+    );
+}
+
+/**
+ * Shown on every page while a WhatsApp number is disconnected because access was removed on the
+ * customer's side (at Meta, or in the WhatsApp Business app): the workspace cannot send or
+ * receive on it until someone reconnects it.
+ */
+export function ChannelDisconnectedBanner() {
+    const { can } = useSession();
+    const numbers = usePhoneNumbers();
+    const lost = (numbers.data ?? []).filter((n) => n.status === 'disconnected' && disconnectExplanation(n.disconnect_reason) !== null);
+    if (lost.length === 0) return null;
+
+    const names = lost.map((n) => n.verified_name ?? n.display_phone_number).join(', ');
+
+    return (
+        <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-bad/30 bg-bad-bg px-4 py-2 text-[13px] text-ink-2">
+            <TriangleAlertIcon className="size-4 shrink-0 text-bad" />
+            <span>
+                <span className="font-semibold text-bad">WhatsApp disconnected: {names}.</span> {disconnectExplanation(lost[0].disconnect_reason)} Messages
+                cannot be sent or received on {lost.length === 1 ? 'this number' : 'these numbers'} until {lost.length === 1 ? 'it is' : 'they are'}{' '}
+                reconnected.
+            </span>
+            <Link href="/channels" className="ml-auto font-semibold text-bad underline-offset-2 hover:underline">
+                {can(P.ChannelsManage) ? 'Reconnect in Channels' : 'See Channels'}
+            </Link>
         </div>
     );
 }

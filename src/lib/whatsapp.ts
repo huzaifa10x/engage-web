@@ -41,3 +41,17 @@ export function coexistenceLabel(s: PhoneNumber['coexistence_status']): string |
             return null;
     }
 }
+
+/** What happened, in plain words, for a disconnected account or number. Null when it was disconnected here on purpose. */
+export function disconnectExplanation(reason: string | null | undefined): string | null {
+    switch (reason) {
+        case 'partner_removed':
+            return '10X Engage was removed as a partner on this WhatsApp Business account in Meta Business Settings.';
+        case 'offboarded':
+            return 'This number was disconnected from inside the WhatsApp Business app.';
+        case 'access_revoked':
+            return 'Meta no longer accepts our access to this account. It was removed in Meta Business Settings, or it expired.';
+        default:
+            return null;
+    }
+}

@@ -26,7 +26,7 @@ import { api, errorMessage } from '@/lib/api';
 import { humanize, relative } from '@/lib/format';
 import { keys } from '@/lib/queries';
 import type { WabaAccount } from '@/lib/types';
-import { coexistenceLabel, onboardingLabel, qualityLabel, qualityTone, statusLabel, statusTone, tierLabel } from '@/lib/whatsapp';
+import { coexistenceLabel, disconnectExplanation, onboardingLabel, qualityLabel, qualityTone, statusLabel, statusTone, tierLabel } from '@/lib/whatsapp';
 
 export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: boolean }) {
     const qc = useQueryClient();
@@ -34,6 +34,8 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
     const numbers = waba.phone_numbers ?? [];
     const hasCoexistence = numbers.some((n) => n.onboarding_type === 'coexistence');
     const disconnected = waba.status === 'disconnected';
+    // Set when the customer's side ended the connection (not when it was disconnected here on purpose).
+    const lostAccess = disconnected ? disconnectExplanation(waba.disconnect_reason) : null;
 
     const invalidate = () => {
         void qc.invalidateQueries({ queryKey: keys.accounts });
@@ -65,8 +67,8 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                 <div className="min-w-0">
                     <CardTitle className="flex flex-wrap items-center gap-2">
                         {waba.name ?? 'WhatsApp Business Account'}
-                        <Badge tone={disconnected ? 'grey' : 'good'} dot>
-                            {disconnected ? 'Disconnected' : 'Connected'}
+                        <Badge tone={disconnected ? (lostAccess ? 'bad' : 'grey') : 'good'} dot>
+                            {disconnected ? (lostAccess ? 'Disconnected · access removed' : 'Disconnected') : 'Connected'}
                         </Badge>
                         {waba.ban_state && waba.ban_state !== 'NONE' && <Badge tone="bad">{humanize(waba.ban_state)}</Badge>}
                         {!disconnected && !waba.is_subscribed_to_webhooks && <Badge tone="warn">Events not subscribed</Badge>}
@@ -75,6 +77,12 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                         {waba.business_name ? `${waba.business_name} · ` : ''}WABA <span className="font-mono">{waba.waba_id}</span>
                         {waba.account_review_status ? ` · Review ${humanize(waba.account_review_status).toLowerCase()}` : ''}
                     </p>
+                    {lostAccess && (
+                        <p role="alert" className="mt-2.5 rounded-lg border border-bad/30 bg-bad-bg px-3 py-2 text-[13px] leading-relaxed text-ink-2">
+                            <span className="font-semibold text-bad">Messages cannot be sent or received.</span> {lostAccess} Your conversations and contacts
+                            are kept. Use “Connect a WhatsApp number” above to reconnect and carry on.
+                        </p>
+                    )}
                 </div>
                 {canManage && !disconnected && (
                     <DropdownMenu>
@@ -128,9 +136,11 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                                     <TableCell className="text-[13px]">
                                         {onboardingLabel(n.onboarding_type)}
                                         <div className="text-[12px] text-muted-foreground">
-                                            {n.sync && n.sync.state !== 'complete'
-                                                ? syncSummary(n.sync)
-                                                : (coexistenceLabel(n.coexistence_status) ?? `${n.max_mps} msg/s`)}
+                                            {n.status === 'disconnected' && n.disconnect_reason === 'offboarded'
+                                                ? 'Disconnected in the WhatsApp Business app'
+                                                : n.sync && n.sync.state !== 'complete'
+                                                  ? syncSummary(n.sync)
+                                                  : (coexistenceLabel(n.coexistence_status) ?? `${n.max_mps} msg/s`)}
                                         </div>
                                     </TableCell>
                                     <TableCell>
