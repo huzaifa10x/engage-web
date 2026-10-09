@@ -573,6 +573,8 @@ export type BillingPreview = {
     from: { plan: string | null; interval: string | null } | null;
     lines: { description: string; amount_minor: number; proration: boolean }[];
     unused_credit_minor: number;
+    /** On a paid change: the unused amount (with its VAT) that comes off the next invoice instead of today's charge. */
+    credit_next_invoice_minor: number;
     subtotal_minor: number;
     tax_minor: number;
     tax_percent: number;
