@@ -32,7 +32,11 @@ function StatusTicks({ message }: { message: Message }) {
     }
 }
 
-/** Media is served through this origin (/api/v1/media/{id}) so the session cookie applies. */
+/**
+ * Media is served through this origin (/api/v1/media/{id}) so the session cookie applies.
+ * Links use rel="noopener", NOT "noreferrer": the server recognises portal requests by their Referer,
+ * and a link that hides it is answered "Authentication required" even for a signed-in person.
+ */
 function MediaBody({ message }: { message: Message }) {
     const media = message.media;
     if (message.type === 'media_placeholder' || !media) {
@@ -47,7 +51,7 @@ function MediaBody({ message }: { message: Message }) {
         case 'image':
         case 'sticker':
             return (
-                <a href={src} target="_blank" rel="noreferrer">
+                <a href={src} target="_blank" rel="noopener">
                     {/* eslint-disable-next-line @next/next/no-img-element -- authenticated, same-origin media */}
                     <img
                         src={src}
@@ -62,7 +66,7 @@ function MediaBody({ message }: { message: Message }) {
             return <audio src={src} controls className="w-64 max-w-full" />;
         default:
             return (
-                <a href={src} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-md bg-black/5 px-3 py-2 hover:bg-black/10">
+                <a href={src} target="_blank" rel="noopener" className="flex items-center gap-2 rounded-md bg-black/5 px-3 py-2 hover:bg-black/10">
                     <FileIcon className="size-5 shrink-0" />
                     <span className="min-w-0">
                         <span className="block truncate text-[13px] font-medium">{media.filename ?? 'Document'}</span>
