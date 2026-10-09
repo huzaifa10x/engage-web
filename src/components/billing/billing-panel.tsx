@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckIcon, CreditCardIcon, DownloadIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import { CheckIcon, CreditCardIcon, DownloadIcon, PlusIcon, Trash2Icon, WalletIcon } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -260,6 +260,7 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
     const defaultCard = methods.find((m) => m.is_default) ?? methods[0] ?? null;
     const key = b.stripe_publishable_key;
     const upcoming = payments.data?.upcoming ?? null;
+    const wallet = payments.data?.wallet ?? null;
     const openInvoices = (invoices.data ?? []).filter((i) => i.status === 'open');
 
     const refreshAll = () => {
@@ -472,7 +473,11 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
                             <p className="text-xl font-semibold tabular-nums">{upcoming ? money(upcoming.amount_due_minor, upcoming.currency) : '—'}</p>
                             <p className="text-[13px] text-muted-foreground">
                                 {upcoming?.date
-                                    ? `On ${date(upcoming.date)}${b.vat.applies ? `, including ${b.vat.percent}% VAT` : ''}.`
+                                    ? `On ${date(upcoming.date)}${b.vat.applies ? `, including ${b.vat.percent}% VAT` : ''}.${
+                                          upcoming.credit_applied_minor > 0
+                                              ? ` ${money(upcoming.total_minor, upcoming.currency)} less ${money(upcoming.credit_applied_minor, upcoming.currency)} wallet credit.`
+                                              : ''
+                                      }`
                                     : stripeSub && sub.cancel_at
                                       ? 'Nothing more will be charged.'
                                       : 'Nothing scheduled.'}
@@ -493,6 +498,43 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
                             </div>
                         </Card>
                     </div>
+                    {wallet && (wallet.balance_minor > 0 || wallet.entries.length > 0) && (
+                        <Card className="gap-3 p-5">
+                            <div className="flex flex-wrap items-start gap-3">
+                                <div className="inline-flex size-10 items-center justify-center rounded-lg bg-good-bg text-good">
+                                    <WalletIcon className="size-5" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-[12.5px] text-muted-foreground">Wallet credit</p>
+                                    <p className="text-xl font-semibold tabular-nums">{money(wallet.balance_minor, wallet.currency)}</p>
+                                    <p className="mt-1 max-w-2xl text-[13px] text-muted-foreground">
+                                        {wallet.balance_minor > 0
+                                            ? 'This is the unused value of a plan you changed. It is not refunded to your card: it is used automatically for your next renewal payments, or if you upgrade.'
+                                            : 'Your wallet credit has been used up on your payments.'}
+                                        {wallet.balance_minor > 0 && upcoming && upcoming.credit_applied_minor > 0 && upcoming.date
+                                            ? ` ${money(upcoming.credit_applied_minor, upcoming.currency)} of it will be used on ${date(upcoming.date)}.`
+                                            : ''}
+                                    </p>
+                                </div>
+                            </div>
+                            {wallet.entries.length > 0 && (
+                                <div className="grid gap-1.5 border-t pt-3 text-[13px]">
+                                    {wallet.entries.slice(0, 5).map((e) => (
+                                        <div key={e.id} className="flex items-baseline justify-between gap-3">
+                                            <span className="text-muted-foreground">
+                                                {e.created_at ? date(e.created_at) : ''} ·{' '}
+                                                {e.kind === 'added' ? 'Added from a plan change' : 'Used on a payment'}
+                                            </span>
+                                            <span className={`tabular-nums ${e.kind === 'added' ? 'text-good' : ''}`}>
+                                                {e.kind === 'added' ? '+ ' : '− '}
+                                                {money(Math.abs(e.amount_minor), e.currency)}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </Card>
+                    )}
                     {openInvoices.length > 0 && (
                         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-warn/30 bg-warn-bg px-4 py-3 text-sm">
                             {openInvoices.length === 1 ? 'One invoice is' : `${openInvoices.length} invoices are`} waiting for payment.

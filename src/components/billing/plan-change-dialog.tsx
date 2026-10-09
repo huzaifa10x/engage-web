@@ -80,6 +80,9 @@ export function PlanChangeDialog({
 
     const p = preview;
     const period = yearly ? 'year' : 'month';
+    // Wallet credit includes VAT, so the downgrade breakdown is shown with VAT as well.
+    const newPlanWithTax = p ? Math.round(p.price_minor * (1 + p.tax_percent / 100)) : 0;
+    const withVat = p && p.tax_percent > 0 ? ' (incl. VAT)' : '';
 
     return (
         <Dialog open={plan !== null} onOpenChange={(o) => !o && !working && onClose()}>
@@ -124,24 +127,36 @@ export function PlanChangeDialog({
                             <div className="my-1 border-t" />
                             <Row label="Subtotal" value={money(p.subtotal_minor, p.currency)} />
                             {p.tax_minor > 0 && <Row label={`VAT (${p.tax_percent}%)`} value={money(p.tax_minor, p.currency)} />}
-                            {p.balance_applied_minor > 0 && (
-                                <Row label="Account credit applied" value={`− ${money(p.balance_applied_minor, p.currency)}`} muted />
-                            )}
+                            {p.balance_applied_minor > 0 && <Row label="Wallet credit used" value={`− ${money(p.balance_applied_minor, p.currency)}`} muted />}
                             <div className="my-1 border-t" />
                             <Row label="Due today" value={money(p.amount_due_minor, p.currency)} strong />
                         </div>
 
-                        {p.change && p.unused_credit_minor > 0 && (
-                            <p className="text-[13px] text-muted-foreground">
-                                You have {money(p.unused_credit_minor, p.currency)} of unused time on your current plan. It is applied as a credit, and a new
-                                billing {period} starts today.
-                            </p>
-                        )}
-                        {p.credit_kept_minor > 0 && (
-                            <p className="rounded-md border border-info/20 bg-info-bg px-3 py-2 text-[13px]">
-                                Your unused credit is larger than the new price, so nothing is charged today. The remaining{' '}
-                                {money(p.credit_kept_minor, p.currency)} stays on your account and is used for your next invoices.
-                            </p>
+                        {p.credit_kept_minor > 0 ? (
+                            <div className="grid gap-2 rounded-lg border border-good/30 bg-good-bg p-4">
+                                <p className="text-sm font-semibold">You keep {money(p.credit_kept_minor, p.currency)} as wallet credit</p>
+                                <Row label={`Unused on your current plan${withVat}`} value={money(p.credit_kept_minor + newPlanWithTax, p.currency)} />
+                                <Row
+                                    label={`${p.plan.name} for the first ${period}${withVat}, paid from it`}
+                                    value={`− ${money(newPlanWithTax, p.currency)}`}
+                                    muted
+                                />
+                                <div className="my-0.5 border-t border-good/20" />
+                                <Row label="Added to your wallet" value={money(p.credit_kept_minor, p.currency)} strong />
+                                <p className="text-[13px] text-muted-foreground">
+                                    Nothing is charged today and nothing is refunded to your card. The credit stays in your wallet
+                                    {p.wallet_after_minor > p.credit_kept_minor ? ` (${money(p.wallet_after_minor, p.currency)} in total)` : ''} and is used
+                                    automatically for your next renewal payments, or if you upgrade again.
+                                </p>
+                            </div>
+                        ) : (
+                            p.change &&
+                            p.unused_credit_minor > 0 && (
+                                <p className="text-[13px] text-muted-foreground">
+                                    You have {money(p.unused_credit_minor, p.currency)} of unused time on your current plan. It is deducted from today&apos;s
+                                    charge, nothing is refunded to your card, and a new billing {period} starts today.
+                                </p>
+                            )
                         )}
                         <p className="text-[13px] text-muted-foreground">
                             Renews automatically on {date(p.renews_at)} at {money(p.price_minor, p.currency)}

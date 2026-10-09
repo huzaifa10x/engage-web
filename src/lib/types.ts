@@ -580,6 +580,8 @@ export type BillingPreview = {
     balance_applied_minor: number;
     amount_due_minor: number;
     credit_kept_minor: number;
+    /** What the wallet will hold after this change (earlier credit included). */
+    wallet_after_minor: number;
     renews_at: string;
     has_payment_method: boolean;
 };
@@ -598,7 +600,20 @@ export type BillingPayment = {
     created_at: string | null;
 };
 
-export type BillingPayments = { payments: BillingPayment[]; upcoming: { amount_due_minor: number; currency: string; date: string | null } | null };
+/** Credit kept on the account (unused plan value after a downgrade). It is never refunded; it pays for the next invoices. */
+export type BillingWallet = {
+    balance_minor: number;
+    currency: string;
+    /** Newest first. Positive amounts were added to the wallet, negative ones were used on an invoice. */
+    entries: { id: string; amount_minor: number; balance_after_minor: number; kind: 'added' | 'used'; currency: string; created_at: string | null }[];
+};
+
+export type BillingPayments = {
+    payments: BillingPayment[];
+    /** `total_minor` is the renewal price; `credit_applied_minor` is the part of it the wallet pays. */
+    upcoming: { amount_due_minor: number; total_minor: number; credit_applied_minor: number; currency: string; date: string | null } | null;
+    wallet: BillingWallet;
+};
 
 export type AutoReplySettings = { enabled: boolean; message: string; cooldown_hours: number; when: 'always' | 'outside_hours' };
 
