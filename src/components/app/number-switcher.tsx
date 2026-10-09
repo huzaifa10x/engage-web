@@ -38,11 +38,16 @@ export function useSelectedNumber() {
     const { me } = useSession();
     const storageKey = `engage:number:${me.active_tenant_id}`;
 
-    const selected = useSyncExternalStore(
+    const stored = useSyncExternalStore(
         subscribe,
         () => window.localStorage.getItem(storageKey),
         () => null,
     );
+    // A remembered choice only counts while that number is still in this workspace's list. Otherwise
+    // every screen would stay filtered by a number nobody can see or change, and the inbox would look
+    // empty although the conversations are all there.
+    const numbers = usePhoneNumbers().data;
+    const selected = stored !== null && numbers !== undefined && !numbers.some((n) => n.id === stored) ? null : stored;
 
     const update = useCallback(
         (id: string | null) => {
@@ -59,10 +64,14 @@ export function useSelectedNumber() {
 export function NumberSwitcher() {
     const numbers = usePhoneNumbers();
     const [selected, setSelected] = useSelectedNumber();
-    const connected = (numbers.data ?? []).filter((n) => n.status !== 'disconnected');
+    // Disconnected numbers stay in the list (marked as such): their conversations are kept, and hiding
+    // the number here would leave no way to look at them, or leave the inbox filtered by a number that
+    // can no longer be seen or changed.
+    const all = numbers.data ?? [];
+    const connected = [...all].sort((a, b) => Number(a.status === 'disconnected') - Number(b.status === 'disconnected'));
     const current = connected.find((n) => n.id === selected) ?? null;
 
-    if (connected.length === 0) return null;
+    if (all.length === 0) return null;
 
     return (
         <DropdownMenu>
@@ -81,7 +90,10 @@ export function NumberSwitcher() {
                     <DropdownMenuCheckItem key={n.id} checked={current?.id === n.id} onSelect={() => setSelected(n.id)}>
                         <span className={cn('size-2 rounded-full', TONE_DOT[qualityTone(n.quality_rating)] ?? 'bg-faint')} />
                         <span className="min-w-0">
-                            <span className="block truncate">{n.verified_name ?? 'Unnamed number'}</span>
+                            <span className="block truncate">
+                                {n.verified_name ?? 'Unnamed number'}
+                                {n.status === 'disconnected' && <span className="ml-1.5 text-[11px] font-semibold text-bad">Disconnected</span>}
+                            </span>
                             <span className="block font-mono text-[11.5px] text-muted-foreground">{n.display_phone_number}</span>
                         </span>
                     </DropdownMenuCheckItem>

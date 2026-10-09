@@ -117,8 +117,9 @@ export const useWabaAccounts = (enabled = true) =>
         queryFn: () => api<Data<WabaAccount[]>>('whatsapp/accounts').then((r) => r.data),
         enabled,
         // Kept fresh by itself, so a number that is disconnected at Meta (or reconnected, or whose import
-        // moves on) shows without anyone pressing a refresh button. Also refreshed when the tab regains focus.
-        refetchInterval: 30_000,
+        // moves on) shows within seconds, without anyone pressing a refresh button. Also refreshed when
+        // the tab regains focus.
+        refetchInterval: 10_000,
         refetchOnWindowFocus: true,
     });
 
@@ -128,8 +129,8 @@ export const usePhoneNumbers = () =>
         queryFn: () => api<Data<PhoneNumber[]>>('phone-numbers').then((r) => r.data),
         staleTime: 30_000,
         // Every page uses this (number switcher, disconnected banner): a change of status at Meta, or an
-        // import's progress, appears by itself within a minute. Faster while an import is running.
-        refetchInterval: (query) => ((query.state.data ?? []).some((n) => n.sync && ['waiting', 'importing'].includes(n.sync.state)) ? 30_000 : 60_000),
+        // import's progress, appears by itself within about 20 seconds.
+        refetchInterval: 20_000,
         refetchOnWindowFocus: true,
     });
 
