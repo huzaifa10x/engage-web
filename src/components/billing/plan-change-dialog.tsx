@@ -144,7 +144,7 @@ export function PlanChangeDialog({
                                 <div className="my-0.5 border-t border-good/20" />
                                 <Row label="Added to your wallet" value={money(p.credit_kept_minor, p.currency)} strong />
                                 <p className="text-[13px] text-muted-foreground">
-                                    Nothing is charged today and nothing is refunded to your card. The credit stays in your wallet
+                                    Nothing is charged today. The credit stays in your wallet
                                     {p.wallet_after_minor > p.credit_kept_minor ? ` (${money(p.wallet_after_minor, p.currency)} in total)` : ''} and is used
                                     automatically for your next renewal payments, or if you upgrade again.
                                 </p>
@@ -154,7 +154,7 @@ export function PlanChangeDialog({
                             p.unused_credit_minor > 0 && (
                                 <p className="text-[13px] text-muted-foreground">
                                     You have {money(p.unused_credit_minor, p.currency)} of unused time on your current plan. It is deducted from today&apos;s
-                                    charge, nothing is refunded to your card, and a new billing {period} starts today.
+                                    charge, and a new billing {period} starts today.
                                 </p>
                             )
                         )}

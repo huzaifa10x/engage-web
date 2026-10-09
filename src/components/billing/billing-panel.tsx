@@ -509,7 +509,7 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
                                     <p className="text-xl font-semibold tabular-nums">{money(wallet.balance_minor, wallet.currency)}</p>
                                     <p className="mt-1 max-w-2xl text-[13px] text-muted-foreground">
                                         {wallet.balance_minor > 0
-                                            ? 'This is the unused value of a plan you changed. It is not refunded to your card: it is used automatically for your next renewal payments, or if you upgrade.'
+                                            ? 'This is the remaining balance from a plan you changed. It is applied automatically to your next renewal payments, or if you upgrade.'
                                             : 'Your wallet credit has been used up on your payments.'}
                                         {wallet.balance_minor > 0 && upcoming && upcoming.credit_applied_minor > 0 && upcoming.date
                                             ? ` ${money(upcoming.credit_applied_minor, upcoming.currency)} of it will be used on ${date(upcoming.date)}.`
