@@ -131,14 +131,7 @@ export function PlanChangeDialog({
                             <Row label="Due today" value={money(p.amount_due_minor, p.currency)} strong />
                         </div>
 
-                        {p.change && p.credit_next_invoice_minor > 0 && (
-                            <p className="rounded-md border border-info/20 bg-info-bg px-3 py-2 text-[13px]">
-                                The new plan is charged in full today and a new billing {period} starts now. The{' '}
-                                {money(p.credit_next_invoice_minor, p.currency)} you have not used on your current plan is kept as account credit and taken off
-                                your next invoice.
-                            </p>
-                        )}
-                        {p.change && p.credit_next_invoice_minor === 0 && p.unused_credit_minor > 0 && (
+                        {p.change && p.unused_credit_minor > 0 && (
                             <p className="text-[13px] text-muted-foreground">
                                 You have {money(p.unused_credit_minor, p.currency)} of unused time on your current plan. It is applied as a credit, and a new
                                 billing {period} starts today.
