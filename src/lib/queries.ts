@@ -5,6 +5,10 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import { api, upload } from './api';
 import type {
     ApiKey,
+    Integration,
+    IntegrationEvent,
+    IntegrationRule,
+    IntegrationsOverview,
     DeveloperOverview,
     WebhookDelivery,
     WebhookEndpoint,
@@ -548,3 +552,39 @@ export const useWebhookDeliveries = (filters: { endpoint_id?: string; status?: s
     });
 
 export const resendWebhookDelivery = (id: string) => api<Data<WebhookDelivery>>(`developer/deliveries/${id}/resend`, { method: 'POST' }).then((r) => r.data);
+
+// ── Integrations: stores (Shopify, WooCommerce) and the messages their events send ───────
+
+export const useIntegrations = (enabled = true) =>
+    useQuery({ queryKey: ['integrations', 'overview'], queryFn: () => api<Data<IntegrationsOverview>>('integrations').then((r) => r.data), enabled });
+
+export const useIntegration = (id: string | null) =>
+    useQuery({ queryKey: ['integrations', 'one', id], queryFn: () => api<Data<Integration>>(`integrations/${id}`).then((r) => r.data), enabled: id !== null });
+
+export const useIntegrationEvents = (id: string | null, status?: string) =>
+    useQuery({
+        queryKey: ['integrations', 'events', id, status ?? ''],
+        queryFn: () => api<{ data: IntegrationEvent[]; meta: { total: number } }>(`integrations/${id}/events`, { query: { status } }),
+        enabled: id !== null,
+        refetchInterval: 15_000,
+    });
+
+/** Returns Shopify's approval page for this store; the browser is sent there. */
+export const startShopifyInstall = (shop: string) =>
+    api<Data<{ url: string }>>('integrations/shopify/install', { method: 'POST', body: { shop } }).then((r) => r.data.url);
+
+export const connectWooCommerce = (body: { store_url: string; consumer_key: string; consumer_secret: string; default_country_code?: string | null }) =>
+    api<Data<Integration>>('integrations/woocommerce', { method: 'POST', body }).then((r) => r.data);
+
+export const updateIntegration = (
+    id: string,
+    body: Partial<{ status: 'active' | 'paused'; default_country_code: string | null; tag: string | null; trust_store_consent: boolean }>,
+) => api<Data<Integration>>(`integrations/${id}`, { method: 'PATCH', body }).then((r) => r.data);
+
+export const disconnectIntegration = (id: string) => api(`integrations/${id}`, { method: 'DELETE' });
+
+export const saveIntegrationRule = (id: string, event: string, body: Omit<IntegrationRule, 'event'>) =>
+    api<Data<Integration>>(`integrations/${id}/rules/${event}`, { method: 'PUT', body }).then((r) => r.data);
+
+export const testIntegrationRule = (id: string, event: string, phone: string) =>
+    api(`integrations/${id}/rules/${event}/test`, { method: 'POST', body: { phone } });

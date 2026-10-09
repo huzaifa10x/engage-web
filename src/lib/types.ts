@@ -678,6 +678,8 @@ export type WebhookEndpoint = {
     created_at: string | null;
     /** Present only when the endpoint is created or its secret is rotated. */
     secret?: string;
+    /** 'api' = created by Zapier, Make or the customer's own code through the public API. */
+    source?: 'portal' | 'api';
 };
 
 export type WebhookDelivery = {
@@ -715,3 +717,57 @@ export type PhoneNumberSync = {
 };
 
 export type DisconnectReason = 'manual' | 'partner_removed' | 'offboarded' | 'access_revoked' | (string & {});
+
+// ── Integrations ─────────────────────────────────────────────────────────────────────────
+
+export type IntegrationProvider = 'shopify' | 'woocommerce';
+
+export type IntegrationRule = {
+    event: string;
+    enabled: boolean;
+    phone_number_id: string | null;
+    template_name: string | null;
+    template_language: string | null;
+    /** Each value is text that may contain {{field}} placeholders, e.g. "{{customer_first_name}}". */
+    variables: { header?: string[]; body?: string[]; buttons?: Record<string, string> } | null;
+    delay_minutes: number;
+};
+
+export type Integration = {
+    id: string;
+    provider: IntegrationProvider;
+    name: string;
+    store: string;
+    status: 'active' | 'paused';
+    default_country_code: string | null;
+    tag: string | null;
+    trust_store_consent: boolean;
+    events: string[];
+    active_rules: number;
+    last_event_at: string | null;
+    created_at: string | null;
+    rules?: IntegrationRule[];
+};
+
+export type IntegrationsOverview = {
+    can: { stores: boolean; api: boolean; webhooks: boolean };
+    providers: Record<IntegrationProvider, { available: boolean }>;
+    api_base_url: string;
+    events: { key: string; label: string; hint: string; providers: IntegrationProvider[] }[];
+    fields: { key: string; label: string; sample: string }[];
+    integrations: Integration[];
+};
+
+export type IntegrationEvent = {
+    id: string;
+    event: string;
+    status: 'pending' | 'sent' | 'skipped' | 'failed' | 'cancelled';
+    detail: string | null;
+    reference: string | null;
+    customer: string | null;
+    phone: string | null;
+    contact_id: string | null;
+    message_id: string | null;
+    due_at: string | null;
+    created_at: string | null;
+};

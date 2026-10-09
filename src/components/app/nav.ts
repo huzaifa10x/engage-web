@@ -63,7 +63,7 @@ export const NAV: NavSection[] = [
             { label: 'Channels', icon: PhoneIcon, href: '/channels', permission: P.ChannelsView },
             { label: 'Team & Roles', icon: UsersIcon, href: '/team', permission: P.TeamView },
             { label: 'Compliance', icon: ShieldCheckIcon, href: '/compliance', permission: P.ComplianceView },
-            { label: 'Integrations', icon: PlugIcon },
+            { label: 'Integrations', icon: PlugIcon, href: '/integrations', permission: P.IntegrationsView },
             { label: 'Developer', icon: CodeIcon, href: '/developer', permission: P.DeveloperView },
             { label: 'Billing', icon: CreditCardIcon, href: '/billing', permission: P.BillingView },
             { label: 'Settings', icon: SettingsIcon, href: '/settings', permission: P.SettingsView },
