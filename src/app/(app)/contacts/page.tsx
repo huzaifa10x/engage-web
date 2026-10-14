@@ -95,7 +95,7 @@ export default function ContactsPage() {
                 actions={
                     <>
                         <Button variant="outline" onClick={() => setManaging(true)}>
-                            <SlidersHorizontalIcon /> Segments & tags
+                            <SlidersHorizontalIcon /> Segments, tags & fields
                         </Button>
                         {can(P.ContactsExport) && (
                             <Button asChild variant="outline">

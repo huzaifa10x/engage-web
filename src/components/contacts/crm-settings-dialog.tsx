@@ -2,18 +2,19 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
+import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { errorMessage } from '@/lib/api';
-import { createContactField, deleteContactField, deleteSegment, deleteTag, keys, useContactFields, useSegments, useTags } from '@/lib/queries';
+import { deleteContactField, deleteSegment, deleteTag, keys, useContactFieldsInfo, useSegments, useTags } from '@/lib/queries';
 import type { ContactField, Segment } from '@/lib/types';
+
+import { ContactFieldDialog, typeLabel } from './contact-field-dialog';
 
 /** One place to manage what contacts are organised by: segments, tags and custom fields. */
 export function CrmSettingsDialog({
@@ -30,9 +31,14 @@ export function CrmSettingsDialog({
     const qc = useQueryClient();
     const segments = useSegments(open);
     const tags = useTags(open);
-    const fields = useContactFields(open);
-    const [label, setLabel] = useState('');
-    const [type, setType] = useState<ContactField['type']>('text');
+    const info = useContactFieldsInfo(open);
+    const fields = { data: info.data?.data };
+    const allowance = info.data?.meta;
+    const full =
+        !!allowance &&
+        ((allowance.limit !== null && allowance.used >= allowance.limit) || (allowance.fair_use !== null && allowance.used >= allowance.fair_use));
+    // undefined = closed, null = new field, otherwise the field being edited.
+    const [editingField, setEditingField] = useState<ContactField | null | undefined>(undefined);
 
     const refresh = () => {
         void qc.invalidateQueries({ queryKey: keys.segments });
@@ -120,62 +126,72 @@ export function CrmSettingsDialog({
                     </TabsContent>
 
                     <TabsContent value="fields" className="grid gap-2">
+                        {allowance && (
+                            <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted px-3 py-2 text-[13px]">
+                                <span>
+                                    <span className="font-semibold tabular-nums">{allowance.used}</span>
+                                    {allowance.limit !== null ? ` of ${allowance.limit}` : ''} custom field
+                                    {allowance.used === 1 && allowance.limit === null ? '' : 's'}
+                                    {allowance.limit === null && (
+                                        <span className="text-muted-foreground"> · unlimited{allowance.fair_use ? ' (fair use)' : ''}</span>
+                                    )}
+                                </span>
+                                {allowance.advanced && <Badge tone="brand">Custom types and validation</Badge>}
+                                {full && (
+                                    <Link href="/billing" className="ml-auto font-medium text-brand-600 underline">
+                                        Upgrade for more fields
+                                    </Link>
+                                )}
+                            </div>
+                        )}
                         {(fields.data ?? []).length === 0 && empty('No custom fields yet. Use them for things like membership tier or renewal date.')}
                         {(fields.data ?? []).map((f) => (
                             <div key={f.id} className="flex items-center gap-3 rounded-md border px-3 py-2">
                                 <div className="min-w-0 flex-1">
-                                    <p className="truncate text-sm font-medium">{f.label}</p>
+                                    <p className="truncate text-sm font-medium">
+                                        {f.label}
+                                        {f.rules?.required && <span className="text-bad"> *</span>}
+                                    </p>
                                     <p className="font-mono text-[12px] text-muted-foreground">
-                                        {f.key} · {f.type}
+                                        {f.key} · {typeLabel(f.type)}
+                                        {f.options && f.options.length > 0 ? ` · ${f.options.length} choices` : ''}
                                     </p>
                                 </div>
                                 {canEdit && (
-                                    <Button
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        onClick={() => run.mutate(() => deleteContactField(f.id))}
-                                        aria-label={`Delete ${f.label}`}
-                                    >
-                                        <Trash2Icon />
-                                    </Button>
+                                    <>
+                                        <Button variant="ghost" size="icon-sm" onClick={() => setEditingField(f)} aria-label={`Edit ${f.label}`}>
+                                            <PencilIcon />
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon-sm"
+                                            onClick={() =>
+                                                window.confirm(`Delete the field “${f.label}”? Values already saved on contacts are kept.`) &&
+                                                run.mutate(() => deleteContactField(f.id))
+                                            }
+                                            aria-label={`Delete ${f.label}`}
+                                        >
+                                            <Trash2Icon />
+                                        </Button>
+                                    </>
                                 )}
                             </div>
                         ))}
                         {canEdit && (
-                            <div className="flex gap-2 pt-1">
-                                <Input
-                                    value={label}
-                                    onChange={(e) => setLabel(e.target.value)}
-                                    placeholder="Field name, e.g. Membership tier"
-                                    maxLength={60}
-                                    aria-label="New field name"
-                                />
-                                <Select value={type} onValueChange={(v) => setType(v as ContactField['type'])}>
-                                    <SelectTrigger className="w-28" aria-label="Field type">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="text">Text</SelectItem>
-                                        <SelectItem value="number">Number</SelectItem>
-                                        <SelectItem value="date">Date</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <Button
-                                    disabled={!label.trim() || run.isPending}
-                                    onClick={() =>
-                                        run.mutate(async () => {
-                                            await createContactField(label.trim(), type);
-                                            setLabel('');
-                                        })
-                                    }
-                                >
-                                    Add
-                                </Button>
-                            </div>
+                            <Button variant="outline" size="sm" className="w-fit" disabled={full} onClick={() => setEditingField(null)}>
+                                <PlusIcon /> New field
+                            </Button>
                         )}
                     </TabsContent>
                 </Tabs>
             </DialogContent>
+            <ContactFieldDialog
+                open={editingField !== undefined}
+                onOpenChange={(o) => !o && setEditingField(undefined)}
+                field={editingField ?? null}
+                allowance={allowance}
+                onSaved={refresh}
+            />
         </Dialog>
     );
 }

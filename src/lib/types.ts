@@ -349,7 +349,15 @@ export type TemplateForm = {
 
 export type Tag = { id: string; name: string; contacts: number };
 
-export type ContactField = { id: string; key: string; label: string; type: 'text' | 'number' | 'date' };
+export type ContactFieldType = 'text' | 'number' | 'date' | 'email' | 'url' | 'phone' | 'boolean' | 'select' | 'multi_select';
+
+/** Validation rules (Enterprise). Which apply depends on the type: number → min/max, text → lengths and pattern. */
+export type ContactFieldRules = { required?: boolean; min?: number; max?: number; min_length?: number; max_length?: number; pattern?: string };
+
+export type ContactField = { id: string; key: string; label: string; type: ContactFieldType; options?: string[] | null; rules?: ContactFieldRules };
+
+/** What the plan allows: `limit` null = unlimited (`fair_use` is then the ceiling, if any); `advanced` = extra types and rules. */
+export type ContactFieldsAllowance = { limit: number | null; fair_use: number | null; advanced: boolean; types: ContactFieldType[]; used: number };
 
 /** One condition of a segment. `field` is a built-in name or `attr:<custom field key>`. */
 export type SegmentRule = { field: string; op: string; value?: string | number };

@@ -13,10 +13,11 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { api } from '@/lib/api';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { api, ApiError } from '@/lib/api';
 import { applyServerErrors } from '@/lib/form';
 import { keys, useContactFields, useTags } from '@/lib/queries';
-import type { Contact } from '@/lib/types';
+import type { Contact, ContactField } from '@/lib/types';
 
 import { TagInput } from './tag-input';
 
@@ -28,6 +29,77 @@ const schema = z.object({
 });
 type Values = z.infer<typeof schema>;
 
+type AttributeValue = string | boolean | string[] | undefined;
+
+const toFormValue = (v: unknown): AttributeValue => (typeof v === 'boolean' ? v : Array.isArray(v) ? v.map(String) : v == null ? '' : String(v));
+const isEmpty = (v: AttributeValue) => v === undefined || v === '' || (Array.isArray(v) && v.length === 0);
+
+/** The right control for each custom field type. */
+function CustomFieldInput({ field, value, onChange }: { field: ContactField; value: AttributeValue; onChange: (v: AttributeValue) => void }) {
+    const id = `c-f-${field.key}`;
+    if (field.type === 'boolean') {
+        return (
+            <Select
+                value={value === true ? 'yes' : value === false ? 'no' : ''}
+                onValueChange={(v) => onChange(v === 'yes' ? true : v === 'no' ? false : undefined)}
+            >
+                <SelectTrigger id={id}>
+                    <SelectValue placeholder="Not set" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="yes">Yes</SelectItem>
+                    <SelectItem value="no">No</SelectItem>
+                </SelectContent>
+            </Select>
+        );
+    }
+    if (field.type === 'select') {
+        return (
+            <Select value={typeof value === 'string' ? value : ''} onValueChange={onChange}>
+                <SelectTrigger id={id}>
+                    <SelectValue placeholder="Choose…" />
+                </SelectTrigger>
+                <SelectContent>
+                    {(field.options ?? []).map((o) => (
+                        <SelectItem key={o} value={o}>
+                            {o}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        );
+    }
+    if (field.type === 'multi_select') {
+        const picked = Array.isArray(value) ? value : [];
+        return (
+            <div id={id} className="flex flex-wrap gap-x-4 gap-y-2 rounded-md border px-3 py-2">
+                {(field.options ?? []).map((o) => (
+                    <label key={o} className="flex items-center gap-2 text-sm">
+                        <Checkbox checked={picked.includes(o)} onCheckedChange={(v) => onChange(v === true ? [...picked, o] : picked.filter((p) => p !== o))} />
+                        {o}
+                    </label>
+                ))}
+            </div>
+        );
+    }
+    const type = { number: 'number', date: 'date', email: 'email', url: 'url', phone: 'tel' }[field.type as string] ?? 'text';
+    const r = field.rules ?? {};
+
+    return (
+        <Input
+            id={id}
+            type={type}
+            inputMode={field.type === 'phone' ? 'tel' : undefined}
+            min={r.min}
+            max={r.max}
+            maxLength={r.max_length}
+            placeholder={field.type === 'url' ? 'https://' : undefined}
+            value={typeof value === 'string' ? value : ''}
+            onChange={(e) => onChange(e.target.value)}
+        />
+    );
+}
+
 /** Create (phone required) or edit (phone is the identity and cannot change) a contact. */
 export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; onOpenChange: (o: boolean) => void; contact?: Contact | null }) {
     const qc = useQueryClient();
@@ -38,11 +110,13 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
     // Tags and custom fields live outside the form schema; they reset whenever another contact is opened.
     const [loaded, setLoaded] = useState<string | null | undefined>(undefined);
     const [tags, setTags] = useState<string[]>([]);
-    const [attributes, setAttributes] = useState<Record<string, string>>({});
+    const [attributes, setAttributes] = useState<Record<string, AttributeValue>>({});
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     if (open && loaded !== (contact?.id ?? null)) {
         setLoaded(contact?.id ?? null);
         setTags(contact?.tags ?? []);
-        setAttributes(Object.fromEntries(Object.entries(contact?.attributes ?? {}).map(([k, v]) => [k, v == null ? '' : String(v)])));
+        setAttributes(Object.fromEntries(Object.entries(contact?.attributes ?? {}).map(([k, v]) => [k, toFormValue(v)])));
+        setFieldErrors({});
     }
     if (!open && loaded !== undefined) setLoaded(undefined);
     const { register, control, handleSubmit, setError, reset, formState } = useForm<Values>({
@@ -57,7 +131,14 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
 
             return;
         }
-        const extra = Object.fromEntries(Object.entries(attributes).filter(([, value]) => value.trim() !== ''));
+        // Keep values the form does not show (set through the API), replace the fields it does show, drop emptied ones.
+        const defined = new Set((fields.data ?? []).map((f) => f.key));
+        const extra: Record<string, unknown> = Object.fromEntries(Object.entries(contact?.attributes ?? {}).filter(([k]) => !defined.has(k)));
+        for (const f of fields.data ?? []) {
+            const value = attributes[f.key];
+            if (!isEmpty(value)) extra[f.key] = value;
+        }
+        setFieldErrors({});
         try {
             if (editing) {
                 await api(`contacts/${contact.id}`, { method: 'PATCH', body: { name: v.name || null, email: v.email || null, tags, attributes: extra } });
@@ -75,7 +156,20 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
             reset();
             onOpenChange(false);
         } catch (e) {
-            setFormError(applyServerErrors(e, setError, ['phone', 'name', 'email']));
+            // Custom field problems come back as "attributes.<key>" and are shown under that field.
+            if (e instanceof ApiError) {
+                setFieldErrors(
+                    Object.fromEntries(
+                        Object.entries(e.fields)
+                            .filter(([k]) => k.startsWith('attributes.'))
+                            .map(([k, m]) => [k.slice('attributes.'.length), m[0]]),
+                    ),
+                );
+            }
+            const message = applyServerErrors(e, setError, ['phone', 'name', 'email']);
+            setFormError(
+                message && e instanceof ApiError && Object.keys(e.fields).every((k) => k.startsWith('attributes.')) ? 'Check the highlighted fields.' : message,
+            );
         }
     });
 
@@ -107,16 +201,22 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
                     <Field label="Tags" htmlFor="c-tags" hint="Used to build segments and campaign audiences">
                         <TagInput id="c-tags" value={tags} onChange={setTags} suggestions={(tagList.data ?? []).map((t) => t.name)} />
                     </Field>
+                    {fields.data && fields.data.length === 0 && (
+                        <p className="text-[12.5px] text-muted-foreground">
+                            Need more details on contacts? Add custom fields under Contacts → Segments, tags & fields.
+                        </p>
+                    )}
                     {(fields.data ?? []).length > 0 && (
                         <div className="grid gap-3 sm:grid-cols-2">
                             {(fields.data ?? []).map((f) => (
-                                <Field key={f.id} label={f.label} htmlFor={`c-f-${f.key}`}>
-                                    <Input
-                                        id={`c-f-${f.key}`}
-                                        type={f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text'}
-                                        value={attributes[f.key] ?? ''}
-                                        onChange={(e) => setAttributes({ ...attributes, [f.key]: e.target.value })}
-                                    />
+                                <Field
+                                    key={f.id}
+                                    label={f.rules?.required ? `${f.label} *` : f.label}
+                                    htmlFor={`c-f-${f.key}`}
+                                    error={fieldErrors[f.key]}
+                                    className={f.type === 'multi_select' ? 'sm:col-span-2' : undefined}
+                                >
+                                    <CustomFieldInput field={f} value={attributes[f.key]} onChange={(v) => setAttributes({ ...attributes, [f.key]: v })} />
                                 </Field>
                             ))}
                         </div>

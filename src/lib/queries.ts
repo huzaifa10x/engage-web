@@ -35,6 +35,7 @@ import type {
     CampaignForm,
     CampaignRecipient,
     ContactField,
+    ContactFieldsAllowance,
     ImportResult,
     Segment,
     SegmentCounts,
@@ -285,8 +286,21 @@ export const deleteTag = (id: string) => api(`tags/${id}`, { method: 'DELETE' })
 export const useContactFields = (enabled = true) =>
     useQuery({ queryKey: keys.contactFields, queryFn: () => api<Data<ContactField[]>>('contact-fields').then((r) => r.data), enabled, staleTime: 60_000 });
 
-export const createContactField = (label: string, type: ContactField['type']) =>
-    api<Data<ContactField>>('contact-fields', { method: 'POST', body: { label, type } }).then((r) => r.data);
+/** The fields together with what the plan allows (used / limit, available types). */
+export const useContactFieldsInfo = (enabled = true) =>
+    useQuery({
+        queryKey: [...keys.contactFields, 'info'],
+        queryFn: () => api<{ data: ContactField[]; meta: ContactFieldsAllowance }>('contact-fields'),
+        enabled,
+    });
+
+export type ContactFieldInput = { label: string; type?: ContactField['type']; options?: string[] | null; rules?: ContactField['rules'] | null };
+
+export const createContactField = (body: ContactFieldInput) => api<Data<ContactField>>('contact-fields', { method: 'POST', body }).then((r) => r.data);
+
+/** Label, choices and rules can change; the key and type cannot (values already stored keep their meaning). */
+export const updateContactField = (id: string, body: Omit<ContactFieldInput, 'type'>) =>
+    api<Data<ContactField>>(`contact-fields/${id}`, { method: 'PATCH', body }).then((r) => r.data);
 
 export const deleteContactField = (id: string) => api(`contact-fields/${id}`, { method: 'DELETE' });
 
