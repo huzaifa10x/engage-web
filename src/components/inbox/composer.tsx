@@ -216,9 +216,11 @@ export function Composer({
                 <Button variant="ghost" size="icon" onClick={() => fileRef.current?.click()} disabled={uploading} aria-label="Attach a file">
                     {uploading ? <Loader2Icon className="animate-spin" /> : <PaperclipIcon />}
                 </Button>
-                <Button variant="ghost" size="icon" onClick={onTemplate} aria-label="Send a template">
-                    <FileTextIcon />
-                </Button>
+                {canSendTemplate && (
+                    <Button variant="ghost" size="icon" onClick={onTemplate} aria-label="Send a template">
+                        <FileTextIcon />
+                    </Button>
+                )}
                 <CannedPicker
                     onPick={(body) => {
                         setText((current) => (current.trim() ? `${current.trimEnd()}\n${body}` : body));

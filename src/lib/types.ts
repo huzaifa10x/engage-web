@@ -234,7 +234,8 @@ export type Conversation = {
     last_message_at: string | null;
     last_message_preview: string | null;
     last_message_direction: 'inbound' | 'outbound' | null;
-    window: { open: boolean; expires_at: string | null };
+    /** `replies_allowed`: a normal message can be sent now (window open; for an opted-out contact, opened by a message sent after opting out). */
+    window: { open: boolean; expires_at: string | null; replies_allowed?: boolean };
     contact?: Contact;
     /** `status` is "disconnected" once the number was offboarded: the chat stays readable, nothing can be sent. */
     phone_number?: {

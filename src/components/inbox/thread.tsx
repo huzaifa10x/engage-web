@@ -119,9 +119,11 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
         ? `This conversation is on ${c.phone_number?.verified_name ?? c.phone_number?.display_phone_number ?? 'a number'}, which is no longer connected. You can read the history, but messages cannot be sent or received here. Reconnect the number in Channels to continue.`
         : !can(P.InboxReply)
           ? 'Your role can read this conversation but not reply.'
-          : contact?.consent_state === 'opted_out'
-            ? 'This contact opted out. They must send START before you can message them.'
-            : !c.window.open
+          : // Opted out: replies are allowed while a window the customer opened after opting out is open;
+            // templates never are (they would be the business starting a conversation).
+            contact?.consent_state === 'opted_out' && !(c.window.replies_allowed ?? false)
+            ? 'This contact opted out. You can reply as soon as they write to you again. Templates cannot be sent to them until they send START.'
+            : !(c.window.replies_allowed ?? c.window.open)
               ? 'The 24-hour window is closed, so normal messages cannot be sent. Send an approved template; when the customer replies, the window opens again.'
               : null;
     const optedOut = contact?.consent_state === 'opted_out';
@@ -300,7 +302,7 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
 
                 <Composer
                     ref={composer}
-                    canSendTemplate={!numberGone}
+                    canSendTemplate={!numberGone && !optedOut}
                     disabledReason={disabledReason}
                     replyTo={replyTo}
                     onClearReply={() => setReplyTo(null)}
