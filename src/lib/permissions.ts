@@ -31,6 +31,8 @@ export const P = {
     DeveloperManage: 'developer.manage',
     IntegrationsView: 'integrations.view',
     IntegrationsManage: 'integrations.manage',
+    ChatbotsView: 'chatbots.view',
+    ChatbotsManage: 'chatbots.manage',
 } as const;
 
 export type PermissionKey = (typeof P)[keyof typeof P];

@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertCircleIcon, CheckCheckIcon, CheckIcon, ClockIcon, FileIcon, HistoryIcon, MapPinIcon, ReplyIcon, SmartphoneIcon } from 'lucide-react';
+import { AlertCircleIcon, BotIcon, CheckCheckIcon, CheckIcon, ClockIcon, FileIcon, HistoryIcon, MapPinIcon, ReplyIcon, SmartphoneIcon } from 'lucide-react';
 
 import { clockTime, fileSize } from '@/lib/format';
 import type { Message } from '@/lib/types';
@@ -39,6 +39,23 @@ function StatusTicks({ message }: { message: Message }) {
  */
 function MediaBody({ message }: { message: Message }) {
     const media = message.media;
+    // Sent by a chatbot block as a public link (no uploaded copy).
+    const link = typeof message.content?.link === 'string' && message.content.link.startsWith('https://') ? message.content.link : null;
+    if (!media && link) {
+        return message.type === 'image' ? (
+            <a href={link} target="_blank" rel="noopener noreferrer">
+                {/* eslint-disable-next-line @next/next/no-img-element -- a public picture sent by link */}
+                <img src={link} alt={message.body ?? 'Image'} className="max-h-72 rounded-md object-cover" />
+            </a>
+        ) : (
+            <a href={link} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 rounded-md bg-black/5 px-3 py-2 hover:bg-black/10">
+                <FileIcon className="size-5 shrink-0" />
+                <span className="truncate text-[13px] font-medium">
+                    {String(message.content?.filename ?? (message.type === 'video' ? 'Video' : 'Document'))}
+                </span>
+            </a>
+        );
+    }
     if (message.type === 'media_placeholder' || !media) {
         return <p className="text-[13px] italic opacity-70">Media from chat history</p>;
     }
@@ -86,8 +103,40 @@ function Body({ message }: { message: Message }) {
     switch (message.type) {
         case 'text':
         case 'button':
-        case 'interactive':
             return <p className="text-[14px] break-words whitespace-pre-wrap">{message.body}</p>;
+        case 'interactive': {
+            // Our own menus (chatbot buttons and lists) show what the customer could tap.
+            const action = (c.action ?? {}) as { button?: string; buttons?: { reply?: { title?: string } }[]; sections?: { rows?: { title?: string }[] }[] };
+            const options =
+                message.direction === 'outbound'
+                    ? [
+                          ...(action.buttons ?? []).map((b) => b.reply?.title),
+                          ...(action.sections ?? []).flatMap((sec) => (sec.rows ?? []).map((r) => r.title)),
+                      ].filter(Boolean)
+                    : [];
+            const header = (c.header ?? null) as { type?: string; text?: string; image?: { link?: string } } | null;
+
+            return (
+                <div>
+                    {header?.type === 'image' && header.image?.link && (
+                        // eslint-disable-next-line @next/next/no-img-element -- a public picture sent by link
+                        <img src={header.image.link} alt="" className="mb-1.5 max-h-48 rounded-md object-cover" />
+                    )}
+                    {header?.type === 'text' && header.text && <p className="text-[14px] font-semibold">{header.text}</p>}
+                    <p className="text-[14px] break-words whitespace-pre-wrap">{message.body}</p>
+                    {options.length > 0 && (
+                        <div className="mt-2 grid gap-1 border-t border-black/10 pt-2">
+                            {action.sections && action.button && <span className="text-[11px] font-semibold opacity-60">☰ {action.button}</span>}
+                            {options.map((label, i) => (
+                                <span key={i} className="rounded bg-black/5 px-2 py-1 text-center text-[12.5px] font-medium">
+                                    {label}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
         case 'image':
         case 'video':
         case 'audio':
@@ -201,6 +250,11 @@ export function MessageBubble({
                     {message.origin === 'app_echo' && (
                         <span className="inline-flex items-center gap-0.5" title="Sent from the WhatsApp Business app">
                             <SmartphoneIcon className="size-3" /> App
+                        </span>
+                    )}
+                    {message.origin === 'automation' && (
+                        <span className="inline-flex items-center gap-0.5" title="Sent automatically (chatbot or auto-reply)">
+                            <BotIcon className="size-3" /> Bot ·
                         </span>
                     )}
                     {authorLabel && <span>{authorLabel} ·</span>}

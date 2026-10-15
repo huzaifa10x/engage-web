@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeftIcon, Loader2Icon, UploadCloudIcon } from 'lucide-react';
+import { ArrowLeftIcon, BotIcon, HandIcon, Loader2Icon, UploadCloudIcon } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api, errorMessage } from '@/lib/api';
+import { handBackConversation, takeOverConversation } from '@/lib/chatbots';
 import { newId } from '@/lib/id';
 import { dayLabel, timeLeft } from '@/lib/format';
 import { P } from '@/lib/permissions';
@@ -100,6 +101,25 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
     // Templates belong to the WhatsApp Business Account of the number this thread runs on.
     const numbers = usePhoneNumbers();
     const wabaAccountId = numbers.data?.find((n) => n.id === conversation.data?.phone_number_id)?.waba_account_id ?? null;
+
+    const [botBusy, setBotBusy] = useState(false);
+    const botAction = async (action: 'take' | 'back') => {
+        setBotBusy(true);
+        try {
+            if (action === 'take') {
+                await takeOverConversation(conversationId);
+                toast.success('You are handling this conversation now. The bot stays quiet here.');
+            } else {
+                const r = await handBackConversation(conversationId);
+                toast.success(r.meta?.restarted ? 'Handed back: the bot started again.' : 'Handed back: the bot answers the next customer message.');
+            }
+            afterSend();
+        } catch (e) {
+            toast.error(errorMessage(e));
+        } finally {
+            setBotBusy(false);
+        }
+    };
 
     const c = conversation.data;
     if (conversation.isLoading || !c) {
@@ -200,6 +220,33 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                             </Badge>
                         )}
                         {c.status === 'closed' && <Badge tone="grey">Closed</Badge>}
+                        {c.handler === 'bot' && (
+                            <Badge tone="info" title={c.bot?.node_title ? `The customer is at “${c.bot.node_title}”` : undefined}>
+                                <BotIcon className="size-3" /> Bot{c.bot?.flow_name ? ` · ${c.bot.flow_name}` : ''}
+                            </Badge>
+                        )}
+                        {c.handler === 'bot' && can(P.InboxReply) && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={botBusy}
+                                title="Stop the chatbot in this conversation and answer yourself."
+                                onClick={() => void botAction('take')}
+                            >
+                                <HandIcon /> Take over
+                            </Button>
+                        )}
+                        {c.handler !== 'bot' && c.bot && can(P.InboxReply) && c.status === 'open' && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={botBusy}
+                                title="Let the chatbot continue: it starts again from its menu (if the 24-hour window is open) or with the customer's next message."
+                                onClick={() => void botAction('back')}
+                            >
+                                <BotIcon /> Hand back to bot
+                            </Button>
+                        )}
                         {c.snoozed_until && <Badge tone="info">Snoozed</Badge>}
                         <NotesButton conversation={c} />
                         {can(P.InboxReply) && <SnoozeMenu conversation={c} />}
@@ -300,6 +347,17 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                     })}
                 </div>
 
+                {c.handler === 'bot' && !disabledReason && (
+                    <p className="border-t bg-info-bg px-4 py-1.5 text-[12px] text-info">
+                        <BotIcon className="mr-1 inline size-3.5" />
+                        The chatbot is answering{c.bot?.node_title ? ` (at “${c.bot.node_title}”)` : ''}. Sending a message takes over and stops it here.
+                    </p>
+                )}
+                {c.handler !== 'bot' && c.bot?.state === 'abandoned' && (
+                    <p className="border-t bg-warn-bg px-4 py-1.5 text-[12px] text-warn">
+                        The customer stopped answering the chatbot{c.bot.node_title ? ` at “${c.bot.node_title}”` : ''}. The conversation is yours to pick up.
+                    </p>
+                )}
                 <Composer
                     ref={composer}
                     canSendTemplate={!numberGone && !optedOut}

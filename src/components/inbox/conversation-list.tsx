@@ -1,6 +1,6 @@
 'use client';
 
-import { InboxIcon, SearchIcon } from 'lucide-react';
+import { BotIcon, InboxIcon, SearchIcon } from 'lucide-react';
 import { useState } from 'react';
 
 import { Avatar } from '@/components/ui/avatar';
@@ -17,7 +17,19 @@ const TABS: { id: NonNullable<ConversationFilters['assigned']>; label: string }[
     { id: 'any', label: 'All' },
     { id: 'me', label: 'Mine' },
     { id: 'unassigned', label: 'Unassigned' },
+    { id: 'others', label: 'Team' },
 ];
+
+type View = NonNullable<ConversationFilters['view']> | 'all';
+const VIEWS: { id: View; label: string; title: string }[] = [
+    { id: 'all', label: 'Any', title: 'Every conversation' },
+    { id: 'bot', label: 'Bot', title: 'A chatbot is handling these right now' },
+    { id: 'waiting', label: 'Waiting', title: 'We wrote last: waiting for the customer' },
+    { id: 'abandoned', label: 'Abandoned', title: 'The customer stopped answering the chatbot' },
+    { id: 'completed', label: 'Completed', title: 'The chatbot flow finished' },
+];
+
+const BOT_STATE: Record<string, string> = { handed_off: 'Handed off by bot', completed: 'Bot completed', abandoned: 'Left the bot', stopped: 'Bot stopped' };
 
 export function ConversationList({
     phoneNumberId,
@@ -34,12 +46,13 @@ export function ConversationList({
     const [status, setStatus] = useState<'open' | 'closed'>('open');
     const [unread, setUnread] = useState(false);
     const [snoozed, setSnoozed] = useState(false);
+    const [view, setView] = useState<View>('all');
     const [search, setSearch] = useState('');
     const [q, setQ] = useState('');
 
     // Without websockets the list is kept fresh by polling.
     const list = useConversations(
-        { phone_number_id: phoneNumberId, assigned, status, unread, snoozed: snoozed || undefined, q: q || undefined },
+        { phone_number_id: phoneNumberId, assigned, status, unread, snoozed: snoozed || undefined, q: q || undefined, view: view === 'all' ? undefined : view },
         polling ? 15_000 : false,
     );
     const rows = list.data?.pages.flatMap((p) => p.data) ?? [];
@@ -96,6 +109,18 @@ export function ConversationList({
                     >
                         Snoozed
                     </button>
+                    <Select value={view} onValueChange={(v) => setView(v as View)}>
+                        <SelectTrigger size="sm" className="w-32 shrink-0" aria-label="Bot view">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {VIEWS.map((v) => (
+                                <SelectItem key={v.id} value={v.id} title={v.title}>
+                                    {v.id === 'all' ? 'All chats' : v.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                     <Select value={status} onValueChange={(v) => setStatus(v as 'open' | 'closed')}>
                         <SelectTrigger size="sm" className="ml-auto w-24 shrink-0" aria-label="Status">
                             <SelectValue />
@@ -122,7 +147,7 @@ export function ConversationList({
                 {!list.isLoading && rows.length === 0 && (
                     <li className="flex flex-col items-center gap-2 px-6 py-12 text-center text-sm text-muted-foreground">
                         <InboxIcon className="size-6" />
-                        {q || unread || snoozed || assigned !== 'any'
+                        {q || unread || snoozed || assigned !== 'any' || view !== 'all'
                             ? 'No conversations match these filters.'
                             : 'No conversations yet. Messages to your WhatsApp numbers appear here.'}
                     </li>
@@ -163,6 +188,24 @@ export function ConversationList({
                                             </span>
                                         )}
                                     </span>
+                                    {c.handler === 'bot' ? (
+                                        <span
+                                            className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-info-bg px-1.5 py-px text-[10.5px] font-semibold text-info"
+                                            title={c.bot?.node_title ? `At “${c.bot.node_title}”` : undefined}
+                                        >
+                                            <BotIcon className="size-3" /> Bot{c.bot?.flow_name ? ` · ${c.bot.flow_name}` : ''}
+                                        </span>
+                                    ) : c.bot?.state && BOT_STATE[c.bot.state] ? (
+                                        <span
+                                            className={cn(
+                                                'mt-1 inline-flex w-fit items-center gap-1 rounded-full px-1.5 py-px text-[10.5px] font-semibold',
+                                                c.bot.state === 'abandoned' ? 'bg-warn-bg text-warn' : 'bg-grey-bg text-grey',
+                                            )}
+                                        >
+                                            <BotIcon className="size-3" /> {BOT_STATE[c.bot.state]}
+                                            {c.bot.state === 'abandoned' && c.bot.node_title ? ` at “${c.bot.node_title}”` : ''}
+                                        </span>
+                                    ) : null}
                                     {c.phone_number?.status === 'disconnected' && (
                                         <span className="mt-1 inline-flex w-fit items-center rounded-full bg-bad-bg px-1.5 py-px text-[10.5px] font-semibold text-bad">
                                             Number disconnected

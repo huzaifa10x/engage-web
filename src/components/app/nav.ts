@@ -44,7 +44,7 @@ export const NAV: NavSection[] = [
         title: 'Automate',
         items: [
             { label: 'Web Chatbot', icon: MessageCircleIcon },
-            { label: 'Chatbots & Flows', icon: BotIcon },
+            { label: 'Chatbots & Flows', icon: BotIcon, href: '/chatbots', permission: P.ChatbotsView },
             { label: 'Automations', icon: ZapIcon },
         ],
     },

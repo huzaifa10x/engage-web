@@ -22,7 +22,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // Remembered per browser, so the extra room stays after a reload.
     const [collapsed, setCollapsed] = useStored<boolean>('engage.sidebar.collapsed', false);
     // The inbox is an app-within-the-app: full height, panes scroll independently.
-    const fullBleed = usePathname().startsWith('/inbox');
+    const pathname = usePathname();
+    const fullBleed = pathname.startsWith('/inbox') || pathname.startsWith('/chatbots/builder');
 
     return (
         <div className={cn('flex flex-col', fullBleed ? 'h-dvh overflow-hidden' : 'min-h-dvh')}>

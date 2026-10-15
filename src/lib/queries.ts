@@ -177,7 +177,9 @@ export async function fetchAuditPage(cursor: string | null) {
 export type ConversationFilters = {
     phone_number_id?: string | null;
     status?: 'open' | 'closed';
-    assigned?: 'me' | 'unassigned' | 'any';
+    assigned?: 'me' | 'unassigned' | 'others' | 'any';
+    /** Chatbot views: handled by the bot now, waiting for the customer, or how the bot ended. */
+    view?: 'bot' | 'waiting' | 'abandoned' | 'completed' | 'handed_off';
     unread?: boolean;
     q?: string;
     snoozed?: boolean;

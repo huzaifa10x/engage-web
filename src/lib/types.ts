@@ -230,6 +230,19 @@ export type Conversation = {
     phone_number_id: string;
     status: 'open' | 'closed';
     assigned_membership_id: string | null;
+    /** Who answers now: "bot" (a chatbot is running), "human" (a person took over), or null. */
+    handler?: 'bot' | 'human' | null;
+    /** The conversation's latest chatbot run; `node_title` is where the customer is (or left, when abandoned). */
+    bot?: {
+        state: 'running' | 'handed_off' | 'completed' | 'abandoned' | 'stopped' | null;
+        flow_id: string;
+        flow_name: string | null;
+        node_id: string | null;
+        node_title: string | null;
+        ended_reason: string | null;
+        ended_at: string | null;
+        started_at: string | null;
+    } | null;
     unread_count: number;
     last_message_at: string | null;
     last_message_preview: string | null;
