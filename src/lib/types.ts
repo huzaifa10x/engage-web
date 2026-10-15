@@ -232,6 +232,8 @@ export type Conversation = {
     assigned_membership_id: string | null;
     /** Who answers now: "bot" (a chatbot is running), "human" (a person took over), or null. */
     handler?: 'bot' | 'human' | null;
+    /** A chatbot is live on this conversation's number, so it can be handed (back) to the bot. */
+    bot_available?: boolean;
     /** The conversation's latest chatbot run; `node_title` is where the customer is (or left, when abandoned). */
     bot?: {
         state: 'running' | 'handed_off' | 'completed' | 'abandoned' | 'stopped' | null;

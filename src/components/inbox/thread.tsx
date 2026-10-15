@@ -111,7 +111,7 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                 toast.success('You are handling this conversation now. The bot stays quiet here.');
             } else {
                 const r = await handBackConversation(conversationId);
-                toast.success(r.meta?.restarted ? 'Handed back: the bot started again.' : 'Handed back: the bot answers the next customer message.');
+                toast.success(r.meta?.restarted ? 'The bot has the conversation and started its flow.' : "The bot will answer the customer's next message.");
             }
             afterSend();
         } catch (e) {
@@ -236,15 +236,15 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                                 <HandIcon /> Take over
                             </Button>
                         )}
-                        {c.handler !== 'bot' && c.bot && can(P.InboxReply) && c.status === 'open' && (
+                        {c.handler !== 'bot' && (c.bot_available ?? !!c.bot) && can(P.InboxReply) && c.status === 'open' && (
                             <Button
                                 variant="outline"
                                 size="sm"
                                 disabled={botBusy}
-                                title="Let the chatbot continue: it starts again from its menu (if the 24-hour window is open) or with the customer's next message."
+                                title="Let the chatbot take this conversation: it starts from its menu now (if the 24-hour window is open) or with the customer's next message."
                                 onClick={() => void botAction('back')}
                             >
-                                <BotIcon /> Hand back to bot
+                                <BotIcon /> {c.bot ? 'Hand back to bot' : 'Hand to bot'}
                             </Button>
                         )}
                         {c.snoozed_until && <Badge tone="info">Snoozed</Badge>}
