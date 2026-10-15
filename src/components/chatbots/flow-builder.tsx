@@ -763,7 +763,7 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
                 {/* Palette */}
                 {!readOnly &&
                     (palette ? (
-                        <aside className="flex w-64 shrink-0 flex-col border-r bg-[#fafaf8] px-3 pt-3" aria-label="Blocks">
+                        <aside className="flex min-h-0 w-64 shrink-0 flex-col overflow-hidden border-r bg-[#fafaf8] px-3 pt-3" aria-label="Blocks">
                             <div className="mb-2 flex items-center justify-between">
                                 <p className="text-[13px] font-bold">Blocks</p>
                                 <Button
@@ -779,7 +779,7 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
                             <p className="mb-2 text-[11.5px] leading-snug text-muted-foreground">
                                 Drag onto the canvas, or click to add after the selected block — it connects itself.
                             </p>
-                            <div className="min-h-0 flex-1 pb-3">
+                            <div className="flex min-h-0 flex-1 flex-col pb-3">
                                 <BlockList onPick={(t) => paletteAdd(t)} draggable />
                             </div>
                         </aside>

@@ -31,7 +31,7 @@ export function BlockList({
     const found = BLOCKS.filter((b) => matches(b, q));
 
     return (
-        <div className="flex min-h-0 flex-col">
+        <div className={cn('flex min-h-0 flex-col', !dense && 'flex-1')}>
             <div className="relative mb-2">
                 <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -49,7 +49,7 @@ export function BlockList({
                     }}
                 />
             </div>
-            <div className={cn('min-h-0 flex-1 overflow-y-auto', dense ? 'max-h-80 pr-1' : '')}>
+            <div className={cn('min-h-0 flex-1 overflow-y-auto overscroll-contain', dense ? 'max-h-80 pr-1' : 'pr-1')}>
                 {found.length === 0 && <p className="px-1 py-3 text-[12px] text-muted-foreground">No block matches “{q}”.</p>}
                 {GROUPS.map((g) => {
                     const blocks = found.filter((b) => b.group === g.key);
