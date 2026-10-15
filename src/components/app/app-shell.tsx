@@ -23,7 +23,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const [collapsed, setCollapsed] = useStored<boolean>('engage.sidebar.collapsed', false);
     // The inbox is an app-within-the-app: full height, panes scroll independently.
     const pathname = usePathname();
-    const fullBleed = pathname.startsWith('/inbox') || pathname.startsWith('/chatbots/builder');
+    const fullBleed = pathname.startsWith('/inbox');
+
+    // The chatbot builder takes the whole screen: its own top bar replaces the app's sidebar and header.
+    if (pathname.startsWith('/chatbots/builder')) {
+        return (
+            <div className="flex h-dvh flex-col overflow-hidden">
+                <ImpersonationBanner />
+                <main className="flex min-h-0 flex-1">{children}</main>
+            </div>
+        );
+    }
 
     return (
         <div className={cn('flex flex-col', fullBleed ? 'h-dvh overflow-hidden' : 'min-h-dvh')}>

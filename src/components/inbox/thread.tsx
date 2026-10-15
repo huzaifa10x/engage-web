@@ -325,7 +325,9 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                                 ? m.sent_by_membership_id === membership.id
                                     ? 'You'
                                     : (names.get(m.sent_by_membership_id ?? '') ?? null)
-                                : null;
+                                : m.direction === 'outbound' && m.origin === 'automation' && c.bot
+                                  ? (c.bot.bot_name ?? c.bot.flow_name ?? 'Chatbot')
+                                  : null;
 
                         return (
                             <Fragment key={m.id}>
@@ -352,6 +354,24 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                         <BotIcon className="mr-1 inline size-3.5" />
                         The chatbot is answering{c.bot?.node_title ? ` (at “${c.bot.node_title}”)` : ''}. Sending a message takes over and stops it here.
                     </p>
+                )}
+                {c.handler === 'human' && c.bot?.state === 'handed_off' && (
+                    <div className="border-t bg-brand-50 px-4 py-2 text-[12px] text-ink-2">
+                        <p className="font-semibold text-brand-600">
+                            <BotIcon className="mr-1 inline size-3.5" />
+                            {c.bot.bot_name ?? c.bot.flow_name ?? 'The chatbot'} handed this conversation to your team
+                            {c.bot.node_title ? ` at “${c.bot.node_title}”` : ''}.
+                        </p>
+                        {(c.bot.answers ?? []).length > 0 && (
+                            <p className="mt-0.5 line-clamp-2" title={(c.bot.answers ?? []).map((a) => `${a.key}: ${a.value}`).join('\n')}>
+                                {(c.bot.answers ?? []).map((a) => (
+                                    <span key={a.key} className="mr-3">
+                                        <span className="text-muted-foreground">{a.key}:</span> {a.value}
+                                    </span>
+                                ))}
+                            </p>
+                        )}
+                    </div>
                 )}
                 {c.handler !== 'bot' && c.bot?.state === 'abandoned' && (
                     <p className="border-t bg-warn-bg px-4 py-1.5 text-[12px] text-warn">

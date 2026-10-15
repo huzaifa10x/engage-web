@@ -237,6 +237,10 @@ export type Conversation = {
         state: 'running' | 'handed_off' | 'completed' | 'abandoned' | 'stopped' | null;
         flow_id: string;
         flow_name: string | null;
+        /** The bot's name (the flow's name), shown wherever the bot speaks or hands over. */
+        bot_name?: string;
+        /** What the customer answered the bot, for the person who takes over. */
+        answers?: { key: string; value: string }[];
         node_id: string | null;
         node_title: string | null;
         ended_reason: string | null;
@@ -643,7 +647,7 @@ export type AutoReplySettings = { enabled: boolean; message: string; cooldown_ho
 
 export type CannedResponse = { id: string; shortcut: string; body: string };
 
-export type ConversationNote = { id: string; body: string; author: string; mine: boolean; mentions: string[]; created_at: string | null };
+export type ConversationNote = { id: string; body: string; author: string; by_bot?: boolean; mine: boolean; mentions: string[]; created_at: string | null };
 
 export type DayHours = { open: boolean; from: string; to: string };
 

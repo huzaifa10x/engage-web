@@ -21,7 +21,7 @@ function Builder() {
 /** Full-screen flow builder (/chatbots/builder?id=…). */
 export default function ChatbotBuilderPage() {
     return (
-        <div className="flex h-full min-h-0">
+        <div className="flex h-full min-h-0 w-full min-w-0 flex-1">
             <Suspense>
                 <Builder />
             </Suspense>

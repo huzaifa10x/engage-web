@@ -131,7 +131,7 @@ export function NotesButton({ conversation }: { conversation: Conversation }) {
                             <div key={n.id} className="rounded-md border border-warn/30 bg-warn-bg px-3 py-2">
                                 <p className="text-[13.5px] break-words whitespace-pre-wrap">{n.body}</p>
                                 <p className="mt-1 text-[12px] text-muted-foreground">
-                                    {n.mine ? 'You' : n.author}
+                                    {n.mine ? 'You' : n.by_bot ? `🤖 ${n.author}` : n.author}
                                     {n.mentions.length > 0 && ` · mentioned ${n.mentions.join(', ')}`}
                                     {n.created_at && ` · ${new Date(n.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`}
                                 </p>
