@@ -134,21 +134,25 @@ export function FlowSettingsDialog({
                                     <p className="text-[11.5px] text-muted-foreground">Later than that, they start again. Answers are kept up to 24 hours.</p>
                                 </div>
                             </div>
-                            <div className="grid gap-1.5">
-                                <Label htmlFor="fs-auto">Give a conversation back to the bot after a person has been silent for (minutes)</Label>
-                                <Input
-                                    id="fs-auto"
-                                    type="number"
-                                    min={0}
-                                    max={10080}
-                                    placeholder="Never (only “Hand back to bot” or closing the chat)"
-                                    value={form.auto_resume_minutes ?? ''}
-                                    onChange={(e) =>
-                                        set({
-                                            auto_resume_minutes: e.target.value === '' || Number(e.target.value) === 0 ? null : num(e.target.value, 5, 10080),
-                                        })
-                                    }
-                                />
+                            <div className="grid gap-2 rounded-lg border p-3">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                        <Label htmlFor="fs-auto">Auto-resume: give conversations back to the bot</Label>
+                                        <p className="text-[12px] text-muted-foreground">
+                                            After a handover, the bot stays quiet while your team handles the chat. With auto-resume on, once no agent has
+                                            replied for this long, the customer’s next message goes to the bot again. Off: only “Hand back to bot” or closing
+                                            the conversation returns it.
+                                        </p>
+                                    </div>
+                                    <Switch
+                                        id="fs-auto"
+                                        checked={form.auto_resume_minutes !== null}
+                                        onCheckedChange={(v) => set({ auto_resume_minutes: v ? 1440 : null })}
+                                    />
+                                </div>
+                                {form.auto_resume_minutes !== null && (
+                                    <AutoResumeDuration minutes={form.auto_resume_minutes} onChange={(m) => set({ auto_resume_minutes: m })} />
+                                )}
                             </div>
                             <div className="grid gap-1.5">
                                 <Label htmlFor="fs-tag">Tag customers who leave midway (optional)</Label>
@@ -412,5 +416,36 @@ export function FlowSettingsDialog({
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+    );
+}
+
+/** Auto-resume time in minutes, hours or days (5 minutes to 7 days, as the server allows). */
+function AutoResumeDuration({ minutes, onChange }: { minutes: number; onChange: (m: number) => void }) {
+    const unit = minutes % 1440 === 0 ? 1440 : minutes % 60 === 0 ? 60 : 1;
+    const clamp = (m: number) => Math.max(5, Math.min(10080, Math.round(m)));
+
+    return (
+        <div className="flex items-center gap-2">
+            <span className="text-[12.5px] text-muted-foreground">After</span>
+            <Input
+                type="number"
+                min={1}
+                value={minutes / unit}
+                onChange={(e) => onChange(clamp(Number(e.target.value || 1) * unit))}
+                className="h-8 w-20"
+                aria-label="Auto-resume after (amount)"
+            />
+            <Select value={String(unit)} onValueChange={(u) => onChange(clamp((minutes / unit) * Number(u)))}>
+                <SelectTrigger size="sm" className="w-28" aria-label="Auto-resume after (unit)">
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="1">minutes</SelectItem>
+                    <SelectItem value="60">hours</SelectItem>
+                    <SelectItem value="1440">days</SelectItem>
+                </SelectContent>
+            </Select>
+            <span className="text-[12.5px] text-muted-foreground">without an agent reply</span>
+        </div>
     );
 }
