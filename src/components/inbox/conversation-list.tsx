@@ -43,7 +43,8 @@ export function ConversationList({
     polling: boolean;
 }) {
     const [assigned, setAssigned] = useState<NonNullable<ConversationFilters['assigned']>>('any');
-    const [status, setStatus] = useState<'open' | 'closed'>('open');
+    // Closed conversations stay in the list (marked Closed); filter to Open or Closed when needed.
+    const [status, setStatus] = useState<'all' | 'open' | 'closed'>('all');
     const [unread, setUnread] = useState(false);
     const [snoozed, setSnoozed] = useState(false);
     const [view, setView] = useState<View>('all');
@@ -52,7 +53,15 @@ export function ConversationList({
 
     // Without websockets the list is kept fresh by polling.
     const list = useConversations(
-        { phone_number_id: phoneNumberId, assigned, status, unread, snoozed: snoozed || undefined, q: q || undefined, view: view === 'all' ? undefined : view },
+        {
+            phone_number_id: phoneNumberId,
+            assigned,
+            status: status === 'all' ? undefined : status,
+            unread,
+            snoozed: snoozed || undefined,
+            q: q || undefined,
+            view: view === 'all' ? undefined : view,
+        },
         polling ? 15_000 : false,
     );
     const rows = list.data?.pages.flatMap((p) => p.data) ?? [];
@@ -121,11 +130,12 @@ export function ConversationList({
                             ))}
                         </SelectContent>
                     </Select>
-                    <Select value={status} onValueChange={(v) => setStatus(v as 'open' | 'closed')}>
+                    <Select value={status} onValueChange={(v) => setStatus(v as 'all' | 'open' | 'closed')}>
                         <SelectTrigger size="sm" className="ml-auto w-24 shrink-0" aria-label="Status">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
+                            <SelectItem value="all">All</SelectItem>
                             <SelectItem value="open">Open</SelectItem>
                             <SelectItem value="closed">Closed</SelectItem>
                         </SelectContent>
@@ -206,6 +216,11 @@ export function ConversationList({
                                             {c.bot.state === 'abandoned' && c.bot.node_title ? ` at “${c.bot.node_title}”` : ''}
                                         </span>
                                     ) : null}
+                                    {c.status === 'closed' && (
+                                        <span className="mt-1 mr-1 inline-flex w-fit items-center rounded-full bg-grey-bg px-1.5 py-px text-[10.5px] font-semibold text-grey">
+                                            Closed
+                                        </span>
+                                    )}
                                     {c.phone_number?.status === 'disconnected' && (
                                         <span className="mt-1 inline-flex w-fit items-center rounded-full bg-bad-bg px-1.5 py-px text-[10.5px] font-semibold text-bad">
                                             Number disconnected

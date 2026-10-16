@@ -111,15 +111,12 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                 toast.success('You are handling this conversation now. The bot stays quiet here.');
             } else {
                 const r = await handBackConversation(conversationId);
-                const outcome = r.meta?.outcome ?? (r.meta?.restarted ? 'started' : 'waiting');
-                if (outcome === 'started') toast.success('The bot has the conversation and started its flow.');
-                else if (outcome === 'opted_out')
+                const outcome = r.meta?.outcome ?? 'waiting';
+                if (outcome === 'opted_out')
                     toast.warning(
                         'Handed back. This customer opted out, so the bot stays quiet until they write to you again; then it answers inside that conversation only.',
                     );
-                else if (outcome === 'window_closed')
-                    toast.success("Handed back. The 24-hour window is closed, so the bot answers the customer's next message.");
-                else toast.success("Handed back: the bot answers the customer's next message.");
+                else toast.success("Handed back. Nothing was sent: the bot answers the customer's next message.");
             }
             afterSend();
         } catch (e) {
@@ -249,7 +246,7 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                                 variant="outline"
                                 size="sm"
                                 disabled={botBusy}
-                                title="Let the chatbot take this conversation: it starts from its menu now (if the 24-hour window is open) or with the customer's next message."
+                                title="Let the chatbot take this conversation. Nothing is sent now: the bot answers the customer's next message."
                                 onClick={() => void botAction('back')}
                             >
                                 <BotIcon /> {c.bot ? 'Hand back to bot' : 'Hand to bot'}

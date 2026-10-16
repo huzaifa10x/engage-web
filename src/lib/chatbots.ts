@@ -414,7 +414,7 @@ export const takeOverConversation = (id: string) => api<unknown>(`conversations/
 export const handBackConversation = (id: string) =>
     api<{ meta?: { restarted?: boolean; outcome?: 'started' | 'waiting' | 'window_closed' | 'opted_out' } }>(`conversations/${id}/bot/hand-back`, {
         method: 'POST',
-        body: { restart: true },
+        body: { restart: false }, // nothing is sent now: the bot answers the customer's next message
     });
 
 // ── Block library ──────────────────────────────────────────────────────────────────────────
