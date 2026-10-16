@@ -6,7 +6,9 @@ import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Field, FormError } from '@/components/app/field';
+import { describeRule, FieldFilter, type FieldFilterValue } from '@/components/contacts/field-filter';
 import { emptySelection, selectionError, TemplatePicker, type TemplateSelection } from '@/components/templates/template-picker';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -21,6 +23,7 @@ import {
     previewCampaign,
     saveCampaign,
     useCampaignAudience,
+    useContactFields,
     usePhoneNumbers,
     useSegments,
     useTags,
@@ -89,10 +92,11 @@ export function CampaignDialog({
     const [name, setName] = useState('');
     const [notes, setNotes] = useState('');
     const [objective, setObjective] = useState<CampaignObjective | null>(null);
-    const [category, setCategory] = useState('MARKETING');
     const [numberId, setNumberId] = useState<string | null>(null);
     const [segmentId, setSegmentId] = useState<string | null>(null);
     const [tag, setTag] = useState<string | null>(null);
+    const [fieldFilter, setFieldFilter] = useState<FieldFilterValue | null>(null);
+    const fields = useContactFields(open).data ?? [];
     const [csvConsent, setCsvConsent] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [uploadNote, setUploadNote] = useState<string | null>(null);
@@ -110,10 +114,10 @@ export function CampaignDialog({
         setName(campaign?.name ?? '');
         setNotes(campaign?.notes ?? '');
         setObjective(campaign?.objective ?? null);
-        setCategory(campaign?.template.category ?? 'MARKETING');
         setNumberId(campaign?.phone_number?.id ?? null);
         setSegmentId(campaign?.segment_id ?? null);
         setTag(campaign?.audience_tag ?? null);
+        setFieldFilter(campaign?.audience_filter ?? null);
         setSelection(emptySelection);
         setRestore(campaign ?? null);
         setPreviews(null);
@@ -139,10 +143,18 @@ export function CampaignDialog({
     }
 
     const audience = useCampaignAudience(
-        { segment_id: segmentId, audience_tag: tag, template_id: selection.template?.id ?? null, phone_number_id: from?.id ?? null },
+        {
+            segment_id: segmentId,
+            audience_tag: tag,
+            template_id: selection.template?.id ?? null,
+            phone_number_id: from?.id ?? null,
+            filter: fieldFilter ? JSON.stringify(fieldFilter) : null,
+        },
         open,
     );
     const a = audience.data;
+    // Meta decides a template's category when it approves it: the campaign follows the chosen template.
+    const category = selection.template?.category ?? null;
     const marketing = category === 'MARKETING';
     const overPlan = Boolean(a && a.reach_limit !== null && a.reach_used + a.eligible > a.reach_limit);
     // Meta's daily messaging limit (enforced by the platform): what fits now, the rest follows as room frees up.
@@ -186,6 +198,7 @@ export function CampaignDialog({
                     template_id: selection.template.id,
                     segment_id: segmentId,
                     audience_tag: tag,
+                    filter: fieldFilter,
                     variables: { header: v.header, body: v.body },
                 }),
             );
@@ -214,6 +227,7 @@ export function CampaignDialog({
             template_id: t.id,
             segment_id: segmentId,
             audience_tag: tag,
+            filter: fieldFilter,
             notes: notes.trim() || null,
             objective,
             media_id: selection.media?.id ?? campaign?.media_id ?? null,
@@ -302,34 +316,7 @@ export function CampaignDialog({
                                 </SelectContent>
                             </Select>
                         </Field>
-                        <Field label="Category" htmlFor="cp-category" hint={CATEGORIES.find(([key]) => key === category)?.[2]}>
-                            <Select
-                                value={category}
-                                onValueChange={(v) => {
-                                    setCategory(v);
-                                    setSelection(emptySelection);
-                                    setPreviews(null);
-                                }}
-                            >
-                                <SelectTrigger id="cp-category">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {CATEGORIES.map(([key, label]) => (
-                                        <SelectItem key={key} value={key}>
-                                            {label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </Field>
                     </div>
-                    {!marketing && (
-                        <p className="-mt-2 rounded-md border border-warn/30 bg-warn-bg px-3 py-2 text-[12.5px]">
-                            Only use a {category.toLowerCase()} template for its real purpose. Sending promotional content on a non-marketing template breaks
-                            WhatsApp’s policy and lowers your number’s quality rating. Meta decides each template’s category when it approves it.
-                        </p>
-                    )}
                     <Field label="Internal notes (optional)" htmlFor="cp-notes">
                         <textarea id="cp-notes" className={textarea} value={notes} maxLength={2000} onChange={(e) => setNotes(e.target.value)} />
                     </Field>
@@ -369,6 +356,23 @@ export function CampaignDialog({
                             </Select>
                         </Field>
                     </div>
+                    {fields.length > 0 && (
+                        <div className="-mt-1 flex flex-wrap items-center gap-2 text-[12.5px]">
+                            <FieldFilter fields={fields} value={fieldFilter} onChange={setFieldFilter} label="Filter by custom fields" />
+                            {fieldFilter ? (
+                                <>
+                                    <span className="text-muted-foreground">{fieldFilter.match === 'any' ? 'Any of:' : 'And:'}</span>
+                                    {fieldFilter.rules.map((r, i) => (
+                                        <Badge key={i} tone="brand">
+                                            {describeRule(r, fields)}
+                                        </Badge>
+                                    ))}
+                                </>
+                            ) : (
+                                <span className="text-muted-foreground">Narrow the audience by your contact fields, e.g. City is Dubai.</span>
+                            )}
+                        </div>
+                    )}
                     <div className="rounded-md border border-dashed p-3">
                         <input ref={csvRef} type="file" accept=".csv,text/csv" className="hidden" onChange={(e) => uploadCsv(e.target.files?.[0])} />
                         <div className="flex flex-wrap items-center gap-3">
@@ -461,12 +465,21 @@ export function CampaignDialog({
                     <TemplatePicker
                         wabaAccountId={from?.waba_account_id ?? null}
                         value={selection}
-                        category={category}
                         onChange={(v) => {
                             setSelection(v);
                             setPreviews(null);
                         }}
                     />
+                    {category && (
+                        <p
+                            className={`-mt-2 rounded-md px-3 py-2 text-[12.5px] ${marketing ? 'bg-muted text-muted-foreground' : 'border border-warn/30 bg-warn-bg'}`}
+                        >
+                            Category: <span className="font-semibold">{CATEGORIES.find(([key]) => key === category)?.[1] ?? category}</span> (set by Meta when
+                            it approved the template). {CATEGORIES.find(([key]) => key === category)?.[2]}
+                            {!marketing &&
+                                ` Only use a ${category.toLowerCase()} template for its real purpose: promotional content on a non-marketing template breaks WhatsApp’s policy and lowers your number’s quality rating.`}
+                        </p>
+                    )}
                     {selection.template && selection.template.variables.body.length + selection.template.variables.header.length > 0 && (
                         <p className="-mt-2 rounded-md bg-muted px-3 py-2 text-[12.5px] text-muted-foreground">
                             Personalise a variable with a contact field: <code>{'{{first_name}}'}</code>, <code>{'{{name}}'}</code>, <code>{'{{phone}}'}</code>,{' '}
@@ -528,12 +541,6 @@ export function CampaignDialog({
                                 </Field>
                             )}
                         </div>
-                        {a && (
-                            <p className="-mt-1 text-[12.5px] text-muted-foreground">
-                                Sending speed: up to {a.send_rate_per_hour.toLocaleString()} messages per hour. This is set by your plan to protect your
-                                number’s quality rating and keep delivery reliable.
-                            </p>
-                        )}
                         {marketing && a?.quiet_hours && (
                             <p className="-mt-1 text-[12.5px] text-muted-foreground">
                                 Quiet hours: marketing is not sent between {a.quiet_hours.start} and {a.quiet_hours.end} ({a.quiet_hours.timezone}).

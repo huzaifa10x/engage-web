@@ -245,6 +245,8 @@ export type Conversation = {
     handler?: 'bot' | 'human' | null;
     /** A chatbot is live on this conversation's number, so it can be handed (back) to the bot. */
     bot_available?: boolean;
+    /** While a person handles it: the bot takes over again at the customer's next message from this time (flow auto-resume); null = only hand-back or closing. */
+    bot_resumes_at?: string | null;
     /** The conversation's latest chatbot run; `node_title` is where the customer is (or left, when abandoned). */
     bot?: {
         state: 'running' | 'handed_off' | 'completed' | 'abandoned' | 'stopped' | null;
@@ -428,6 +430,8 @@ export type Campaign = {
     media_id: string | null;
     segment_id: string | null;
     audience_tag: string | null;
+    /** The campaign's own conditions on custom fields (on top of the segment and tag). */
+    audience_filter?: { match: 'all' | 'any'; rules: SegmentRule[] } | null;
     notes: string | null;
     objective: CampaignObjective | null;
     batch_per_hour: number | null;
@@ -453,6 +457,7 @@ export type CampaignForm = {
     segment_id: string | null;
     media_id: string | null;
     audience_tag: string | null;
+    filter?: { match: 'all' | 'any'; rules: SegmentRule[] } | null;
     notes: string | null;
     objective: CampaignObjective | null;
     variables: { header: string[]; body: string[]; buttons: Record<string, string> };

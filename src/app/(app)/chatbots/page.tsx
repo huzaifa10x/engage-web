@@ -32,6 +32,7 @@ import { toast } from 'sonner';
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
 import { FlowDashboard } from '@/components/chatbots/flow-dashboard';
+import { RunPeriodDialog, runPeriodLabel } from '@/components/chatbots/run-period-dialog';
 import { TemplateGallery } from '@/components/chatbots/template-gallery';
 import { WorkspaceDialog } from '@/components/chatbots/workspace-dialog';
 import {
@@ -389,7 +390,7 @@ function ChatbotsList() {
                                                 </DropdownMenuItem>
                                                 {canPublish && f.kind === 'bot' && (
                                                     <DropdownMenuItem onSelect={() => setScheduling(f)} disabled={f.published_version === null}>
-                                                        <CalendarClockIcon /> Schedule on / off
+                                                        <CalendarClockIcon /> Run period…
                                                     </DropdownMenuItem>
                                                 )}
                                                 {canPublish && (
@@ -452,8 +453,11 @@ function ChatbotsList() {
                                                       : 'Changes requested'}
                                             </Badge>
                                         )}
-                                        {f.activate_at && <Badge tone="brand">On {when(f.activate_at)}</Badge>}
-                                        {f.deactivate_at && <Badge tone="grey">Off {when(f.deactivate_at)}</Badge>}
+                                        {runPeriodLabel(f) && (
+                                            <Badge tone={f.activate_at ? 'brand' : 'grey'}>
+                                                <CalendarClockIcon className="size-3" /> {runPeriodLabel(f)}
+                                            </Badge>
+                                        )}
                                     </div>
                                     {(f.attention ?? []).length > 0 && (
                                         <Link
@@ -539,7 +543,7 @@ function ChatbotsList() {
             <WorkspaceDialog open={workspace} onOpenChange={setWorkspace} canManage={canManage} canPublish={canPublish} />
             <FlowDashboard flow={dashboard} onOpenChange={(o) => !o && setDashboard(null)} />
             <MoveDialog flow={moving} folders={meta?.folders ?? []} onClose={() => setMoving(null)} onDone={refresh} />
-            <ScheduleDialog flow={scheduling} onClose={() => setScheduling(null)} onDone={refresh} />
+            <RunPeriodDialog flow={scheduling} onClose={() => setScheduling(null)} onSaved={refresh} />
             <EditorsDialog flow={editors} onClose={() => setEditors(null)} onDone={refresh} />
             <ImportDialog file={importing} onClose={() => setImporting(null)} onDone={(id) => router.push(`/chatbots/builder?id=${id}`)} />
 
@@ -638,72 +642,6 @@ function MoveDialog({ flow, folders, onClose, onDone }: { flow: ChatbotFlow | nu
                         }}
                     >
                         Move
-                    </Button>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-const local = (iso: string | null) => {
-    if (!iso) return '';
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, '0');
-
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
-
-function ScheduleDialog({ flow, onClose, onDone }: { flow: ChatbotFlow | null; onClose: () => void; onDone: () => void }) {
-    const [on, setOn] = useState('');
-    const [off, setOff] = useState('');
-    const [for_, setFor] = useState<string | null>(null);
-    if (flow && flow.id !== for_) {
-        setFor(flow.id);
-        setOn(local(flow.activate_at));
-        setOff(local(flow.deactivate_at));
-    }
-
-    return (
-        <Dialog open={flow !== null} onOpenChange={(o) => !o && onClose()}>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Schedule “{flow?.name}”</DialogTitle>
-                    <DialogDescription>
-                        Switch the published version on and off automatically — e.g. a Ramadan or Black Friday flow. Times are in your browser’s time zone.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-3">
-                    <div className="grid gap-1.5">
-                        <Label htmlFor="sch-on">Switch on at</Label>
-                        <Input id="sch-on" type="datetime-local" value={on} onChange={(e) => setOn(e.target.value)} disabled={flow?.is_active} />
-                        {flow?.is_active && <p className="text-[11.5px] text-muted-foreground">It is live already.</p>}
-                    </div>
-                    <div className="grid gap-1.5">
-                        <Label htmlFor="sch-off">Switch off at</Label>
-                        <Input id="sch-off" type="datetime-local" value={off} onChange={(e) => setOff(e.target.value)} />
-                    </div>
-                </div>
-                <DialogFooter>
-                    <Button variant="outline" onClick={onClose}>
-                        Cancel
-                    </Button>
-                    <Button
-                        onClick={async () => {
-                            if (!flow) return;
-                            try {
-                                await saveChatbot(flow.id, {
-                                    activate_at: on && !flow.is_active ? new Date(on).toISOString() : null,
-                                    deactivate_at: off ? new Date(off).toISOString() : null,
-                                });
-                                toast.success('Schedule saved');
-                                onDone();
-                                onClose();
-                            } catch (e) {
-                                toast.error(e instanceof ApiError ? (Object.values(e.fields)[0]?.[0] ?? e.message) : errorMessage(e));
-                            }
-                        }}
-                    >
-                        Save
                     </Button>
                 </DialogFooter>
             </DialogContent>

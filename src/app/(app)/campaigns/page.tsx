@@ -117,6 +117,9 @@ export default function CampaignsPage() {
                                                 {[
                                                     c.audience_name ?? (c.segment_id ? 'Segment' : c.audience_tag ? null : 'All contacts'),
                                                     c.audience_tag ? `tag ${c.audience_tag}` : null,
+                                                    c.audience_filter?.rules.length
+                                                        ? `${c.audience_filter.rules.length} field condition${c.audience_filter.rules.length === 1 ? '' : 's'}`
+                                                        : null,
                                                 ]
                                                     .filter(Boolean)
                                                     .join(' + ')}{' '}

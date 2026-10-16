@@ -412,7 +412,10 @@ export const deleteChatbotSecret = (name: string) => api<void>(`chatbots/secrets
 export const takeOverConversation = (id: string) => api<unknown>(`conversations/${id}/bot/take-over`, { method: 'POST' });
 
 export const handBackConversation = (id: string) =>
-    api<{ meta?: { restarted?: boolean } }>(`conversations/${id}/bot/hand-back`, { method: 'POST', body: { restart: true } });
+    api<{ meta?: { restarted?: boolean; outcome?: 'started' | 'waiting' | 'window_closed' | 'opted_out' } }>(`conversations/${id}/bot/hand-back`, {
+        method: 'POST',
+        body: { restart: true },
+    });
 
 // ── Block library ──────────────────────────────────────────────────────────────────────────
 

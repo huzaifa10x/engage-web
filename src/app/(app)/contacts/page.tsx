@@ -2,6 +2,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+    Columns3Icon,
     ContactIcon,
     DownloadIcon,
     MessageSquareIcon,
@@ -22,6 +23,7 @@ import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header'
 import { useSession } from '@/components/app/session';
 import { ContactDialog } from '@/components/contacts/contact-dialog';
 import { CrmSettingsDialog } from '@/components/contacts/crm-settings-dialog';
+import { describeRule, FieldFilter, type FieldFilterValue, formatFieldValue } from '@/components/contacts/field-filter';
 import { ImportContactsDialog } from '@/components/contacts/import-dialog';
 import { SegmentDialog } from '@/components/contacts/segment-dialog';
 import { NewConversationDialog } from '@/components/inbox/new-conversation-dialog';
@@ -39,7 +41,15 @@ import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+    DropdownMenu,
+    DropdownMenuCheckItem,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -47,7 +57,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { api, errorMessage } from '@/lib/api';
 import { humanize, relative } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { type ContactFilters, keys, useContacts, usePhoneNumbers, useSegments, useTags } from '@/lib/queries';
+import { useStored } from '@/hooks/use-stored';
+import { type ContactFilters, keys, useContactFields, useContacts, usePhoneNumbers, useSegments, useTags } from '@/lib/queries';
 import type { ConsentState, Contact, Segment } from '@/lib/types';
 
 const ALL = '__all__';
@@ -66,11 +77,20 @@ export default function ContactsPage() {
     const [segmentEditing, setSegmentEditing] = useState<Segment | null | undefined>(undefined); // undefined = closed, null = new
     const segments = useSegments(can(P.ContactsView));
     const tags = useTags(can(P.ContactsView));
-    const filtered = Boolean(filters.q || filters.consent || filters.tag || filters.segment_id || filters.synced_from);
+    const fields = useContactFields(can(P.ContactsView)).data ?? [];
+    const [fieldFilter, setFieldFilter] = useState<FieldFilterValue | null>(null);
+    // Custom fields shown as columns: remembered per browser (comma-separated keys).
+    const [columnsRaw, setColumnsRaw] = useStored<string>('engage.contacts.columns', '');
+    const columnKeys = columnsRaw.split(',').filter((k) => k !== '');
+    const columns = fields.filter((f) => columnKeys.includes(f.key));
+    const toggleColumn = (key: string) => setColumnsRaw((columnKeys.includes(key) ? columnKeys.filter((k) => k !== key) : [...columnKeys, key]).join(','));
+    const filtered = Boolean(filters.q || filters.consent || filters.tag || filters.segment_id || filters.synced_from || filters.filter);
     // Numbers shared with the WhatsApp Business app: the only ones contacts can have been synced from.
     const syncNumbers = (usePhoneNumbers().data ?? []).filter((n) => n.onboarding_type === 'coexistence');
     const exportUrl = `/api/v1/contacts/export?${new URLSearchParams(
-        Object.entries({ segment_id: filters.segment_id, tag: filters.tag }).filter((e): e is [string, string] => Boolean(e[1])),
+        Object.entries({ segment_id: filters.segment_id, tag: filters.tag, consent: filters.consent, filter: filters.filter }).filter(
+            (e): e is [string, string] => Boolean(e[1]),
+        ),
     ).toString()}`;
 
     const contacts = useContacts(filters);
@@ -192,7 +212,61 @@ export default function ContactsPage() {
                         </SelectContent>
                     </Select>
                 )}
+                <FieldFilter
+                    fields={fields}
+                    value={fieldFilter}
+                    onChange={(v) => {
+                        setFieldFilter(v);
+                        setFilters((f) => ({ ...f, filter: v ? JSON.stringify(v) : undefined }));
+                    }}
+                />
+                {fields.length > 0 && (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" aria-label="Columns">
+                                <Columns3Icon /> Columns{columns.length > 0 ? ` (${columns.length})` : ''}
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="max-h-80 overflow-y-auto">
+                            <DropdownMenuLabel>Show custom fields</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {fields.map((f) => (
+                                <DropdownMenuCheckItem
+                                    key={f.key}
+                                    checked={columnKeys.includes(f.key)}
+                                    onSelect={(e) => {
+                                        e.preventDefault(); // keep the menu open to pick several
+                                        toggleColumn(f.key);
+                                    }}
+                                >
+                                    {f.label}
+                                </DropdownMenuCheckItem>
+                            ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )}
             </div>
+            {fieldFilter && (
+                <div className="-mt-1 mb-3 flex flex-wrap items-center gap-1.5 text-[12.5px]">
+                    <span className="text-muted-foreground">{fieldFilter.match === 'any' ? 'Any of:' : 'Matching:'}</span>
+                    {fieldFilter.rules.map((r, i) => (
+                        <Badge key={i} tone="brand">
+                            {describeRule(r, fields)}
+                        </Badge>
+                    ))}
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 px-2 text-[12px]"
+                        onClick={() => {
+                            setFieldFilter(null);
+                            setFilters((f) => ({ ...f, filter: undefined }));
+                        }}
+                    >
+                        Clear
+                    </Button>
+                </div>
+            )}
 
             <Card>
                 {contacts.isLoading ? (
@@ -217,6 +291,9 @@ export default function ContactsPage() {
                                 <TableHead>Consent</TableHead>
                                 <TableHead>Last message</TableHead>
                                 <TableHead>Source</TableHead>
+                                {columns.map((f) => (
+                                    <TableHead key={f.key}>{f.label}</TableHead>
+                                ))}
                                 <TableHead className="w-10" />
                             </TableRow>
                         </TableHeader>
@@ -272,6 +349,15 @@ export default function ContactsPage() {
                                             humanize(c.source)
                                         )}
                                     </TableCell>
+                                    {columns.map((f) => (
+                                        <TableCell
+                                            key={f.key}
+                                            className="max-w-48 truncate text-[13px]"
+                                            title={formatFieldValue(c.attributes?.[f.key], f.type)}
+                                        >
+                                            {formatFieldValue(c.attributes?.[f.key], f.type)}
+                                        </TableCell>
+                                    ))}
                                     <TableCell>
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>

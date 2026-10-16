@@ -86,7 +86,22 @@ export function TemplatePicker({
     const fileRef = useRef<HTMLInputElement>(null);
 
     const all = templates.data?.data ?? [];
-    const approved = all.filter((t) => t.sendable && (!category || t.category === category));
+    const approvedAny = all.filter((t) => t.sendable);
+    const approved = approvedAny.filter((t) => !category || t.category === category);
+    // Nothing approved on this number's account: look at the workspace's other accounts, to say where they are.
+    const elsewhereQuery = useTemplates({ status: 'APPROVED' }, wabaAccountId !== null && templates.isSuccess && approvedAny.length === 0);
+    const elsewhere = (elsewhereQuery.data?.data ?? []).filter((x) => x.sendable && x.waba_account_id !== wabaAccountId).length;
+    const pending = all.filter((x) => x.status === 'PENDING').length;
+    const emptyHint =
+        approvedAny.length > 0
+            ? `${approvedAny.length} approved template${approvedAny.length === 1 ? ' is' : 's are'} in another category. This needs a ${(category ?? '').toLowerCase()} template.`
+            : elsewhere > 0
+              ? `${elsewhere} approved template${elsewhere === 1 ? ' belongs' : 's belong'} to another WhatsApp Business Account. Choose a number from that account, or create the template for this number's account.`
+              : pending > 0
+                ? `${pending} template${pending === 1 ? ' is' : 's are'} still in Meta's review. They appear here as soon as Meta approves them.`
+                : all.length > 0
+                  ? 'None of this account’s templates is approved (rejected, paused or disabled). Open Templates to see why.'
+                  : 'No templates on this number’s WhatsApp Business Account yet. Create one on the Templates page; templates made in WhatsApp Manager appear here automatically.';
     const t = value.template;
     const set = (patch: Partial<TemplateSelection>) => onChange({ ...value, ...patch });
 
@@ -121,11 +136,11 @@ export function TemplatePicker({
                 hint={
                     templates.isLoading
                         ? 'Loading templates…'
-                        : approved.length === 0
-                          ? all.length > 0
-                              ? 'None of your templates is approved yet. Templates in review appear here once Meta approves them.'
-                              : 'No templates yet. Create one on the Templates page; templates made in WhatsApp Manager appear here automatically.'
-                          : `${approved.length} approved template${approved.length === 1 ? '' : 's'}`
+                        : templates.isError
+                          ? `Templates could not be loaded: ${errorMessage(templates.error)}`
+                          : approved.length === 0
+                            ? emptyHint
+                            : `${approved.length} approved template${approved.length === 1 ? '' : 's'}`
                 }
             >
                 <div className="flex gap-2">

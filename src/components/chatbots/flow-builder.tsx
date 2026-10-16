@@ -5,6 +5,7 @@ import {
     ArrowLeftIcon,
     BarChart3Icon,
     BotIcon,
+    CalendarClockIcon,
     CheckCircle2Icon,
     ChevronDownIcon,
     CircleAlertIcon,
@@ -14,9 +15,8 @@ import {
     HistoryIcon,
     LayoutDashboardIcon,
     Loader2Icon,
-    PanelLeftCloseIcon,
-    PanelLeftOpenIcon,
     PlayIcon,
+    PlusIcon,
     Redo2Icon,
     RocketIcon,
     SettingsIcon,
@@ -28,6 +28,7 @@ import {
     XIcon,
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -46,6 +47,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
@@ -88,6 +90,7 @@ import { BlockList } from './block-picker';
 import { type CanvasApi, FlowCanvas } from './flow-canvas';
 import { FlowSettingsDialog } from './flow-settings-dialog';
 import { NodeInspector } from './node-inspector';
+import { RunPeriodDialog, runPeriodLabel } from './run-period-dialog';
 import { TestChat } from './test-chat';
 
 const NO_NUMBER = '__none__';
@@ -112,7 +115,7 @@ const ACTIONS: Record<string, string> = {
     'chatbot.webhook_removed': 'Removed the webhook URL',
 };
 
-/** The full-screen flow builder: palette · canvas · block settings, with test, review and publish. */
+/** The full-screen flow builder: canvas · block settings, with test, review and publish. Blocks are added with "Add block", the "+" on a branch, or paste. */
 export function FlowBuilder({ flowId }: { flowId: string }) {
     const qc = useQueryClient();
     const flow = useChatbot(flowId);
@@ -133,7 +136,13 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [showStats, setShowStats] = useState(false);
     const [showIssues, setShowIssues] = useState(false);
-    const [palette, setPalette] = useState(true);
+    const [adding, setAdding] = useState(false);
+    const [runPeriod, setRunPeriod] = useState(false);
+    /** Leaving with changes that are not saved (or saved but not published): where to go once confirmed. */
+    const [leaving, setLeaving] = useState<string | null>(null);
+    const [leaveBusy, setLeaveBusy] = useState(false);
+    const [touched, setTouched] = useState(false); // the draft was changed in this visit
+    const router = useRouter();
     const [snapOn, setSnapOn] = useState(true);
     const [publishing, setPublishing] = useState(false);
     const [replace, setReplace] = useState<{ name: string } | null>(null);
@@ -417,14 +426,47 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
         return () => window.removeEventListener('keydown', handler);
     }, []);
 
-    // Leaving with unsaved edits: the browser asks first.
+    // Leaving with unsaved edits: the browser asks first (reload, close, typed address).
+    const unsaved = dirty || saving !== 'idle';
     useEffect(() => {
-        if (!dirty) return;
+        if (!unsaved) return;
         const warn = (e: BeforeUnloadEvent) => e.preventDefault();
         window.addEventListener('beforeunload', warn);
 
         return () => window.removeEventListener('beforeunload', warn);
-    }, [dirty]);
+    }, [unsaved]);
+    if (dirty && !touched) setTouched(true);
+
+    // Leaving inside the app (back arrow, dashboard link, browser Back): our own dialog asks first
+    // when something is not saved, or was changed here and is saved but not published yet.
+    const unpublished = touched && (flow.data?.published_version ?? null) !== null && (flow.data?.has_unpublished_changes ?? false);
+    const mustAsk = !readOnly && (unsaved || unpublished);
+    const leave = (href: string) => {
+        if (mustAsk) setLeaving(href);
+        else router.push(href);
+    };
+    const onBack = useEffectEvent(() => {
+        if (!mustAsk) {
+            history.back();
+
+            return;
+        }
+        history.pushState(history.state, '', location.href); // stay on the page while the dialog asks
+        setLeaving('/chatbots');
+    });
+    useEffect(() => {
+        history.pushState(history.state, '', location.href); // a step to come back to when Back is pressed
+        const handler = () => onBack();
+        window.addEventListener('popstate', handler);
+
+        return () => window.removeEventListener('popstate', handler);
+    }, []);
+    const go = (href: string) => {
+        setLeaving(null);
+        setDirty(false);
+        setTouched(false);
+        router.push(href);
+    };
 
     // ── Publish / go live ───────────────────────────────────────────────────────────────────
     const publish = async (thenLive = false) => {
@@ -506,10 +548,8 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
         <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background">
             {/* Top bar */}
             <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-card px-3">
-                <Button asChild variant="ghost" size="icon-sm" aria-label="Back to Chatbots">
-                    <Link href="/chatbots">
-                        <ArrowLeftIcon />
-                    </Link>
+                <Button variant="ghost" size="icon-sm" aria-label="Back to Chatbots" onClick={() => leave('/chatbots')}>
+                    <ArrowLeftIcon />
                 </Button>
                 <span className="flex size-8 items-center justify-center rounded-lg bg-brand-100 text-brand-600">
                     {data.kind === 'subflow' ? <WorkflowIcon className="size-4" /> : <BotIcon className="size-4" />}
@@ -579,8 +619,45 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
                         Unpublished changes
                     </Badge>
                 )}
+                {data.kind === 'bot' && runPeriodLabel(data) && (
+                    <button type="button" onClick={() => data.can.publish && setRunPeriod(true)} className="hidden xl:inline-flex" title="When this bot runs">
+                        <Badge tone="grey">
+                            <CalendarClockIcon className="size-3" /> {runPeriodLabel(data)}
+                        </Badge>
+                    </button>
+                )}
 
                 <div className="ml-auto flex items-center gap-1">
+                    {!readOnly && (
+                        <Popover open={adding} onOpenChange={setAdding}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    title="Add a block after the selected one (it connects itself), or drag one onto the canvas"
+                                >
+                                    <PlusIcon /> Add block
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent align="end" className="w-80 p-2.5">
+                                <p className="mb-2 text-[11.5px] leading-snug text-muted-foreground">
+                                    {selectedSingle
+                                        ? 'Added after the selected block and connected to it.'
+                                        : 'Added to the canvas. Select a block first to connect it.'}{' '}
+                                    You can also drag a block onto the canvas.
+                                </p>
+                                <BlockList
+                                    onPick={(t) => {
+                                        paletteAdd(t);
+                                        setAdding(false);
+                                    }}
+                                    draggable
+                                    autoFocus
+                                    dense
+                                />
+                            </PopoverContent>
+                        </Popover>
+                    )}
                     {!readOnly && (
                         <div className="hidden items-center gap-0.5 rounded-lg border p-0.5 lg:flex">
                             <Button variant="ghost" size="icon-sm" onClick={undo} disabled={past.length === 0} aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)">
@@ -665,10 +742,13 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
                                 </DropdownMenuItem>
                             )}
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem asChild>
-                                <Link href={`/chatbots?analytics=${flowId}`}>
-                                    <LayoutDashboardIcon /> Flow dashboard
-                                </Link>
+                            {data.kind === 'bot' && data.can.publish && (
+                                <DropdownMenuItem onSelect={() => setRunPeriod(true)}>
+                                    <CalendarClockIcon /> Run period…
+                                </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onSelect={() => leave(`/chatbots?analytics=${flowId}`)}>
+                                <LayoutDashboardIcon /> Flow dashboard
                             </DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -760,37 +840,6 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
             )}
 
             <div className="flex min-h-0 flex-1">
-                {/* Palette */}
-                {!readOnly &&
-                    (palette ? (
-                        <aside className="flex min-h-0 w-64 shrink-0 flex-col overflow-hidden border-r bg-[#fafaf8] px-3 pt-3" aria-label="Blocks">
-                            <div className="mb-2 flex items-center justify-between">
-                                <p className="text-[13px] font-bold">Blocks</p>
-                                <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    onClick={() => setPalette(false)}
-                                    aria-label="Hide the blocks"
-                                    title="Hide the blocks for more room"
-                                >
-                                    <PanelLeftCloseIcon />
-                                </Button>
-                            </div>
-                            <p className="mb-2 text-[11.5px] leading-snug text-muted-foreground">
-                                Drag onto the canvas, or click to add after the selected block — it connects itself.
-                            </p>
-                            <div className="flex min-h-0 flex-1 flex-col pb-3">
-                                <BlockList onPick={(t) => paletteAdd(t)} draggable />
-                            </div>
-                        </aside>
-                    ) : (
-                        <div className="flex w-11 shrink-0 flex-col items-center border-r bg-[#fafaf8] pt-3">
-                            <Button variant="ghost" size="icon-sm" onClick={() => setPalette(true)} aria-label="Show the blocks" title="Show the blocks">
-                                <PanelLeftOpenIcon />
-                            </Button>
-                        </div>
-                    ))}
-
                 <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
                     <FlowCanvas
                         graph={graph}
@@ -891,6 +940,92 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
                     )}
                 </aside>
             </div>
+
+            <RunPeriodDialog flow={runPeriod ? data : null} onClose={() => setRunPeriod(false)} onSaved={(d) => updateCache({ ...d, draft: graph })} />
+
+            <Dialog open={leaving !== null} onOpenChange={(o) => !o && !leaveBusy && setLeaving(null)}>
+                <DialogContent className="sm:max-w-md">
+                    {unsaved ? (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>Save your changes before leaving?</DialogTitle>
+                                <DialogDescription>
+                                    {saving === 'error' ? 'Your last changes could not be saved. ' : 'Some changes to this flow are not saved yet. '}
+                                    If you leave without saving, they will be lost.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter className="gap-2 sm:justify-between">
+                                <Button variant="ghost" onClick={() => setLeaving(null)} disabled={leaveBusy}>
+                                    Stay
+                                </Button>
+                                <div className="flex gap-2">
+                                    <Button variant="outline" className="text-bad" onClick={() => leaving && go(leaving)} disabled={leaveBusy}>
+                                        Leave without saving
+                                    </Button>
+                                    <Button
+                                        disabled={leaveBusy}
+                                        onClick={async () => {
+                                            setLeaveBusy(true);
+                                            const ok = await save();
+                                            setLeaveBusy(false);
+                                            if (ok && leaving) go(leaving);
+                                        }}
+                                    >
+                                        {leaveBusy && <Loader2Icon className="animate-spin" />} Save and leave
+                                    </Button>
+                                </div>
+                            </DialogFooter>
+                        </>
+                    ) : (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle>Publish your changes?</DialogTitle>
+                                <DialogDescription>
+                                    Your changes are saved as a draft, but customers still get version {data.published_version}
+                                    {data.is_active ? ' (live now)' : ''} until you publish. You can also leave and publish later.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <DialogFooter className="gap-2 sm:justify-between">
+                                <Button variant="ghost" onClick={() => setLeaving(null)} disabled={leaveBusy}>
+                                    Stay
+                                </Button>
+                                <div className="flex gap-2">
+                                    <Button variant="outline" onClick={() => leaving && go(leaving)} disabled={leaveBusy}>
+                                        Leave, keep the draft
+                                    </Button>
+                                    {data.can.publish && (
+                                        <Button
+                                            disabled={leaveBusy || errors.length > 0 || needsReview}
+                                            title={
+                                                errors.length > 0
+                                                    ? 'Fix the problems first'
+                                                    : needsReview
+                                                      ? 'This flow needs an approved review first'
+                                                      : undefined
+                                            }
+                                            onClick={async () => {
+                                                setLeaveBusy(true);
+                                                try {
+                                                    const detail = await publishChatbot(flowId);
+                                                    updateCache({ ...detail, draft: graph });
+                                                    toast.success(`Version ${detail.published_version} published`);
+                                                    if (leaving) go(leaving);
+                                                } catch (e) {
+                                                    toast.error(errorMessage(e));
+                                                } finally {
+                                                    setLeaveBusy(false);
+                                                }
+                                            }}
+                                        >
+                                            {leaveBusy && <Loader2Icon className="animate-spin" />} Publish and leave
+                                        </Button>
+                                    )}
+                                </div>
+                            </DialogFooter>
+                        </>
+                    )}
+                </DialogContent>
+            </Dialog>
 
             <FlowSettingsDialog
                 open={settingsOpen}

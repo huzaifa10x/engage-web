@@ -216,7 +216,8 @@ export const useThread = (id: string | null, refetchInterval: number | false = f
         enabled: id !== null,
     });
 
-export type ContactFilters = { q?: string; consent?: ConsentState; tag?: string; segment_id?: string; synced_from?: string };
+/** `filter`: JSON {match, rules} of conditions on custom fields (see FieldFilter). */
+export type ContactFilters = { q?: string; consent?: ConsentState; tag?: string; segment_id?: string; synced_from?: string; filter?: string };
 
 export const useContacts = (filters: ContactFilters) =>
     useInfiniteQuery({
@@ -348,7 +349,7 @@ export const cancelCampaign = (id: string) => api<Data<Campaign>>(`campaigns/${i
 export const deleteCampaign = (id: string) => api(`campaigns/${id}`, { method: 'DELETE' });
 
 export const useCampaignAudience = (
-    filters: { segment_id: string | null; audience_tag: string | null; template_id: string | null; phone_number_id: string | null },
+    filters: { segment_id: string | null; audience_tag: string | null; template_id: string | null; phone_number_id: string | null; filter?: string | null },
     enabled = true,
 ) =>
     useQuery({
@@ -369,6 +370,7 @@ export const previewCampaign = (body: {
     template_id: string;
     segment_id: string | null;
     audience_tag: string | null;
+    filter?: { match: 'all' | 'any'; rules: SegmentRule[] } | null;
     variables: { header: string[]; body: string[] };
 }) => api<Data<CampaignPreview[]>>('campaigns/preview', { method: 'POST', body }).then((r) => r.data);
 

@@ -111,7 +111,15 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                 toast.success('You are handling this conversation now. The bot stays quiet here.');
             } else {
                 const r = await handBackConversation(conversationId);
-                toast.success(r.meta?.restarted ? 'The bot has the conversation and started its flow.' : "The bot will answer the customer's next message.");
+                const outcome = r.meta?.outcome ?? (r.meta?.restarted ? 'started' : 'waiting');
+                if (outcome === 'started') toast.success('The bot has the conversation and started its flow.');
+                else if (outcome === 'opted_out')
+                    toast.warning(
+                        'Handed back. This customer opted out, so the bot stays quiet until they write to you again; then it answers inside that conversation only.',
+                    );
+                else if (outcome === 'window_closed')
+                    toast.success("Handed back. The 24-hour window is closed, so the bot answers the customer's next message.");
+                else toast.success("Handed back: the bot answers the customer's next message.");
             }
             afterSend();
         } catch (e) {
@@ -353,6 +361,16 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                     <p className="border-t bg-info-bg px-4 py-1.5 text-[12px] text-info">
                         <BotIcon className="mr-1 inline size-3.5" />
                         The chatbot is answering{c.bot?.node_title ? ` (at “${c.bot.node_title}”)` : ''}. Sending a message takes over and stops it here.
+                    </p>
+                )}
+                {c.handler === 'human' && c.bot_available && (
+                    <p className="border-t bg-muted/60 px-4 py-1.5 text-[12px] text-muted-foreground">
+                        A person is handling this conversation; the bot stays quiet. It takes over again when someone clicks “Hand back to bot”, when the
+                        conversation is closed
+                        {c.bot_resumes_at
+                            ? `, or when the customer writes after ${new Date(c.bot_resumes_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })} with no agent reply in between (auto-resume)`
+                            : ' (auto-resume is off in this flow’s settings)'}
+                        .
                     </p>
                 )}
                 {c.handler === 'human' && c.bot?.state === 'handed_off' && (

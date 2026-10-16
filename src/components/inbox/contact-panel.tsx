@@ -39,12 +39,24 @@ export function ContactPanel({ conversation }: { conversation: Conversation }) {
 
     const consent = useMutation({
         mutationFn: (state: 'opted_in' | 'opted_out') =>
-            api<{ data: Contact }>(`contacts/${contact?.id}/consent`, { method: 'POST', body: { state, note: 'Changed from the inbox' } }),
-        onSuccess: () => {
-            toast.success('Consent updated');
+            api<{ data: Contact; meta?: { changed: boolean; confirmation: { status: string; message: string } | null } }>(`contacts/${contact?.id}/consent`, {
+                method: 'POST',
+                body: { state, note: 'Changed from the inbox', notify: true, conversation_id: conversation.id },
+            }),
+        onSuccess: (r, state) => {
+            const what = state === 'opted_in' ? 'Opt-in recorded.' : 'Opt-out recorded.';
+            const c = r.meta?.confirmation;
+            if (!c || c.status === 'sent') {
+                toast.success(c ? `${what} ${c.message}` : what);
+            } else if (c.status === 'failed') {
+                toast.error(c.message);
+            } else {
+                toast.warning(`${what} ${c.message}`);
+            }
             refresh();
+            void qc.invalidateQueries({ queryKey: keys.thread(conversation.id) });
         },
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => toast.error(`The consent could not be recorded: ${errorMessage(e)}`),
     });
 
     if (!contact) return null;
@@ -136,7 +148,13 @@ export function ContactPanel({ conversation }: { conversation: Conversation }) {
                     {can(P.ContactsUpdate) && (
                         <div className="flex gap-2">
                             {contact.consent_state !== 'opted_in' && (
-                                <Button size="sm" variant="outline" onClick={() => consent.mutate('opted_in')} disabled={consent.isPending}>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => consent.mutate('opted_in')}
+                                    disabled={consent.isPending}
+                                    title="Record that the customer agreed to receive messages. If they wrote in the last 24 hours, they also get your opt-in confirmation (Compliance settings)."
+                                >
                                     Record opt-in
                                 </Button>
                             )}
