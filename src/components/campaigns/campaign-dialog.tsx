@@ -145,7 +145,9 @@ export function CampaignDialog({
     const a = audience.data;
     const marketing = category === 'MARKETING';
     const overPlan = Boolean(a && a.reach_limit !== null && a.reach_used + a.eligible > a.reach_limit);
-    const overTier = Boolean(a && a.messaging_limit !== null && a.eligible > a.messaging_limit);
+    // Meta's daily messaging limit (enforced by the platform): what fits now, the rest follows as room frees up.
+    const dailyLeft = a && a.messaging_limit !== null ? (a.messaging_remaining ?? Math.max(0, a.messaging_limit - (a.messaging_used ?? 0))) : null;
+    const overTier = Boolean(a && dailyLeft !== null && a.eligible > dailyLeft);
     const redQuality = marketing && a?.quality_rating === 'RED';
     const needsMedia = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(selection.template?.variables.header_format ?? '');
     const variables = () => ({
@@ -405,10 +407,10 @@ export function CampaignDialog({
                                             {' '}
                                             ({(a.matched - a.eligible).toLocaleString()} excluded:{' '}
                                             {a.category === 'MARKETING'
-                                                ? `no marketing opt-in, opted out${a.frequency_cap ? ', or already at the weekly limit' : ''}`
+                                                ? `no marketing opt-in, opted out, no WhatsApp number${a.frequency_cap ? ', or already at the weekly limit' : ''}`
                                                 : a.category
-                                                  ? 'opted out'
-                                                  : 'depends on the template'}
+                                                  ? 'opted out or no WhatsApp number'
+                                                  : 'opted out or no WhatsApp number; a marketing template also needs opt-in'}
                                             )
                                         </span>
                                     )}
@@ -425,12 +427,22 @@ export function CampaignDialog({
                                             : `Plan reach this month: ${a.reach_used.toLocaleString()} of ${a.reach_limit.toLocaleString()} used.`}
                                     </p>
                                 )}
-                                {a.messaging_limit !== null && (
-                                    <p className={overTier ? 'font-medium' : 'text-muted-foreground'}>
-                                        {overTier
-                                            ? `This number can start ${a.messaging_limit.toLocaleString()} conversations per 24 hours (Meta’s limit). Messages beyond that will fail — send to a smaller audience, or in parts on different days.`
-                                            : `Meta’s limit for this number: ${a.messaging_limit.toLocaleString()} new conversations per 24 hours.`}
-                                    </p>
+                                {a.messaging_limit !== null && dailyLeft !== null && (
+                                    <div className={overTier ? 'font-medium' : 'text-muted-foreground'}>
+                                        <p>
+                                            Daily limit: {a.messaging_limit.toLocaleString()} new conversations per 24 hours (Meta’s limit for your business,
+                                            shared by all its numbers) · {(a.messaging_used ?? 0).toLocaleString()} used · {dailyLeft.toLocaleString()} left.
+                                        </p>
+                                        {overTier && (
+                                            <p className="mt-0.5">
+                                                {dailyLeft === 0
+                                                    ? `The limit is used up. The campaign waits and starts by itself${a.messaging_available_at ? ` around ${new Date(a.messaging_available_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}` : ' as room frees up'}`
+                                                    : `${dailyLeft.toLocaleString()} go out now; the other ${(a.eligible - dailyLeft).toLocaleString()} follow automatically as room frees up`}
+                                                , at most {a.messaging_limit.toLocaleString()} every 24 hours. Contacts who wrote to you in the last 24 hours
+                                                don’t count.
+                                            </p>
+                                        )}
+                                    </div>
                                 )}
                                 {marketing && a.quality_rating === 'YELLOW' && (
                                     <p className="font-medium">This number’s quality rating is Yellow. Send to your most engaged contacts only.</p>

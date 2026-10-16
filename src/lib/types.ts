@@ -132,9 +132,20 @@ export type PhoneNumber = {
     /** Import from the WhatsApp Business app; null for numbers that are not shared with the app. */
     sync: PhoneNumberSync | null;
     max_mps: number;
+    /** Meta's daily messaging limit for the business (all its numbers), as the platform enforces it. limit null = unlimited. */
+    daily_limit?: DailyLimit;
     capabilities: Record<string, boolean>;
     is_official_business_account: boolean;
     last_synced_at: string | null;
+};
+
+export type DailyLimit = {
+    limit: number | null;
+    used: number;
+    remaining: number | null;
+    /** When room frees up again (only when nothing is left). */
+    available_at: string | null;
+    tier: string | null;
 };
 
 export type WabaAccount = {
@@ -421,6 +432,8 @@ export type Campaign = {
     objective: CampaignObjective | null;
     batch_per_hour: number | null;
     next_batch_at: string | null;
+    /** Why a sending campaign is waiting until next_batch_at. */
+    wait_reason?: 'quiet_hours' | 'drip' | 'daily_limit' | null;
     paused_at: string | null;
     pause_reason: string | null;
     failure_reasons?: CampaignFailureReason[];
@@ -451,8 +464,12 @@ export type CampaignAudience = {
     category: string | null;
     reach_limit: number | null;
     reach_used: number;
-    /** Meta's limit of business-initiated conversations for this number per rolling 24 hours (null = unlimited / unknown). */
+    /** Meta's daily messaging limit: people the business may start a conversation with per moving 24 hours, across all its numbers (null = unlimited). */
     messaging_limit: number | null;
+    messaging_limit_tier?: string | null;
+    messaging_used?: number;
+    messaging_remaining?: number | null;
+    messaging_available_at?: string | null;
     quality_rating: string | null;
     max_mps: number | null;
     /** Campaign sending speed of the workspace's plan (messages per hour); not selectable. */

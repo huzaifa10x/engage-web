@@ -98,7 +98,13 @@ export function CampaignDetailDialog({ campaign, onOpenChange }: { campaign: Cam
                 {campaign?.status === 'sending' && campaign.next_batch_at && (
                     <p className="rounded-md border px-3 py-2 text-[13px] text-muted-foreground">
                         Waiting: sending continues at {new Date(campaign.next_batch_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}{' '}
-                        (quiet hours or drip sending).
+                        {campaign.wait_reason === 'daily_limit'
+                            ? '— Meta’s daily messaging limit for your business is used up. It continues by itself as room frees up, or straight away if Meta raises the limit.'
+                            : campaign.wait_reason === 'quiet_hours'
+                              ? '(quiet hours).'
+                              : campaign.wait_reason === 'drip'
+                                ? '(drip sending).'
+                                : '(quiet hours or drip sending).'}
                     </p>
                 )}
                 {campaign?.notes && <p className="rounded-md bg-muted px-3 py-2 text-[13px] whitespace-pre-wrap text-ink-2">{campaign.notes}</p>}

@@ -138,7 +138,17 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                                             {qualityLabel(n.quality_rating)}
                                         </Badge>
                                     </TableCell>
-                                    <TableCell className="text-[13px] tabular-nums">{tierLabel(n.messaging_limit_tier)}</TableCell>
+                                    <TableCell className="text-[13px] tabular-nums">
+                                        {tierLabel(n.messaging_limit_tier)}
+                                        {n.daily_limit && n.daily_limit.limit !== null && (
+                                            <div
+                                                className={`text-[12px] ${n.daily_limit.remaining === 0 ? 'font-medium text-warn' : 'text-muted-foreground'}`}
+                                                title="New conversations started in the last 24 hours, shared by all numbers of this business. People who wrote to you in the last 24 hours don't count."
+                                            >
+                                                {n.daily_limit.used.toLocaleString()} used · {(n.daily_limit.remaining ?? 0).toLocaleString()} left
+                                            </div>
+                                        )}
+                                    </TableCell>
                                     <TableCell className="text-[13px]">
                                         {onboardingLabel(n.onboarding_type)}
                                         <div className="text-[12px] text-muted-foreground">

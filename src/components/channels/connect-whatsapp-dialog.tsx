@@ -117,7 +117,7 @@ function ChooseFlow({ flow, setFlow, cancelled }: { flow: Flow; setFlow: (f: Flo
             title: 'My WhatsApp Business app number',
             body: !coexistence.enabled
                 ? 'Not available on this workspace. Contact support to connect a number that stays on the WhatsApp Business app.'
-                : 'Keep chatting from the app on your phone while your team uses 10X Engage. Your contacts and recent chat history are imported. Sending on this number is limited to 20 messages per second on every plan.',
+                : 'Keep chatting from the app on your phone while your team uses 10X Engage. Your contacts and recent chat history are imported. Sending on this number is limited to 15 messages per second on every plan.',
             disabled: !coexistence.enabled,
         },
     ];

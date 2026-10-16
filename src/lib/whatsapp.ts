@@ -13,6 +13,7 @@ export function tierLabel(tier: string | null): string {
     if (!tier) return '—';
     if (tier === 'TIER_UNLIMITED') return 'Unlimited';
     if (tier === 'TIER_NOT_SET') return 'Not set';
+    if (/^\d+$/.test(tier)) return `${Number(tier).toLocaleString()} customers / 24h`;
     const m = /TIER_(\d+)(K?)/.exec(tier);
 
     return m ? `${m[1]}${m[2]} customers / 24h` : humanize(tier);

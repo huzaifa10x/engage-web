@@ -125,7 +125,11 @@ export default function CampaignsPage() {
                                         </TableCell>
                                         <TableCell>
                                             <Badge tone={CAMPAIGN_STATUS[c.status].tone} dot title={c.pause_reason ?? undefined}>
-                                                {c.status === 'sending' && c.next_batch_at ? 'Waiting' : CAMPAIGN_STATUS[c.status].label}
+                                                {c.status === 'sending' && c.next_batch_at
+                                                    ? c.wait_reason === 'daily_limit'
+                                                        ? 'Waiting · daily limit'
+                                                        : 'Waiting'
+                                                    : CAMPAIGN_STATUS[c.status].label}
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="text-right tabular-nums">
