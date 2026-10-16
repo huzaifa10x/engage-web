@@ -1,6 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ChevronDownIcon, MessageSquareIcon, UserCheckIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { ResizeHandle } from '@/components/app/resize-handle';
@@ -8,12 +9,20 @@ import { useSession } from '@/components/app/session';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useStored } from '@/hooks/use-stored';
 import { api, errorMessage } from '@/lib/api';
 import { dateTime, humanize, timeLeft } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { keys, useMembers } from '@/lib/queries';
+import { keys, requestConsent, useMembers } from '@/lib/queries';
 import type { Contact, Conversation } from '@/lib/types';
 
 const UNASSIGNED = '__none__';
@@ -58,6 +67,18 @@ export function ContactPanel({ conversation }: { conversation: Conversation }) {
         },
         onError: (e) => toast.error(`The consent could not be recorded: ${errorMessage(e)}`),
     });
+
+    // "Ask the customer": the in-chat question with Subscribe / No thanks; a tap on Subscribe records the opt-in.
+    const ask = useMutation({
+        mutationFn: () => requestConsent(conversation.id),
+        onSuccess: () => {
+            toast.success('Consent question sent. When the customer taps Subscribe, the opt-in is recorded and confirmed automatically.');
+            refresh();
+            void qc.invalidateQueries({ queryKey: keys.thread(conversation.id) });
+        },
+        onError: (e) => toast.error(`The consent question could not be sent: ${errorMessage(e)}`),
+    });
+    const canAsk = can(P.InboxReply) && conversation.window.open;
 
     if (!contact) return null;
 
@@ -148,15 +169,38 @@ export function ContactPanel({ conversation }: { conversation: Conversation }) {
                     {can(P.ContactsUpdate) && (
                         <div className="flex gap-2">
                             {contact.consent_state !== 'opted_in' && (
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => consent.mutate('opted_in')}
-                                    disabled={consent.isPending}
-                                    title="Record that the customer agreed to receive messages. If they wrote in the last 24 hours, they also get your opt-in confirmation (Compliance settings)."
-                                >
-                                    Record opt-in
-                                </Button>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <Button size="sm" variant="outline" disabled={consent.isPending || ask.isPending}>
+                                            Record opt-in <ChevronDownIcon />
+                                        </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="start" className="w-72">
+                                        <DropdownMenuLabel>How do you have their consent?</DropdownMenuLabel>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem onSelect={() => ask.mutate()} disabled={!canAsk} className="items-start">
+                                            <MessageSquareIcon className="mt-0.5" />
+                                            <span>
+                                                <span className="block font-medium">Ask the customer</span>
+                                                <span className="block text-[11.5px] leading-snug text-muted-foreground">
+                                                    {canAsk
+                                                        ? 'Sends your consent question with Subscribe / No thanks buttons. Subscribe records the opt-in and sends the confirmation.'
+                                                        : 'Only while the 24-hour window is open (the customer wrote in the last 24 hours).'}
+                                                </span>
+                                            </span>
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onSelect={() => consent.mutate('opted_in')} className="items-start">
+                                            <UserCheckIcon className="mt-0.5" />
+                                            <span>
+                                                <span className="block font-medium">I already have their consent</span>
+                                                <span className="block text-[11.5px] leading-snug text-muted-foreground">
+                                                    They agreed elsewhere (form, call, shop). Records the opt-in now and, inside the 24-hour window, sends the
+                                                    confirmation.
+                                                </span>
+                                            </span>
+                                        </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             )}
                             {contact.consent_state !== 'opted_out' && (
                                 <Button size="sm" variant="outline" onClick={() => consent.mutate('opted_out')} disabled={consent.isPending}>

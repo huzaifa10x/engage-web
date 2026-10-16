@@ -286,6 +286,8 @@ export type Message = {
     conversation_id: string;
     direction: 'inbound' | 'outbound';
     origin: 'customer' | 'agent' | 'api' | 'campaign' | 'automation' | 'app_echo' | 'history';
+    /** Which automation sent it: the chatbot, a consent confirmation, the away auto-reply, or an integration. */
+    automation?: 'bot' | 'consent' | 'auto_reply' | 'integration' | null;
     type: string;
     status: MessageStatus;
     body: string | null;

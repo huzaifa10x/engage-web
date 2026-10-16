@@ -330,8 +330,16 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                                 ? m.sent_by_membership_id === membership.id
                                     ? 'You'
                                     : (names.get(m.sent_by_membership_id ?? '') ?? null)
-                                : m.direction === 'outbound' && m.origin === 'automation' && c.bot
-                                  ? (c.bot.bot_name ?? c.bot.flow_name ?? 'Chatbot')
+                                : m.direction === 'outbound' && m.origin === 'automation'
+                                  ? m.automation === 'consent'
+                                      ? 'Consent reply'
+                                      : m.automation === 'auto_reply'
+                                        ? 'Auto reply'
+                                        : m.automation === 'integration'
+                                          ? 'Integration'
+                                          : c.bot
+                                            ? (c.bot.bot_name ?? c.bot.flow_name ?? 'Chatbot')
+                                            : null
                                   : null;
 
                         return (
@@ -374,8 +382,9 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                     <div className="border-t bg-brand-50 px-4 py-2 text-[12px] text-ink-2">
                         <p className="font-semibold text-brand-600">
                             <BotIcon className="mr-1 inline size-3.5" />
-                            {c.bot.bot_name ?? c.bot.flow_name ?? 'The chatbot'} handed this conversation to your team
-                            {c.bot.node_title ? ` at “${c.bot.node_title}”` : ''}.
+                            {['agent_replied', 'taken_over'].includes(c.bot.ended_reason ?? '')
+                                ? `A teammate took over from ${c.bot.bot_name ?? c.bot.flow_name ?? 'the chatbot'}${c.bot.node_title ? ` at “${c.bot.node_title}”` : ''}.`
+                                : `${c.bot.bot_name ?? c.bot.flow_name ?? 'The chatbot'} handed this conversation to your team${c.bot.node_title ? ` at “${c.bot.node_title}”` : ''}.`}
                         </p>
                         {(c.bot.answers ?? []).length > 0 && (
                             <p className="mt-0.5 line-clamp-2" title={(c.bot.answers ?? []).map((a) => `${a.key}: ${a.value}`).join('\n')}>
