@@ -253,8 +253,8 @@ export function MessageBubble({
                         </span>
                     )}
                     {message.origin === 'automation' && (
-                        <span className="inline-flex items-center gap-0.5" title="Sent automatically">
-                            <BotIcon className="size-3" /> {!message.automation || message.automation === 'bot' ? 'Bot ·' : 'Auto ·'}
+                        <span className="inline-flex items-center gap-0.5" title="Sent automatically (chatbot or auto-reply)">
+                            <BotIcon className="size-3" /> Bot ·
                         </span>
                     )}
                     {authorLabel && <span>{authorLabel} ·</span>}

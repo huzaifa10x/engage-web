@@ -212,10 +212,7 @@ export function ConversationList({
                                                 c.bot.state === 'abandoned' ? 'bg-warn-bg text-warn' : 'bg-grey-bg text-grey',
                                             )}
                                         >
-                                            <BotIcon className="size-3" />{' '}
-                                            {c.bot.state === 'handed_off' && ['agent_replied', 'taken_over'].includes(c.bot.ended_reason ?? '')
-                                                ? 'Taken over from bot'
-                                                : BOT_STATE[c.bot.state]}
+                                            <BotIcon className="size-3" /> {BOT_STATE[c.bot.state]}
                                             {c.bot.state === 'abandoned' && c.bot.node_title ? ` at “${c.bot.node_title}”` : ''}
                                         </span>
                                     ) : null}
