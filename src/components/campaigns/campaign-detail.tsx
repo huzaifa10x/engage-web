@@ -117,7 +117,7 @@ export function CampaignDetailDialog({ campaign, onOpenChange }: { campaign: Cam
                             {(
                                 [
                                     ['Matched audience', s.matched],
-                                    ['Eligible (consent)', s.eligible],
+                                    ['Eligible', s.eligible],
                                     ['Waiting to send', s.pending + s.queued],
                                     ['Replied', s.replied],
                                 ] as [string, number][]

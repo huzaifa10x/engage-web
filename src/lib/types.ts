@@ -390,7 +390,11 @@ export type TemplateForm = {
     waba_account_id: string;
     name: string;
     language: string;
-    category: 'MARKETING' | 'UTILITY';
+    category: 'MARKETING' | 'UTILITY' | 'AUTHENTICATION';
+    /** Authentication only: Meta writes the text itself; these are its options. */
+    add_security_recommendation?: boolean;
+    code_expiration_minutes?: number | null;
+    otp_button_text?: string | null;
     /** TEXT (default) uses `text`; IMAGE / VIDEO / DOCUMENT use `media_id` of an uploaded sample file. */
     header?: { format?: 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT'; text?: string; example?: string; media_id?: string } | null;
     body: string;
@@ -592,6 +596,8 @@ export type BillingPlan = {
     price_yearly_minor: number | null;
     current: boolean;
     purchasable: boolean;
+    /** The plan a workspace falls back to; offered as "Switch to Free". */
+    free?: boolean;
 };
 
 export type Billing = {

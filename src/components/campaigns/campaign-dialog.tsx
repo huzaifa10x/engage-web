@@ -10,10 +10,8 @@ import { describeRule, FieldFilter, type FieldFilterValue } from '@/components/c
 import { emptySelection, selectionError, TemplatePicker, type TemplateSelection } from '@/components/templates/template-picker';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ApiError, errorMessage } from '@/lib/api';
 import {
@@ -44,7 +42,7 @@ const OBJECTIVES: [CampaignObjective, string][] = [
 ];
 
 const CATEGORIES: [string, string, string][] = [
-    ['MARKETING', 'Marketing', 'Offers, news, re-engagement. Needs marketing opt-in.'],
+    ['MARKETING', 'Marketing', 'Offers, news, re-engagement.'],
     ['UTILITY', 'Utility', 'Order updates, reminders, account notices about something the customer did.'],
     ['AUTHENTICATION', 'Authentication', 'One-time passcodes only.'],
 ];
@@ -97,7 +95,6 @@ export function CampaignDialog({
     const [tag, setTag] = useState<string | null>(null);
     const [fieldFilter, setFieldFilter] = useState<FieldFilterValue | null>(null);
     const fields = useContactFields(open).data ?? [];
-    const [csvConsent, setCsvConsent] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [uploadNote, setUploadNote] = useState<string | null>(null);
     const [selection, setSelection] = useState<TemplateSelection>(emptySelection);
@@ -122,7 +119,6 @@ export function CampaignDialog({
         setRestore(campaign ?? null);
         setPreviews(null);
         setUploadNote(null);
-        setCsvConsent(false);
         setWhen('now');
         setError(null);
     }
@@ -174,7 +170,7 @@ export function CampaignDialog({
         setError(null);
         try {
             const label = `Upload ${new Date().toISOString().slice(0, 16).replace('T', ' ').replace(':', '.')}`;
-            const result = await importContacts(file, [label], csvConsent);
+            const result = await importContacts(file, [label], false);
             setTag(label);
             setSegmentId(null);
             setUploadNote(`${file.name}: ${result.created} added, ${result.updated} already existed, ${result.skipped} skipped. They are tagged “${label}”.`);
@@ -382,12 +378,6 @@ export function CampaignDialog({
                             <Button type="button" variant="ghost" size="sm" onClick={() => downloadSampleCsv()}>
                                 <DownloadIcon /> Download sample CSV
                             </Button>
-                            <div className="flex items-start gap-2">
-                                <Checkbox id="cp-csv-consent" checked={csvConsent} onCheckedChange={(v) => setCsvConsent(v === true)} className="mt-0.5" />
-                                <Label htmlFor="cp-csv-consent" className="text-[12.5px] leading-snug font-normal text-muted-foreground">
-                                    Everyone in the file agreed to receive marketing from us on WhatsApp
-                                </Label>
-                            </div>
                         </div>
                         <p className="mt-2 text-[12.5px] text-muted-foreground">
                             {uploadNote ??
@@ -411,10 +401,8 @@ export function CampaignDialog({
                                             {' '}
                                             ({(a.matched - a.eligible).toLocaleString()} excluded:{' '}
                                             {a.category === 'MARKETING'
-                                                ? `no marketing opt-in, opted out, no WhatsApp number${a.frequency_cap ? ', or already at the weekly limit' : ''}`
-                                                : a.category
-                                                  ? 'opted out or no WhatsApp number'
-                                                  : 'opted out or no WhatsApp number; a marketing template also needs opt-in'}
+                                                ? `opted out, no WhatsApp number${a.frequency_cap ? ', or already at the weekly limit' : ''}`
+                                                : 'opted out or no WhatsApp number'}
                                             )
                                         </span>
                                     )}

@@ -37,6 +37,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { ExportContactsDialog } from '@/components/contacts/export-dialog';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -87,11 +88,7 @@ export default function ContactsPage() {
     const filtered = Boolean(filters.q || filters.consent || filters.tag || filters.segment_id || filters.synced_from || filters.filter);
     // Numbers shared with the WhatsApp Business app: the only ones contacts can have been synced from.
     const syncNumbers = (usePhoneNumbers().data ?? []).filter((n) => n.onboarding_type === 'coexistence');
-    const exportUrl = `/api/v1/contacts/export?${new URLSearchParams(
-        Object.entries({ segment_id: filters.segment_id, tag: filters.tag, consent: filters.consent, filter: filters.filter }).filter(
-            (e): e is [string, string] => Boolean(e[1]),
-        ),
-    ).toString()}`;
+    const [exporting, setExporting] = useState(false);
 
     const contacts = useContacts(filters);
     const rows = contacts.data?.pages.flatMap((p) => p.data) ?? [];
@@ -118,10 +115,8 @@ export default function ContactsPage() {
                             <SlidersHorizontalIcon /> Segments, tags & fields
                         </Button>
                         {can(P.ContactsExport) && (
-                            <Button asChild variant="outline">
-                                <a href={exportUrl} download>
-                                    <DownloadIcon /> Export
-                                </a>
+                            <Button variant="outline" onClick={() => setExporting(true)}>
+                                <DownloadIcon /> Export
                             </Button>
                         )}
                         {can(P.ContactsImport) && (
@@ -426,6 +421,14 @@ export default function ContactsPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+            <ExportContactsDialog
+                open={exporting}
+                onOpenChange={setExporting}
+                current={filters}
+                segments={segments.data ?? []}
+                tags={tags.data ?? []}
+                syncNumbers={syncNumbers}
+            />
         </>
     );
 }

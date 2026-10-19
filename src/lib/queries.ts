@@ -466,6 +466,9 @@ export const cancelSubscription = () => api<Data<Billing>>('billing/cancel', { m
 
 export const resumeSubscription = () => api<Data<Billing>>('billing/resume', { method: 'POST' }).then((r) => r.data);
 
+/** Paid plan: ends at the end of the paid period, then Free. Trial: Free straight away. */
+export const switchToFree = () => api<Data<Billing>>('billing/switch-to-free', { method: 'POST' }).then((r) => r.data);
+
 // ── Auto reply ───────────────────────────────────────────────────────────────────────────
 
 export const useAutoReply = (enabled = true) =>

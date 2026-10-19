@@ -76,7 +76,13 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                         {!disconnected && !waba.is_subscribed_to_webhooks && <Badge tone="warn">Events not subscribed</Badge>}
                     </CardTitle>
                     <p className="mt-1 text-[13px] text-muted-foreground">
-                        {waba.business_name ? `${waba.business_name} · ` : ''}WABA <span className="font-mono">{waba.waba_id}</span>
+                        {waba.business_name ? `${waba.business_name} · ` : ''}
+                        {waba.meta_business_id && (
+                            <>
+                                Business ID <span className="font-mono">{waba.meta_business_id}</span> ·{' '}
+                            </>
+                        )}
+                        WABA <span className="font-mono">{waba.waba_id}</span>
                         {waba.account_review_status ? ` · Review ${humanize(waba.account_review_status).toLowerCase()}` : ''}
                     </p>
                     {lostAccess && (

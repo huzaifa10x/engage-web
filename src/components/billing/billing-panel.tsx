@@ -27,6 +27,7 @@ import {
     resumeSubscription,
     setDefaultPaymentMethod,
     subscribeToPlan,
+    switchToFree,
     updateBillingDetails,
     useBilling,
     useInvoices,
@@ -161,6 +162,7 @@ function PlanCard({
     canManage,
     busy,
     onChoose,
+    onSwitchFree,
 }: {
     plan: BillingPlan;
     yearly: boolean;
@@ -168,6 +170,7 @@ function PlanCard({
     canManage: boolean;
     busy: boolean;
     onChoose: () => void;
+    onSwitchFree: () => void;
 }) {
     const minor = yearly ? plan.price_yearly_minor : plan.price_monthly_minor;
     const custom = plan.price_monthly_minor === null;
@@ -196,9 +199,25 @@ function PlanCard({
                     <Button asChild variant="outline" className="w-full">
                         <a href="mailto:sales@10xdigital.ae?subject=10X%20Engage%20Enterprise">Talk to sales</a>
                     </Button>
+                ) : plan.free && !plan.current ? (
+                    billing.subscription?.cancel_at ? (
+                        <Button variant="outline" className="w-full" disabled>
+                            Switching on {date(billing.subscription.cancel_at)}
+                        </Button>
+                    ) : (
+                        <Button variant="outline" className="w-full" disabled={!canManage || busy} onClick={onSwitchFree}>
+                            {busy ? 'One moment…' : 'Switch to Free'}
+                        </Button>
+                    )
                 ) : !plan.purchasable ? (
                     <Button variant="outline" className="w-full" disabled>
-                        {plan.current ? 'Your plan' : 'Included'}
+                        {plan.current ? (
+                            <>
+                                <CheckIcon /> Your plan
+                            </>
+                        ) : (
+                            'Included'
+                        )}
                     </Button>
                 ) : paidCurrent && sameInterval ? (
                     <Button variant="outline" className="w-full" disabled>
@@ -266,6 +285,8 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
     const refreshAll = () => {
         void qc.invalidateQueries({ queryKey: ['billing'] });
         void qc.invalidateQueries({ queryKey: keys.entitlements });
+        // The plan shown everywhere else (trial banner, sidebar) comes from the session.
+        void qc.invalidateQueries({ queryKey: keys.me });
     };
 
     const run = async (id: string, action: () => Promise<unknown>) => {
@@ -341,6 +362,19 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
             toast.success('Invoice paid');
             refreshAll();
         });
+
+    const switchFree = () => {
+        const paid = sub?.provider === 'stripe' && sub.status !== 'trialing';
+        const question = paid
+            ? `Switch to Free? You keep ${b.plan.name} until ${date(sub?.current_period_end)} (already paid), then the workspace moves to Free and nothing more is charged.`
+            : `Switch to Free now? ${b.plan.name} features stop straight away.`;
+        if (!window.confirm(question)) return;
+        void run('free', async () => {
+            qc.setQueryData(['billing'], await switchToFree());
+            refreshAll();
+            toast.success(paid ? `You move to Free on ${date(sub?.current_period_end)}` : 'Your workspace is on the Free plan');
+        });
+    };
 
     const cancel = () =>
         window.confirm(
@@ -583,8 +617,9 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
                                         yearly={yearly}
                                         billing={b}
                                         canManage={canManage}
-                                        busy={false}
+                                        busy={plan.free ? busy === 'free' : false}
                                         onChoose={() => choose(plan)}
+                                        onSwitchFree={switchFree}
                                     />
                                 ))}
                             </div>

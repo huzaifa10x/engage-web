@@ -7,8 +7,10 @@ import { toast } from 'sonner';
 
 import { Field, FormError } from '@/components/app/field';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ApiError, errorMessage, upload } from '@/lib/api';
 import { fileSize } from '@/lib/format';
@@ -37,6 +39,14 @@ const LANGUAGES: [string, string][] = [
 
 type HeaderType = 'NONE' | 'TEXT' | 'IMAGE' | 'VIDEO' | 'DOCUMENT';
 
+type Category = 'MARKETING' | 'UTILITY' | 'AUTHENTICATION';
+
+const CATEGORY_HINT: Record<Category, string> = {
+    UTILITY: 'Order updates, reminders, account notices',
+    MARKETING: 'Offers, announcements, promotions',
+    AUTHENTICATION: 'One-time passcodes (login, verification). Meta writes the text.',
+};
+
 /** Meta's rules for the sample file of a media header. */
 const MEDIA: Record<'IMAGE' | 'VIDEO' | 'DOCUMENT', { accept: string; mimes: string[]; maxMb: number; hint: string }> = {
     IMAGE: { accept: 'image/jpeg,image/png', mimes: ['image/jpeg', 'image/png'], maxMb: 5, hint: 'JPG or PNG, up to 5 MB' },
@@ -57,7 +67,11 @@ export function CreateTemplateDialog({ open, onOpenChange, accounts }: { open: b
     const [accountId, setAccountId] = useState<string | null>(null);
     const [name, setName] = useState('');
     const [language, setLanguage] = useState('en');
-    const [category, setCategory] = useState<'MARKETING' | 'UTILITY'>('UTILITY');
+    const [category, setCategory] = useState<Category>('UTILITY');
+    // Authentication (one-time passcode) options; Meta writes the message text itself.
+    const [securityTip, setSecurityTip] = useState(true);
+    const [expiry, setExpiry] = useState('10');
+    const [otpText, setOtpText] = useState('Copy code');
     const [headerType, setHeaderType] = useState<HeaderType>('NONE');
     const [header, setHeader] = useState('');
     const [media, setMedia] = useState<UploadedMedia | null>(null);
@@ -74,6 +88,8 @@ export function CreateTemplateDialog({ open, onOpenChange, accounts }: { open: b
     const [pending, setPending] = useState(false);
 
     const account = accounts.find((a) => a.id === accountId) ?? accounts[0] ?? null;
+    const auth = category === 'AUTHENTICATION';
+    const expiryMinutes = expiry.trim() === '' ? null : Number(expiry);
     const vars = placeholders(body);
     const headerVars = headerType === 'TEXT' ? placeholders(header) : [];
     const isMedia = headerType === 'IMAGE' || headerType === 'VIDEO' || headerType === 'DOCUMENT';
@@ -129,6 +145,21 @@ export function CreateTemplateDialog({ open, onOpenChange, accounts }: { open: b
         setError(null);
         if (!account) return setError('Connect a WhatsApp number first.');
         if (!/^[a-z0-9_]+$/.test(name)) return setError('Give the template a name using lowercase letters, numbers and underscores, e.g. order_update.');
+        if (auth) {
+            if (expiryMinutes !== null && (!Number.isInteger(expiryMinutes) || expiryMinutes < 1 || expiryMinutes > 90))
+                return setError('The code can expire after 1 to 90 minutes, or leave it empty.');
+
+            return send({
+                waba_account_id: account.id,
+                name,
+                language,
+                category,
+                body: '',
+                add_security_recommendation: securityTip,
+                code_expiration_minutes: expiryMinutes,
+                otp_button_text: otpText.trim() || null,
+            });
+        }
         if (headerType === 'TEXT' && !header.trim()) return setError('Write the header text, or set the header to None.');
         if (isMedia && !media) return setError(`Attach the sample ${headerType.toLowerCase()} for the header.`);
         if (uploading) return setError('Wait for the file to finish uploading.');
@@ -157,6 +188,10 @@ export function CreateTemplateDialog({ open, onOpenChange, accounts }: { open: b
             })),
         };
 
+        return send(form);
+    };
+
+    const send = async (form: TemplateForm) => {
         setPending(true);
         try {
             const created = await createTemplate(form);
@@ -171,6 +206,15 @@ export function CreateTemplateDialog({ open, onOpenChange, accounts }: { open: b
             setPending(false);
         }
     };
+
+    const authPreview = {
+        components: [
+            { type: 'BODY', text: `*{{1}}* is your verification code.${securityTip ? ' For your security, do not share this code.' : ''}` },
+            ...(expiryMinutes ? [{ type: 'FOOTER', text: `This code expires in ${expiryMinutes} minutes.` }] : []),
+            { type: 'BUTTONS', buttons: [{ type: 'URL', text: otpText.trim() || 'Copy code' }] },
+        ],
+        variables: { header: [], header_format: null, body: ['1'], buttons: [] },
+    } as unknown as MessageTemplate;
 
     const preview = {
         components: [
@@ -238,18 +282,15 @@ export function CreateTemplateDialog({ open, onOpenChange, accounts }: { open: b
                             }
                         />
                     </Field>
-                    <Field
-                        label="Category"
-                        htmlFor="ct-category"
-                        hint={category === 'UTILITY' ? 'Order updates, reminders, account notices' : 'Offers, announcements, promotions'}
-                    >
-                        <Select value={category} onValueChange={(v) => setCategory(v as 'MARKETING' | 'UTILITY')}>
+                    <Field label="Category" htmlFor="ct-category" hint={CATEGORY_HINT[category]}>
+                        <Select value={category} onValueChange={(v) => setCategory(v as Category)}>
                             <SelectTrigger id="ct-category">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="UTILITY">Utility</SelectItem>
                                 <SelectItem value="MARKETING">Marketing</SelectItem>
+                                <SelectItem value="AUTHENTICATION">Authentication</SelectItem>
                             </SelectContent>
                         </Select>
                     </Field>
@@ -269,197 +310,234 @@ export function CreateTemplateDialog({ open, onOpenChange, accounts }: { open: b
                     </Field>
                 </div>
 
-                <Field label="Header (optional)" htmlFor="ct-header-type" hint="Shown above the message: a short title, or an image, video or document">
-                    <Select
-                        value={headerType}
-                        onValueChange={(v) => {
-                            setHeaderType(v as HeaderType);
-                            clearMedia();
-                        }}
-                    >
-                        <SelectTrigger id="ct-header-type" className="sm:w-60">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="NONE">None</SelectItem>
-                            <SelectItem value="TEXT">Text</SelectItem>
-                            <SelectItem value="IMAGE">Image</SelectItem>
-                            <SelectItem value="VIDEO">Video</SelectItem>
-                            <SelectItem value="DOCUMENT">Document</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </Field>
-                {headerType === 'TEXT' && (
-                    <Field label="Header text" htmlFor="ct-header" hint="Up to 60 characters. May contain one variable: {{1}}">
-                        <Input id="ct-header" value={header} maxLength={60} onChange={(e) => setHeader(e.target.value)} />
-                    </Field>
-                )}
-                {headerVars.length > 0 && (
-                    <Field label="Example for the header variable" htmlFor="ct-header-ex">
-                        <Input id="ct-header-ex" value={headerExample} maxLength={60} onChange={(e) => setHeaderExample(e.target.value)} />
-                    </Field>
-                )}
-                {isMedia && (
-                    <Field
-                        label={`Header ${headerType.toLowerCase()}`}
-                        htmlFor="ct-header-file"
-                        error={mediaError ?? undefined}
-                        hint={`${MEDIA[headerType].hint}. Meta reviews this as the sample; you choose the actual ${headerType.toLowerCase()} each time you send the template.`}
-                    >
-                        <input
-                            id="ct-header-file"
-                            ref={fileRef}
-                            type="file"
-                            accept={MEDIA[headerType].accept}
-                            className="hidden"
-                            onChange={(e) => pickMedia(e.target.files?.[0])}
-                        />
-                        {media ? (
-                            <div className="flex items-center gap-3 rounded-md border p-2.5">
-                                {mediaPreview ? (
-                                    // eslint-disable-next-line @next/next/no-img-element -- local object URL
-                                    <img src={mediaPreview} alt="" className="size-12 rounded object-cover" />
-                                ) : (
-                                    <span className="grid size-12 place-items-center rounded bg-muted text-muted-foreground">
-                                        {headerType === 'VIDEO' ? <VideoIcon className="size-5" /> : <FileTextIcon className="size-5" />}
-                                    </span>
-                                )}
-                                <span className="min-w-0 flex-1">
-                                    <span className="block truncate text-[13px] font-medium">{media.filename}</span>
-                                    <span className="block text-[12px] text-muted-foreground">{fileSize(media.file_size)}</span>
-                                </span>
-                                <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
-                                    Replace
-                                </Button>
-                                <Button type="button" variant="ghost" size="icon-sm" onClick={clearMedia} aria-label="Remove file">
-                                    <XIcon />
-                                </Button>
-                            </div>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={() => fileRef.current?.click()}
-                                disabled={uploading}
-                                className="flex w-full flex-col items-center gap-1.5 rounded-md border border-dashed px-4 py-6 text-[13px] text-muted-foreground hover:bg-muted disabled:opacity-60"
-                            >
-                                {uploading ? <Loader2Icon className="size-5 animate-spin" /> : <UploadIcon className="size-5" />}
-                                {uploading ? 'Uploading…' : `Choose ${headerType === 'IMAGE' ? 'an image' : headerType === 'VIDEO' ? 'a video' : 'a document'}`}
-                            </button>
-                        )}
-                    </Field>
-                )}
-
-                <Field label="Message" htmlFor="ct-body" hint="Up to 1024 characters. Variables cannot be the first or last thing in the message.">
-                    <textarea
-                        id="ct-body"
-                        value={body}
-                        maxLength={1024}
-                        onChange={(e) => setBody(e.target.value)}
-                        placeholder="Hi {{1}}, your order {{2}} is on its way."
-                        className={textarea}
-                    />
-                    <Button type="button" variant="outline" size="sm" className="w-fit" onClick={() => setBody(`${body}{{${vars.length + 1}}}`)}>
-                        <PlusIcon /> Add variable
-                    </Button>
-                </Field>
-                {vars.length > 0 && (
-                    <div className="grid gap-2">
-                        <p className="text-[13px] font-semibold text-ink-2">Example values (required by Meta for review)</p>
-                        {vars.map((v, i) => (
-                            <div key={v} className="flex items-center gap-2">
-                                <span className="w-12 shrink-0 font-mono text-[12px] text-muted-foreground">{`{{${v}}}`}</span>
+                {auth ? (
+                    <div className="grid gap-4">
+                        <p className="rounded-md bg-muted px-3 py-2 text-[12.5px] text-muted-foreground">
+                            Meta writes the message of an authentication template: “<span className="font-semibold">123456</span> is your verification code.”
+                            You send the code each time (in the message and the Copy code button). Use it for one-time passcodes only.
+                        </p>
+                        <div className="flex items-start gap-2">
+                            <Checkbox id="ct-security" checked={securityTip} onCheckedChange={(v) => setSecurityTip(v === true)} className="mt-0.5" />
+                            <Label htmlFor="ct-security" className="text-[13px] leading-snug font-normal">
+                                Add the security advice “For your security, do not share this code.”
+                            </Label>
+                        </div>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <Field label="Code expires after (minutes)" htmlFor="ct-expiry" hint="1 to 90. Leave empty to show no expiry line.">
                                 <Input
-                                    value={examples[i] ?? ''}
-                                    aria-label={`Example for variable ${v}`}
-                                    maxLength={200}
-                                    onChange={(e) => setExamples(vars.map((_, j) => (j === i ? e.target.value : (examples[j] ?? ''))))}
+                                    id="ct-expiry"
+                                    value={expiry}
+                                    inputMode="numeric"
+                                    maxLength={2}
+                                    onChange={(e) => setExpiry(e.target.value.replace(/\D/g, ''))}
                                 />
-                            </div>
-                        ))}
+                            </Field>
+                            <Field label="Button text" htmlFor="ct-otp-text" hint="Up to 25 characters">
+                                <Input id="ct-otp-text" value={otpText} maxLength={25} onChange={(e) => setOtpText(e.target.value)} />
+                            </Field>
+                        </div>
                     </div>
-                )}
-
-                <Field label="Footer (optional)" htmlFor="ct-footer" hint="Small grey text under the message, up to 60 characters">
-                    <Input id="ct-footer" value={footer} maxLength={60} onChange={(e) => setFooter(e.target.value)} />
-                </Field>
-
-                <div className="grid gap-2">
-                    <p className="text-[13px] font-semibold text-ink-2">Buttons (optional)</p>
-                    {buttons.map((b, i) => (
-                        <div key={i} className="grid gap-2 rounded-md border p-2.5 sm:grid-cols-[9rem_1fr_auto]">
-                            <Select value={b.type} onValueChange={(v) => setButton(i, { type: v as ButtonRow['type'] })}>
-                                <SelectTrigger aria-label="Button type">
+                ) : (
+                    <>
+                        <Field label="Header (optional)" htmlFor="ct-header-type" hint="Shown above the message: a short title, or an image, video or document">
+                            <Select
+                                value={headerType}
+                                onValueChange={(v) => {
+                                    setHeaderType(v as HeaderType);
+                                    clearMedia();
+                                }}
+                            >
+                                <SelectTrigger id="ct-header-type" className="sm:w-60">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="QUICK_REPLY">Quick reply</SelectItem>
-                                    <SelectItem value="URL">Visit website</SelectItem>
-                                    <SelectItem value="PHONE_NUMBER">Call number</SelectItem>
+                                    <SelectItem value="NONE">None</SelectItem>
+                                    <SelectItem value="TEXT">Text</SelectItem>
+                                    <SelectItem value="IMAGE">Image</SelectItem>
+                                    <SelectItem value="VIDEO">Video</SelectItem>
+                                    <SelectItem value="DOCUMENT">Document</SelectItem>
                                 </SelectContent>
                             </Select>
-                            <div className="grid gap-2">
-                                <Input
-                                    value={b.text}
-                                    maxLength={25}
-                                    placeholder="Button text"
-                                    aria-label="Button text"
-                                    onChange={(e) => setButton(i, { text: e.target.value })}
+                        </Field>
+                        {headerType === 'TEXT' && (
+                            <Field label="Header text" htmlFor="ct-header" hint="Up to 60 characters. May contain one variable: {{1}}">
+                                <Input id="ct-header" value={header} maxLength={60} onChange={(e) => setHeader(e.target.value)} />
+                            </Field>
+                        )}
+                        {headerVars.length > 0 && (
+                            <Field label="Example for the header variable" htmlFor="ct-header-ex">
+                                <Input id="ct-header-ex" value={headerExample} maxLength={60} onChange={(e) => setHeaderExample(e.target.value)} />
+                            </Field>
+                        )}
+                        {isMedia && (
+                            <Field
+                                label={`Header ${headerType.toLowerCase()}`}
+                                htmlFor="ct-header-file"
+                                error={mediaError ?? undefined}
+                                hint={`${MEDIA[headerType].hint}. Meta reviews this as the sample; you choose the actual ${headerType.toLowerCase()} each time you send the template.`}
+                            >
+                                <input
+                                    id="ct-header-file"
+                                    ref={fileRef}
+                                    type="file"
+                                    accept={MEDIA[headerType].accept}
+                                    className="hidden"
+                                    onChange={(e) => pickMedia(e.target.files?.[0])}
                                 />
-                                {b.type === 'URL' && (
-                                    <>
+                                {media ? (
+                                    <div className="flex items-center gap-3 rounded-md border p-2.5">
+                                        {mediaPreview ? (
+                                            // eslint-disable-next-line @next/next/no-img-element -- local object URL
+                                            <img src={mediaPreview} alt="" className="size-12 rounded object-cover" />
+                                        ) : (
+                                            <span className="grid size-12 place-items-center rounded bg-muted text-muted-foreground">
+                                                {headerType === 'VIDEO' ? <VideoIcon className="size-5" /> : <FileTextIcon className="size-5" />}
+                                            </span>
+                                        )}
+                                        <span className="min-w-0 flex-1">
+                                            <span className="block truncate text-[13px] font-medium">{media.filename}</span>
+                                            <span className="block text-[12px] text-muted-foreground">{fileSize(media.file_size)}</span>
+                                        </span>
+                                        <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
+                                            Replace
+                                        </Button>
+                                        <Button type="button" variant="ghost" size="icon-sm" onClick={clearMedia} aria-label="Remove file">
+                                            <XIcon />
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => fileRef.current?.click()}
+                                        disabled={uploading}
+                                        className="flex w-full flex-col items-center gap-1.5 rounded-md border border-dashed px-4 py-6 text-[13px] text-muted-foreground hover:bg-muted disabled:opacity-60"
+                                    >
+                                        {uploading ? <Loader2Icon className="size-5 animate-spin" /> : <UploadIcon className="size-5" />}
+                                        {uploading
+                                            ? 'Uploading…'
+                                            : `Choose ${headerType === 'IMAGE' ? 'an image' : headerType === 'VIDEO' ? 'a video' : 'a document'}`}
+                                    </button>
+                                )}
+                            </Field>
+                        )}
+
+                        <Field label="Message" htmlFor="ct-body" hint="Up to 1024 characters. Variables cannot be the first or last thing in the message.">
+                            <textarea
+                                id="ct-body"
+                                value={body}
+                                maxLength={1024}
+                                onChange={(e) => setBody(e.target.value)}
+                                placeholder="Hi {{1}}, your order {{2}} is on its way."
+                                className={textarea}
+                            />
+                            <Button type="button" variant="outline" size="sm" className="w-fit" onClick={() => setBody(`${body}{{${vars.length + 1}}}`)}>
+                                <PlusIcon /> Add variable
+                            </Button>
+                        </Field>
+                        {vars.length > 0 && (
+                            <div className="grid gap-2">
+                                <p className="text-[13px] font-semibold text-ink-2">Example values (required by Meta for review)</p>
+                                {vars.map((v, i) => (
+                                    <div key={v} className="flex items-center gap-2">
+                                        <span className="w-12 shrink-0 font-mono text-[12px] text-muted-foreground">{`{{${v}}}`}</span>
                                         <Input
-                                            value={b.url}
-                                            placeholder="https://example.com/orders/{{1}}"
-                                            aria-label="Link"
-                                            onChange={(e) => setButton(i, { url: e.target.value })}
+                                            value={examples[i] ?? ''}
+                                            aria-label={`Example for variable ${v}`}
+                                            maxLength={200}
+                                            onChange={(e) => setExamples(vars.map((_, j) => (j === i ? e.target.value : (examples[j] ?? ''))))}
                                         />
-                                        {b.url.includes('{{1}}') && (
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <Field label="Footer (optional)" htmlFor="ct-footer" hint="Small grey text under the message, up to 60 characters">
+                            <Input id="ct-footer" value={footer} maxLength={60} onChange={(e) => setFooter(e.target.value)} />
+                        </Field>
+
+                        <div className="grid gap-2">
+                            <p className="text-[13px] font-semibold text-ink-2">Buttons (optional)</p>
+                            {buttons.map((b, i) => (
+                                <div key={i} className="grid gap-2 rounded-md border p-2.5 sm:grid-cols-[9rem_1fr_auto]">
+                                    <Select value={b.type} onValueChange={(v) => setButton(i, { type: v as ButtonRow['type'] })}>
+                                        <SelectTrigger aria-label="Button type">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="QUICK_REPLY">Quick reply</SelectItem>
+                                            <SelectItem value="URL">Visit website</SelectItem>
+                                            <SelectItem value="PHONE_NUMBER">Call number</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <div className="grid gap-2">
+                                        <Input
+                                            value={b.text}
+                                            maxLength={25}
+                                            placeholder="Button text"
+                                            aria-label="Button text"
+                                            onChange={(e) => setButton(i, { text: e.target.value })}
+                                        />
+                                        {b.type === 'URL' && (
+                                            <>
+                                                <Input
+                                                    value={b.url}
+                                                    placeholder="https://example.com/orders/{{1}}"
+                                                    aria-label="Link"
+                                                    onChange={(e) => setButton(i, { url: e.target.value })}
+                                                />
+                                                {b.url.includes('{{1}}') && (
+                                                    <Input
+                                                        value={b.example}
+                                                        placeholder="Full example link, e.g. https://example.com/orders/1042"
+                                                        aria-label="Example link"
+                                                        onChange={(e) => setButton(i, { example: e.target.value })}
+                                                    />
+                                                )}
+                                            </>
+                                        )}
+                                        {b.type === 'PHONE_NUMBER' && (
                                             <Input
-                                                value={b.example}
-                                                placeholder="Full example link, e.g. https://example.com/orders/1042"
-                                                aria-label="Example link"
-                                                onChange={(e) => setButton(i, { example: e.target.value })}
+                                                value={b.phone_number}
+                                                placeholder="+971501234567"
+                                                aria-label="Phone number"
+                                                inputMode="tel"
+                                                onChange={(e) => setButton(i, { phone_number: e.target.value })}
                                             />
                                         )}
-                                    </>
-                                )}
-                                {b.type === 'PHONE_NUMBER' && (
-                                    <Input
-                                        value={b.phone_number}
-                                        placeholder="+971501234567"
-                                        aria-label="Phone number"
-                                        inputMode="tel"
-                                        onChange={(e) => setButton(i, { phone_number: e.target.value })}
-                                    />
-                                )}
-                            </div>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={() => setButtons(buttons.filter((_, j) => j !== i))}
-                                aria-label="Remove button"
-                            >
-                                <XIcon />
-                            </Button>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon-sm"
+                                        onClick={() => setButtons(buttons.filter((_, j) => j !== i))}
+                                        aria-label="Remove button"
+                                    >
+                                        <XIcon />
+                                    </Button>
+                                </div>
+                            ))}
+                            {buttons.length < 10 && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-fit"
+                                    onClick={() => setButtons([...buttons, { type: 'QUICK_REPLY', text: '', url: '', example: '', phone_number: '' }])}
+                                >
+                                    <PlusIcon /> Add button
+                                </Button>
+                            )}
                         </div>
-                    ))}
-                    {buttons.length < 10 && (
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="w-fit"
-                            onClick={() => setButtons([...buttons, { type: 'QUICK_REPLY', text: '', url: '', example: '', phone_number: '' }])}
-                        >
-                            <PlusIcon /> Add button
-                        </Button>
-                    )}
-                </div>
+                    </>
+                )}
 
                 <div className="grid gap-1.5">
                     <p className="text-[13px] font-semibold text-ink-2">Preview</p>
-                    <TemplatePreview template={preview} header={[headerExample]} body={examples} mediaUrl={mediaPreview} />
+                    {auth ? (
+                        <TemplatePreview template={authPreview} header={[]} body={['123456']} mediaUrl={null} />
+                    ) : (
+                        <TemplatePreview template={preview} header={[headerExample]} body={examples} mediaUrl={mediaPreview} />
+                    )}
                 </div>
 
                 <DialogFooter>
