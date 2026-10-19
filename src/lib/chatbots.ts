@@ -29,6 +29,7 @@ import {
     StarIcon,
     StickyNoteIcon,
     TagIcon,
+    UserCheckIcon,
     UserXIcon,
     WorkflowIcon,
     ZapIcon,
@@ -56,6 +57,7 @@ export type NodeType =
     | 'calculate'
     | 'delay'
     | 'tag'
+    | 'optin'
     | 'optout'
     | 'hours'
     | 'split'
@@ -456,6 +458,7 @@ export const BLOCKS: BlockKind[] = [
     { type: 'calculate', label: 'Calculate', group: 'logic', icon: CalculatorIcon, blurb: 'Price, days, totals', keywords: 'math formula price' },
     { type: 'delay', label: 'Wait', group: 'logic', icon: ClockIcon, blurb: 'Wait a while or until a date', keywords: 'delay timer reminder' },
     { type: 'tag', label: 'Tag / assign', group: 'logic', icon: TagIcon, blurb: 'Tag the contact, assign the chat', keywords: 'label route agent team' },
+    { type: 'optin', label: 'Opt-in', group: 'logic', icon: UserCheckIcon, blurb: 'Record the customer’s consent', keywords: 'subscribe consent agree start' },
     { type: 'optout', label: 'Opt-out', group: 'logic', icon: UserXIcon, blurb: 'Stop marketing messages', keywords: 'unsubscribe consent stop' },
     { type: 'hours', label: 'Business hours', group: 'logic', icon: CalendarClockIcon, blurb: 'Open or closed now?', keywords: 'time office open closed' },
     { type: 'split', label: 'A/B split', group: 'logic', icon: SplitIcon, blurb: 'Test two versions', keywords: 'experiment ab test' },
@@ -596,6 +599,8 @@ export function defaultConfig(type: NodeType): NodeConfig {
             return { mode: 'duration', minutes: 10, until: null, offset_minutes: 0 };
         case 'tag':
             return { add: [], remove: [], assign: 'none', member_id: null };
+        case 'optin':
+            return { text: 'Thank you! You’re subscribed to our updates. Reply STOP at any time to unsubscribe.' };
         case 'optout':
             return { scope: 'marketing', text: 'Done — you will not receive promotional messages from us anymore. Reply START to subscribe again.' };
         case 'hours':
@@ -649,6 +654,7 @@ export function outputsFor(type: NodeType, config: NodeConfig): { id: string; la
         case 'setfield':
         case 'tag':
         case 'calculate':
+        case 'optin':
         case 'optout':
         case 'sheets':
             return [{ id: 'next', label: 'Done' }];
@@ -792,6 +798,8 @@ export function autoTitle(node: FlowNode): string {
             return c.mode === 'until' ? 'Wait until a date' : `Wait ${formatMinutes(Number(c.minutes ?? 10))}`;
         case 'tag':
             return (c.add ?? []).length ? `Tag: ${(c.add as string[]).join(', ').slice(0, 30)}` : c.assign !== 'none' ? 'Assign the chat' : label;
+        case 'optin':
+            return 'Subscribe';
         case 'optout':
             return c.scope === 'all' ? 'Unsubscribe' : 'Stop marketing';
         case 'hours':

@@ -141,6 +141,7 @@ export function messageOf(node: FlowNode): WaMessage | null {
                   }
                 : { text: c.text };
         }
+        case 'optin':
         case 'optout':
         case 'handoff':
         case 'end':

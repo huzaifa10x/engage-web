@@ -11,7 +11,9 @@ import { emptySelection, selectionError, TemplatePicker, type TemplateSelection 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ApiError, errorMessage } from '@/lib/api';
 import {
@@ -42,7 +44,7 @@ const OBJECTIVES: [CampaignObjective, string][] = [
 ];
 
 const CATEGORIES: [string, string, string][] = [
-    ['MARKETING', 'Marketing', 'Offers, news, re-engagement.'],
+    ['MARKETING', 'Marketing', 'Offers, news, re-engagement. Goes to opted-in contacts unless you include the others.'],
     ['UTILITY', 'Utility', 'Order updates, reminders, account notices about something the customer did.'],
     ['AUTHENTICATION', 'Authentication', 'One-time passcodes only.'],
 ];
@@ -94,9 +96,12 @@ export function CampaignDialog({
     const [segmentId, setSegmentId] = useState<string | null>(null);
     const [tag, setTag] = useState<string | null>(null);
     const [fieldFilter, setFieldFilter] = useState<FieldFilterValue | null>(null);
+    // Marketing goes to opted-in contacts; the sender may also include those with no recorded opt-in.
+    const [includeNonOptedIn, setIncludeNonOptedIn] = useState(false);
     const fields = useContactFields(open).data ?? [];
     const [uploading, setUploading] = useState(false);
     const [uploadNote, setUploadNote] = useState<string | null>(null);
+    const [csvConsent, setCsvConsent] = useState(false);
     const [selection, setSelection] = useState<TemplateSelection>(emptySelection);
     const [restore, setRestore] = useState<Campaign | null>(null); // draft whose template still has to be looked up
     const [previews, setPreviews] = useState<CampaignPreview[] | null>(null);
@@ -115,10 +120,12 @@ export function CampaignDialog({
         setSegmentId(campaign?.segment_id ?? null);
         setTag(campaign?.audience_tag ?? null);
         setFieldFilter(campaign?.audience_filter ?? null);
+        setIncludeNonOptedIn(campaign?.include_non_opted_in ?? false);
         setSelection(emptySelection);
         setRestore(campaign ?? null);
         setPreviews(null);
         setUploadNote(null);
+        setCsvConsent(false);
         setWhen('now');
         setError(null);
     }
@@ -145,6 +152,7 @@ export function CampaignDialog({
             template_id: selection.template?.id ?? null,
             phone_number_id: from?.id ?? null,
             filter: fieldFilter ? JSON.stringify(fieldFilter) : null,
+            include_non_opted_in: includeNonOptedIn,
         },
         open,
     );
@@ -170,7 +178,7 @@ export function CampaignDialog({
         setError(null);
         try {
             const label = `Upload ${new Date().toISOString().slice(0, 16).replace('T', ' ').replace(':', '.')}`;
-            const result = await importContacts(file, [label], false);
+            const result = await importContacts(file, [label], csvConsent);
             setTag(label);
             setSegmentId(null);
             setUploadNote(`${file.name}: ${result.created} added, ${result.updated} already existed, ${result.skipped} skipped. They are tagged “${label}”.`);
@@ -226,6 +234,7 @@ export function CampaignDialog({
             filter: fieldFilter,
             notes: notes.trim() || null,
             objective,
+            include_non_opted_in: marketing && includeNonOptedIn,
             media_id: selection.media?.id ?? campaign?.media_id ?? null,
             variables: variables(),
         };
@@ -378,12 +387,42 @@ export function CampaignDialog({
                             <Button type="button" variant="ghost" size="sm" onClick={() => downloadSampleCsv()}>
                                 <DownloadIcon /> Download sample CSV
                             </Button>
+                            <div className="flex items-start gap-2">
+                                <Checkbox id="cp-csv-consent" checked={csvConsent} onCheckedChange={(v) => setCsvConsent(v === true)} className="mt-0.5" />
+                                <Label htmlFor="cp-csv-consent" className="text-[12.5px] leading-snug font-normal text-muted-foreground">
+                                    Everyone in the file agreed to receive marketing from us on WhatsApp (recorded as opted in)
+                                </Label>
+                            </div>
                         </div>
                         <p className="mt-2 text-[12.5px] text-muted-foreground">
                             {uploadNote ??
                                 'Needs a “phone” column; name, email and tags are optional. Existing contacts are matched by number, never duplicated.'}
                         </p>
                     </div>
+
+                    {marketing && (
+                        <div className="grid gap-1.5">
+                            <div className="flex items-start gap-2">
+                                <Checkbox
+                                    id="cp-include-non-opted-in"
+                                    checked={includeNonOptedIn}
+                                    onCheckedChange={(v) => setIncludeNonOptedIn(v === true)}
+                                    className="mt-0.5"
+                                />
+                                <Label htmlFor="cp-include-non-opted-in" className="text-[13px] leading-snug font-normal">
+                                    Include contacts who have not opted in
+                                    {a?.not_opted_in ? ` (${a.not_opted_in.toLocaleString()})` : ''}
+                                </Label>
+                            </div>
+                            {includeNonOptedIn && (a?.not_opted_in ?? 0) > 0 && (
+                                <p role="alert" className="rounded-md border border-warn/30 bg-warn-bg px-3 py-2 text-[12.5px] leading-relaxed text-ink-2">
+                                    <span className="font-semibold">{(a?.not_opted_in ?? 0).toLocaleString()} recipients have no recorded opt-in.</span> If many
+                                    of them block or report the message, Meta lowers the number’s quality rating and can restrict or ban it. Contacts who opted
+                                    out are never included.
+                                </p>
+                            )}
+                        </div>
+                    )}
 
                     <div
                         className={`rounded-md border px-3 py-2.5 text-[13px] ${overPlan || redQuality ? 'border-bad/30 bg-bad-bg' : overTier ? 'border-warn/30 bg-warn-bg' : 'bg-muted'}`}
@@ -401,8 +440,10 @@ export function CampaignDialog({
                                             {' '}
                                             ({(a.matched - a.eligible).toLocaleString()} excluded:{' '}
                                             {a.category === 'MARKETING'
-                                                ? `opted out, no WhatsApp number${a.frequency_cap ? ', or already at the weekly limit' : ''}`
-                                                : 'opted out or no WhatsApp number'}
+                                                ? `${includeNonOptedIn ? '' : 'no opt-in, '}opted out, no WhatsApp number${a.frequency_cap ? ', or already at the weekly limit' : ''}`
+                                                : a.category
+                                                  ? 'opted out or no WhatsApp number'
+                                                  : 'opted out or no WhatsApp number; a marketing template also needs opt-in'}
                                             )
                                         </span>
                                     )}

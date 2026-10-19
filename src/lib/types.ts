@@ -478,6 +478,8 @@ export type Campaign = {
     failure_reason: string | null;
     stats: CampaignStats;
     created_at: string | null;
+    /** Marketing also goes to contacts with no recorded opt-in (never to opted-out ones). */
+    include_non_opted_in?: boolean;
 };
 
 export type CampaignForm = {
@@ -490,12 +492,15 @@ export type CampaignForm = {
     filter?: { match: 'all' | 'any'; rules: SegmentRule[] } | null;
     notes: string | null;
     objective: CampaignObjective | null;
+    include_non_opted_in?: boolean;
     variables: { header: string[]; body: string[]; buttons: Record<string, string> };
 };
 
 export type CampaignAudience = {
     matched: number;
     eligible: number;
+    /** Marketing: reachable contacts with no recorded opt-in (added when "include non-opted-in" is ticked). */
+    not_opted_in?: number;
     category: string | null;
     reach_limit: number | null;
     reach_used: number;
@@ -617,6 +622,8 @@ export type Billing = {
     vat: { applies: boolean; percent: number; country: string };
     has_payment_history: boolean;
     plans: BillingPlan[];
+    /** Trial or paid Stripe plan: the workspace may switch itself to Free. */
+    can_switch_to_free?: boolean;
 };
 
 export type BillingInvoice = {

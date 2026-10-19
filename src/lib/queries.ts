@@ -349,7 +349,14 @@ export const cancelCampaign = (id: string) => api<Data<Campaign>>(`campaigns/${i
 export const deleteCampaign = (id: string) => api(`campaigns/${id}`, { method: 'DELETE' });
 
 export const useCampaignAudience = (
-    filters: { segment_id: string | null; audience_tag: string | null; template_id: string | null; phone_number_id: string | null; filter?: string | null },
+    filters: {
+        segment_id: string | null;
+        audience_tag: string | null;
+        template_id: string | null;
+        phone_number_id: string | null;
+        filter?: string | null;
+        include_non_opted_in?: boolean;
+    },
     enabled = true,
 ) =>
     useQuery({

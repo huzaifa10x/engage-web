@@ -993,6 +993,17 @@ function Editor({ ctx, onWebhook }: { ctx: Ctx; onWebhook: (enabled: boolean) =>
                     <AssignPicker c={c} set={set} options={options} noneLabel="Don’t assign" />
                 </>
             );
+        case 'optin':
+            return (
+                <>
+                    <Hint>
+                        Records that the customer agreed to receive messages, marketing included. Put it after their “yes” — for example on a “Yes, send me
+                        offers” button of a Buttons block. (A reply of just “Subscribe” or “Start” is already recorded by the opt-in keywords.) It is saved in
+                        Compliance › Consent ledger like any other opt-in.
+                    </Hint>
+                    {text('Confirmation', LIMITS.body, undefined, 'Thank you! You’re subscribed to our updates.', 2)}
+                </>
+            );
         case 'optout':
             return (
                 <>

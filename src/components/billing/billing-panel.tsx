@@ -204,6 +204,11 @@ function PlanCard({
                         <Button variant="outline" className="w-full" disabled>
                             Switching on {date(billing.subscription.cancel_at)}
                         </Button>
+                    ) : billing.can_switch_to_free === false ? (
+                        // In-House or a plan set up by 10X Digital: changed by the platform team.
+                        <Button variant="outline" className="w-full" disabled title="Your plan is managed by 10X Digital">
+                            Contact us to switch
+                        </Button>
                     ) : (
                         <Button variant="outline" className="w-full" disabled={!canManage || busy} onClick={onSwitchFree}>
                             {busy ? 'One moment…' : 'Switch to Free'}
