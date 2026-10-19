@@ -478,6 +478,11 @@ export function CampaignDialog({
                             it approved the template). {CATEGORIES.find(([key]) => key === category)?.[2]}
                             {!marketing &&
                                 ` Only use a ${category.toLowerCase()} template for its real purpose: promotional content on a non-marketing template breaks WhatsApp’s policy and lowers your number’s quality rating.`}
+                            {marketing &&
+                                from &&
+                                (from.marketing_messages_status === 'onboarded'
+                                    ? ' Sends through Meta’s Marketing Messages API, with optimised delivery.'
+                                    : ' Sends through the Cloud API. Enable the Marketing Messages API in Channels for optimised delivery.')}
                         </p>
                     )}
                     {selection.template && selection.template.variables.body.length + selection.template.variables.header.length > 0 && (

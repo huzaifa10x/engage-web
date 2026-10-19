@@ -113,6 +113,8 @@ export type AuditEntry = {
 
 export type PhoneNumber = {
     id: string;
+    /** The Marketing Messages API status of the number's account. */
+    marketing_messages_status?: MarketingMessagesStatus;
     waba_account_id: string;
     phone_number_id: string;
     display_phone_number: string | null;
@@ -148,6 +150,25 @@ export type DailyLimit = {
     tier: string | null;
 };
 
+/** Meta's Marketing Messages API, per WhatsApp Business Account. Only Meta moves it to onboarded. */
+export type MarketingMessagesStatus = 'not_started' | 'eligible' | 'request_sent' | 'onboarded' | 'not_eligible';
+export type SendRoute = 'mm_api' | 'cloud_api';
+
+export type MarketingMessagesInfo = {
+    enabled: boolean;
+    status: MarketingMessagesStatus;
+    /** Where campaign marketing goes right now. */
+    route: SendRoute;
+    meta_status: string | null;
+    terms_status: string | null;
+    consent_source: string | null;
+    requested_at: string | null;
+    /** Why Meta refused our request: a portfolio admin then accepts in WhatsApp Manager. */
+    request_error: string | null;
+    onboarded_at: string | null;
+    synced_at: string | null;
+};
+
 export type WabaAccount = {
     id: string;
     waba_id: string;
@@ -162,6 +183,7 @@ export type WabaAccount = {
     is_subscribed_to_webhooks: boolean;
     connected_at: string | null;
     disconnected_at: string | null;
+    marketing_messages?: MarketingMessagesInfo;
     phone_numbers?: PhoneNumber[];
 };
 
@@ -418,6 +440,8 @@ export type CampaignStats = {
     read: number;
     failed: number;
     replied: number;
+    /** Which API delivered the campaign's messages. */
+    routes?: { mm_api: number; cloud_api: number };
 };
 
 export type Campaign = {
@@ -426,6 +450,8 @@ export type Campaign = {
     status: CampaignStatus;
     phone_number: { id: string; display: string | null } | null;
     template: { id: string | null; name: string; language: string; category: string | null };
+    /** How its marketing messages go out right now (never blocks sending). */
+    send_route?: SendRoute;
     variables: { header: string[]; body: string[]; buttons: Record<string, string> };
     media_id: string | null;
     segment_id: string | null;

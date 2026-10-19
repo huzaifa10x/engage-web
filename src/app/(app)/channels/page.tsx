@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
 import { ConnectWhatsappDialog } from '@/components/channels/connect-whatsapp-dialog';
+import { needsMarketingMessages } from '@/components/channels/marketing-messages';
 import { WabaCard } from '@/components/channels/waba-card';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -33,6 +34,7 @@ export default function ChannelsPage() {
     const usage = entitlements.data?.features.whatsapp_numbers;
     const connected = (accounts.data ?? []).filter((w) => w.status === 'connected');
     const disconnected = (accounts.data ?? []).filter((w) => w.status !== 'connected');
+    const notOnMm = connected.filter(needsMarketingMessages);
 
     const connectButton = canManage ? (
         <Button variant="whatsapp" onClick={() => setOpen(true)}>
@@ -74,6 +76,15 @@ export default function ChannelsPage() {
                 </Card>
             ) : (
                 <div className="grid gap-4">
+                    {notOnMm.length > 0 && (
+                        <p className="rounded-lg border border-info/25 bg-info-bg px-4 py-3 text-[13px] leading-relaxed text-ink-2">
+                            <span className="font-semibold">
+                                {notOnMm.length === 1 ? '1 account isn’t' : `${notOnMm.length} accounts aren’t`} on the Marketing Messages API yet.
+                            </span>{' '}
+                            Campaigns still send through the Cloud API; with the Marketing Messages API, Meta optimises the delivery of marketing campaigns. See
+                            each account below.
+                        </p>
+                    )}
                     {connected.map((w) => (
                         <WabaCard key={w.id} waba={w} canManage={canManage} />
                     ))}

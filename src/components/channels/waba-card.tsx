@@ -16,6 +16,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { MarketingMessagesPanel } from '@/components/channels/marketing-messages';
 import { SyncProgress, syncSummary } from '@/components/channels/sync-progress';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -108,6 +109,8 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                     </DropdownMenu>
                 )}
             </CardHeader>
+
+            <MarketingMessagesPanel waba={waba} canManage={canManage} />
 
             {numbers.length === 0 ? (
                 <p className="px-5 py-6 text-sm text-muted-foreground">No phone number yet. Add one in WhatsApp Manager, then refresh.</p>

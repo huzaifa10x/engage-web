@@ -84,6 +84,8 @@ export function CampaignDetailDialog({ campaign, onOpenChange }: { campaign: Cam
                         {campaign
                             ? `${campaign.template.name} · ${campaign.audience_name ?? 'All contacts'} · from ${campaign.phone_number?.display ?? 'removed number'}`
                             : ''}
+                        {campaign?.template.category === 'MARKETING' &&
+                            (campaign.send_route === 'mm_api' ? ' · Marketing Messages API (optimised delivery)' : ' · Cloud API')}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -127,6 +129,13 @@ export function CampaignDetailDialog({ campaign, onOpenChange }: { campaign: Cam
                             ))}
                         </div>
                         <Funnel sent={s.sent} delivered={s.delivered} read={s.read} failed={s.failed} />
+                        {s.routes && s.routes.mm_api + s.routes.cloud_api > 0 && (
+                            <p className="text-[12.5px] text-muted-foreground">
+                                Delivered through:{' '}
+                                <span className="font-medium text-foreground">Marketing Messages API {s.routes.mm_api.toLocaleString()}</span> · Cloud API{' '}
+                                {s.routes.cloud_api.toLocaleString()}
+                            </p>
+                        )}
                         {reasons.length > 0 && (
                             <div className="rounded-md border p-3 text-[13px]">
                                 <p className="font-semibold">Why some contacts did not get it</p>
