@@ -21,14 +21,28 @@ import {
 } from 'lucide-react';
 
 import { P, type PermissionKey } from '@/lib/permissions';
+import { SHOW_UNRELEASED } from '@/lib/release';
 
+/**
+ * A module's place in the release cycle:
+ *  - no `href`        → upcoming: a "Soon" placeholder on staging and locally, hidden in production;
+ *  - `preview: true`  → built and under review: a working link on staging and locally, hidden in production;
+ *  - otherwise        → released: shown everywhere.
+ * To release a module, give it its `href` and remove `preview`; the next production deploy shows it.
+ */
 export type NavItem = {
     label: string;
     icon: LucideIcon;
-    href?: string; // undefined = module not released yet
+    href?: string;
     permission?: PermissionKey;
+    preview?: boolean;
 };
 export type NavSection = { title: string; items: NavItem[] };
+
+export const isReleased = (item: NavItem): boolean => !!item.href && !item.preview;
+
+/** Whether this build shows the item at all (permissions are checked separately). */
+export const isVisible = (item: NavItem): boolean => SHOW_UNRELEASED || isReleased(item);
 
 /** Same information architecture as the prototype; modules ship phase by phase. */
 export const NAV: NavSection[] = [
@@ -71,3 +85,8 @@ export const NAV: NavSection[] = [
         ],
     },
 ];
+
+/** Routes of modules that are not released yet; production treats them as not found. */
+export const UNRELEASED_ROUTES: string[] = NAV.flatMap((s) => s.items)
+    .filter((i) => i.href && i.preview)
+    .map((i) => i.href!.split('?')[0]!);

@@ -1,17 +1,19 @@
 'use client';
 
 import { MenuIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, XIcon } from 'lucide-react';
-import { usePathname } from 'next/navigation';
+import { notFound, usePathname } from 'next/navigation';
 import { useState } from 'react';
 
 import { Logo } from '@/components/brand/logo';
 import { useStored } from '@/hooks/use-stored';
+import { SHOW_UNRELEASED } from '@/lib/release';
 import { cn } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 
 import { ChannelDisconnectedBanner, ImpersonationBanner, TrialBanner } from './banners';
 import { NotificationBell } from './notification-bell';
+import { UNRELEASED_ROUTES } from './nav';
 import { NumberSwitcher } from './number-switcher';
 import { Sidebar } from './sidebar';
 import { UserMenu } from './user-menu';
@@ -24,6 +26,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // The inbox is an app-within-the-app: full height, panes scroll independently.
     const pathname = usePathname();
     const fullBleed = pathname.startsWith('/inbox');
+
+    // A module still in review is not reachable in production, not even by typing its address.
+    if (!SHOW_UNRELEASED && UNRELEASED_ROUTES.some((r) => pathname === r || pathname.startsWith(`${r}/`))) notFound();
 
     // The chatbot builder takes the whole screen: its own top bar replaces the app's sidebar and header.
     if (pathname.startsWith('/chatbots/builder')) {

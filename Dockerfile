@@ -15,10 +15,13 @@ ARG NEXT_PUBLIC_REVERB_HOST=""
 ARG NEXT_PUBLIC_REVERB_PORT="443"
 ARG NEXT_PUBLIC_REVERB_SCHEME="https"
 ARG BACKEND_URL="http://app:8000"
+# staging | production. Unfinished modules are hidden unless this says otherwise (src/lib/release.ts).
+ARG NEXT_PUBLIC_APP_ENV="production"
 ENV NEXT_PUBLIC_REVERB_KEY=$NEXT_PUBLIC_REVERB_KEY \
     NEXT_PUBLIC_REVERB_HOST=$NEXT_PUBLIC_REVERB_HOST \
     NEXT_PUBLIC_REVERB_PORT=$NEXT_PUBLIC_REVERB_PORT \
     NEXT_PUBLIC_REVERB_SCHEME=$NEXT_PUBLIC_REVERB_SCHEME \
+    NEXT_PUBLIC_APP_ENV=$NEXT_PUBLIC_APP_ENV \
     BACKEND_URL=$BACKEND_URL
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -30,6 +33,8 @@ ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 RUN addgroup -S app && adduser -S app -G app
 COPY --from=build --chown=app:app /app/.next/standalone ./
 COPY --from=build --chown=app:app /app/.next/static ./.next/static
+# Static files (brand artwork: the logo used by emails, PWA icons). Standalone output leaves them out.
+COPY --from=build --chown=app:app /app/public ./public
 USER app
 EXPOSE 3000
 CMD ["node", "server.js"]

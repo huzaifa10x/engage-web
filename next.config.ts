@@ -37,7 +37,7 @@ const nextConfig: NextConfig = {
                 // Pages must never be cached by a CDN or the browser: after a deploy, a cached page
                 // points at script files of the previous build, which no longer exist (404s and a
                 // broken screen). The hashed files under /_next/static stay cacheable forever.
-                source: '/((?!_next/static|_next/image|favicon.ico).*)',
+                source: '/((?!_next/static|_next/image|favicon.ico|brand/).*)',
                 headers: [
                     { key: 'Cache-Control', value: 'private, no-cache, no-store, max-age=0, must-revalidate' },
                     { key: 'CDN-Cache-Control', value: 'no-store' },

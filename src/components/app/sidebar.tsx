@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { Logo } from '@/components/brand/logo';
 import { cn } from '@/lib/utils';
 
-import { NAV } from './nav';
+import { isVisible, NAV } from './nav';
 import { useSession } from './session';
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
@@ -20,7 +20,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             </div>
             <div className="flex-1 overflow-y-auto px-3 pb-4">
                 {NAV.map((section) => {
-                    const items = section.items.filter((i) => !i.permission || can(i.permission));
+                    const items = section.items.filter((i) => isVisible(i) && (!i.permission || can(i.permission)));
                     if (items.length === 0) return null;
 
                     return (
@@ -60,6 +60,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                                             >
                                                 <Icon className="size-4" />
                                                 {item.label}
+                                                {item.preview && (
+                                                    <span
+                                                        className="ml-auto rounded bg-sidebar-2 px-1.5 py-0.5 text-[10px] font-semibold"
+                                                        title="In review: hidden in production"
+                                                    >
+                                                        Preview
+                                                    </span>
+                                                )}
                                             </Link>
                                         </li>
                                     );
