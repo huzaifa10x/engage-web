@@ -8,6 +8,9 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 
 import { Field, FormError } from '@/components/app/field';
+import { AcquisitionCard } from '@/components/growth/acquisition-card';
+import { StageHistory } from './stage-history';
+import { StageSelect } from './stage-select';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -182,6 +185,16 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
                         {editing ? 'The WhatsApp number identifies the contact and cannot be changed.' : 'Contacts who message you are added automatically.'}
                     </DialogDescription>
                 </DialogHeader>
+                {editing && contact && (
+                    <section className="grid gap-2 rounded-lg border p-3.5" aria-label="Stage">
+                        <div className="flex items-center justify-between gap-2">
+                            <h3 className="text-[13.5px] font-semibold">Stage</h3>
+                            <StageSelect contact={contact} />
+                        </div>
+                        <StageHistory contactId={contact.id} />
+                    </section>
+                )}
+                {editing && contact && <AcquisitionCard contact={contact} />}
                 <form id="contact-form" onSubmit={onSubmit} className="grid gap-4" noValidate>
                     <FormError message={formError} />
                     <Field

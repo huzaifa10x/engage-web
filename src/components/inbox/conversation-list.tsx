@@ -3,6 +3,7 @@
 import { BotIcon, InboxIcon, SearchIcon } from 'lucide-react';
 import { useState } from 'react';
 
+import { SourceChip } from '@/components/growth/source-chip';
 import { Avatar } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -198,6 +199,7 @@ export function ConversationList({
                                             </span>
                                         )}
                                     </span>
+                                    {c.contact?.acquisition && <SourceChip acquisition={c.contact.acquisition} compact className="mt-1 mr-1" />}
                                     {c.handler === 'bot' ? (
                                         <span
                                             className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-info-bg px-1.5 py-px text-[10.5px] font-semibold text-info"

@@ -71,6 +71,9 @@ export type Me = {
     permissions: string[];
     impersonation: { admin_name: string | null; reason: string | null; expires_at: string } | null;
     entitlements: EntitlementSnapshot | null;
+    /** Growth Hub pilot switch for the active workspace (set by 10X Engage, not part of a plan). */
+    /** tier: off | chip (Starter: Meta ad source chip only) | full (Growth Hub and Analytics → Marketing). */
+    growth?: { enabled: boolean; tier?: 'off' | 'chip' | 'full' };
 };
 
 export type FeatureUsage = {
@@ -252,6 +255,60 @@ export type Contact = {
     marketing_opted_out: boolean;
     last_inbound_at: string | null;
     created_at: string | null;
+    /** Growth Hub: where this lead came from. null when Growth Hub is off. Agents get status + label only. */
+    acquisition?: Acquisition | null;
+    /** CRM pipeline stage; null = no stage yet. */
+    stage?: StageRef | null;
+    stage_changed_at?: string | null;
+};
+
+export type StageColor = 'grey' | 'info' | 'good' | 'warn' | 'bad' | 'brand';
+
+export type StageRef = { id: string; name: string; color: StageColor; archived: boolean };
+
+export type CrmStage = StageRef & { position: number; contacts?: number };
+
+export type StageEvent = { id: string; from: StageRef | null; to: StageRef | null; changed_by: string | null; source: string; changed_at: string };
+
+export type AcquisitionStatus = 'meta' | 'ref' | 'multi' | 'web' | 'unattributed' | 'before';
+
+export type AcquisitionTouch = {
+    evidence_id?: string;
+    type?: string;
+    occurred_at?: string;
+    source?: string;
+    label: string;
+    platform?: string | null;
+    headline?: string | null;
+    campaign?: string | null;
+    landing_path?: string | null;
+};
+
+export type Acquisition = {
+    status: AcquisitionStatus;
+    /** Chip text, e.g. "Meta ad", "Meta ad · Instagram", "Before tracking · Latest: Meta ad". */
+    label: string;
+    // Only with growth.view:
+    original?: AcquisitionTouch;
+    latest?: AcquisitionTouch | null;
+    first_tracked_enquiry_at?: string | null;
+    landing_page?: string | null;
+    confidence?: 'confirmed' | null;
+};
+
+/** One piece of proof behind a lead's source (growth.view). IDs are masked. */
+export type LeadEvidence = {
+    id: string;
+    type: 'meta_ctwa' | 'website_reference' | 'website_unregistered' | (string & {});
+    source: string;
+    label: string;
+    confidence: string;
+    conflict: boolean;
+    occurred_at: string;
+    message_id: string | null;
+    platform: string | null;
+    platform_proof: string | null;
+    details: { headline?: string; body?: string; source_type?: string; media_type?: string; source_url?: string; ad_id?: string; click_id?: string };
 };
 
 export type Conversation = {

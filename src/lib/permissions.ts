@@ -34,6 +34,9 @@ export const P = {
     ChatbotsView: 'chatbots.view',
     ChatbotsManage: 'chatbots.manage',
     ChatbotsPublish: 'chatbots.publish',
+    GrowthView: 'growth.view',
+    GrowthManage: 'growth.manage',
+    InboxRawText: 'inbox.raw_text',
 } as const;
 
 export type PermissionKey = (typeof P)[keyof typeof P];

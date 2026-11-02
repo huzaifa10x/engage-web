@@ -4,6 +4,8 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 
 import { ResizeHandle } from '@/components/app/resize-handle';
+import { StageSelect } from '@/components/contacts/stage-select';
+import { SourceSection } from '@/components/growth/source-section';
 import { useSession } from '@/components/app/session';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -85,6 +87,8 @@ export function ContactPanel({ conversation }: { conversation: Conversation }) {
                     {contact.username && <p className="text-[13px] text-muted-foreground">@{contact.username}</p>}
                 </div>
 
+                <SourceSection contact={contact} />
+
                 <section className="grid gap-3 border-b px-5 py-4 text-[13px]">
                     <div className="flex items-center justify-between">
                         <span className="text-muted-foreground">Service window</span>
@@ -104,6 +108,10 @@ export function ContactPanel({ conversation }: { conversation: Conversation }) {
                                 {conversation.status === 'open' ? 'Close' : 'Reopen'}
                             </Button>
                         )}
+                    </div>
+                    <div className="grid gap-1.5">
+                        <span className="text-muted-foreground">Stage</span>
+                        <StageSelect contact={contact} className="w-full" />
                     </div>
                     <div className="grid gap-1.5">
                         <span className="text-muted-foreground">Assigned to</span>
@@ -172,7 +180,7 @@ export function ContactPanel({ conversation }: { conversation: Conversation }) {
                                 <dd className="truncate">{contact.email}</dd>
                             </>
                         )}
-                        <dt className="text-muted-foreground">Source</dt>
+                        <dt className="text-muted-foreground">{contact.acquisition ? 'Added via' : 'Source'}</dt>
                         <dd>{humanize(contact.source)}</dd>
                         <dt className="text-muted-foreground">Last message</dt>
                         <dd>{dateTime(contact.last_inbound_at)}</dd>

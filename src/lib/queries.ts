@@ -4,6 +4,9 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api, upload } from './api';
 import type {
+    CrmStage,
+    LeadEvidence,
+    StageEvent,
     ApiKey,
     Integration,
     IntegrationEvent,
@@ -65,6 +68,9 @@ import type {
 
 export const keys = {
     me: ['me'] as const,
+    leadEvidence: (contactId: string) => ['growth', 'evidence', contactId] as const,
+    stages: ['crm', 'stages'] as const,
+    stageHistory: (contactId: string) => ['crm', 'stage-history', contactId] as const,
     tenant: ['tenant'] as const,
     entitlements: ['entitlements'] as const,
     roles: ['roles'] as const,
@@ -217,7 +223,15 @@ export const useThread = (id: string | null, refetchInterval: number | false = f
     });
 
 /** `filter`: JSON {match, rules} of conditions on custom fields (see FieldFilter). */
-export type ContactFilters = { q?: string; consent?: ConsentState; tag?: string; segment_id?: string; synced_from?: string; filter?: string };
+export type ContactFilters = {
+    q?: string;
+    consent?: ConsentState;
+    tag?: string;
+    segment_id?: string;
+    synced_from?: string;
+    filter?: string;
+    stage_id?: string;
+};
 
 export const useContacts = (filters: ContactFilters) =>
     useInfiniteQuery({
@@ -616,3 +630,22 @@ export const saveIntegrationRule = (id: string, event: string, body: Omit<Integr
 
 export const testIntegrationRule = (id: string, event: string, phone: string) =>
     api(`integrations/${id}/rules/${event}/test`, { method: 'POST', body: { phone } });
+
+/** Growth Hub: the proof behind one lead's source (Owner, Admin; IDs masked by the server). */
+export const useLeadEvidence = (contactId: string | undefined, enabled = true) =>
+    useQuery({
+        queryKey: keys.leadEvidence(contactId ?? ''),
+        queryFn: () => api<Data<LeadEvidence[]>>(`growth/leads/${contactId}/evidence`).then((r) => r.data),
+        enabled: enabled && !!contactId,
+    });
+
+/** The workspace's CRM pipeline stages, in order (archived ones only when asked). */
+export const useStages = (enabled = true) =>
+    useQuery({ queryKey: keys.stages, queryFn: () => api<Data<CrmStage[]>>('crm/stages').then((r) => r.data), enabled, staleTime: 60_000 });
+
+export const useStageHistory = (contactId: string | undefined, enabled = true) =>
+    useQuery({
+        queryKey: keys.stageHistory(contactId ?? ''),
+        queryFn: () => api<Data<StageEvent[]>>(`contacts/${contactId}/stage-history`).then((r) => r.data),
+        enabled: enabled && !!contactId,
+    });

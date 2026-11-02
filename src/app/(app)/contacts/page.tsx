@@ -22,6 +22,8 @@ import { toast } from 'sonner';
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
 import { ContactDialog } from '@/components/contacts/contact-dialog';
+import { SourceChip } from '@/components/growth/source-chip';
+import { StageSelect } from '@/components/contacts/stage-select';
 import { CrmSettingsDialog } from '@/components/contacts/crm-settings-dialog';
 import { describeRule, FieldFilter, type FieldFilterValue, formatFieldValue } from '@/components/contacts/field-filter';
 import { ImportContactsDialog } from '@/components/contacts/import-dialog';
@@ -59,7 +61,7 @@ import { api, errorMessage } from '@/lib/api';
 import { humanize, relative } from '@/lib/format';
 import { P } from '@/lib/permissions';
 import { useStored } from '@/hooks/use-stored';
-import { type ContactFilters, keys, useContactFields, useContacts, usePhoneNumbers, useSegments, useTags } from '@/lib/queries';
+import { type ContactFilters, keys, useContactFields, useContacts, usePhoneNumbers, useSegments, useStages, useTags } from '@/lib/queries';
 import type { ConsentState, Contact, Segment } from '@/lib/types';
 
 const ALL = '__all__';
@@ -78,6 +80,7 @@ export default function ContactsPage() {
     const [segmentEditing, setSegmentEditing] = useState<Segment | null | undefined>(undefined); // undefined = closed, null = new
     const segments = useSegments(can(P.ContactsView));
     const tags = useTags(can(P.ContactsView));
+    const stages = (useStages(can(P.ContactsView)).data ?? []).filter((s) => !s.archived);
     const fields = useContactFields(can(P.ContactsView)).data ?? [];
     const [fieldFilter, setFieldFilter] = useState<FieldFilterValue | null>(null);
     // Custom fields shown as columns: remembered per browser (comma-separated keys).
@@ -85,7 +88,7 @@ export default function ContactsPage() {
     const columnKeys = columnsRaw.split(',').filter((k) => k !== '');
     const columns = fields.filter((f) => columnKeys.includes(f.key));
     const toggleColumn = (key: string) => setColumnsRaw((columnKeys.includes(key) ? columnKeys.filter((k) => k !== key) : [...columnKeys, key]).join(','));
-    const filtered = Boolean(filters.q || filters.consent || filters.tag || filters.segment_id || filters.synced_from || filters.filter);
+    const filtered = Boolean(filters.q || filters.consent || filters.tag || filters.segment_id || filters.synced_from || filters.filter || filters.stage_id);
     // Numbers shared with the WhatsApp Business app: the only ones contacts can have been synced from.
     const syncNumbers = (usePhoneNumbers().data ?? []).filter((n) => n.onboarding_type === 'coexistence');
     const [exporting, setExporting] = useState(false);
@@ -174,6 +177,22 @@ export default function ContactsPage() {
                             {syncNumbers.map((n) => (
                                 <SelectItem key={n.id} value={n.id}>
                                     Synced from {n.verified_name ?? n.display_phone_number}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                )}
+                {stages.length > 0 && (
+                    <Select value={filters.stage_id ?? ALL} onValueChange={(v) => setFilters((f) => ({ ...f, stage_id: v === ALL ? undefined : v }))}>
+                        <SelectTrigger className="w-40" aria-label="Stage">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value={ALL}>Any stage</SelectItem>
+                            <SelectItem value="none">No stage</SelectItem>
+                            {stages.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                    {s.name}
                                 </SelectItem>
                             ))}
                         </SelectContent>
@@ -283,6 +302,7 @@ export default function ContactsPage() {
                                 <TableHead>Contact</TableHead>
                                 <TableHead>WhatsApp</TableHead>
                                 <TableHead>Tags</TableHead>
+                                <TableHead>Stage</TableHead>
                                 <TableHead>Consent</TableHead>
                                 <TableHead>Last message</TableHead>
                                 <TableHead>Source</TableHead>
@@ -318,6 +338,9 @@ export default function ContactsPage() {
                                             {c.tags.length > 3 && <Badge tone="grey">+{c.tags.length - 3}</Badge>}
                                         </div>
                                     </TableCell>
+                                    <TableCell onClick={(e) => e.stopPropagation()}>
+                                        <StageSelect contact={c} />
+                                    </TableCell>
                                     <TableCell>
                                         <Badge tone={c.consent_state === 'opted_out' ? 'bad' : c.consent_state === 'opted_in' ? 'good' : 'grey'}>
                                             {humanize(c.consent_state)}
@@ -343,6 +366,7 @@ export default function ContactsPage() {
                                         ) : (
                                             humanize(c.source)
                                         )}
+                                        {c.acquisition && <SourceChip acquisition={c.acquisition} compact className="mt-1 block w-fit max-w-52" />}
                                     </TableCell>
                                     {columns.map((f) => (
                                         <TableCell

@@ -15,6 +15,7 @@ import { deleteContactField, deleteSegment, deleteTag, keys, useContactFieldsInf
 import type { ContactField, Segment } from '@/lib/types';
 
 import { ContactFieldDialog, typeLabel } from './contact-field-dialog';
+import { StagesTab } from './stages-tab';
 
 /** One place to manage what contacts are organised by: segments, tags and custom fields. */
 export function CrmSettingsDialog({
@@ -58,7 +59,7 @@ export function CrmSettingsDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
                 <DialogHeader>
-                    <DialogTitle>Segments, tags and fields</DialogTitle>
+                    <DialogTitle>Segments, tags, fields and stages</DialogTitle>
                     <DialogDescription>Organise contacts so campaigns reach the right people.</DialogDescription>
                 </DialogHeader>
                 <Tabs defaultValue="segments">
@@ -66,6 +67,7 @@ export function CrmSettingsDialog({
                         <TabsTrigger value="segments">Segments</TabsTrigger>
                         <TabsTrigger value="tags">Tags</TabsTrigger>
                         <TabsTrigger value="fields">Custom fields</TabsTrigger>
+                        <TabsTrigger value="stages">Stages</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="segments" className="grid gap-2">
@@ -101,6 +103,10 @@ export function CrmSettingsDialog({
                                 <PlusIcon /> New segment
                             </Button>
                         )}
+                    </TabsContent>
+
+                    <TabsContent value="stages">
+                        <StagesTab open={open} />
                     </TabsContent>
 
                     <TabsContent value="tags" className="grid gap-2">
