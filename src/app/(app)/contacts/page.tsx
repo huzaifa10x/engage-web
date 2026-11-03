@@ -23,7 +23,7 @@ import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header'
 import { useSession } from '@/components/app/session';
 import { ContactDialog } from '@/components/contacts/contact-dialog';
 import { SourceChip } from '@/components/growth/source-chip';
-import { StageSelect } from '@/components/contacts/stage-select';
+import { StageBadge } from '@/components/contacts/stage-badge';
 import { CrmSettingsDialog } from '@/components/contacts/crm-settings-dialog';
 import { describeRule, FieldFilter, type FieldFilterValue, formatFieldValue } from '@/components/contacts/field-filter';
 import { ImportContactsDialog } from '@/components/contacts/import-dialog';
@@ -338,8 +338,8 @@ export default function ContactsPage() {
                                             {c.tags.length > 3 && <Badge tone="grey">+{c.tags.length - 3}</Badge>}
                                         </div>
                                     </TableCell>
-                                    <TableCell onClick={(e) => e.stopPropagation()}>
-                                        <StageSelect contact={c} />
+                                    <TableCell>
+                                        <StageBadge stage={c.stage} />
                                     </TableCell>
                                     <TableCell>
                                         <Badge tone={c.consent_state === 'opted_out' ? 'bad' : c.consent_state === 'opted_in' ? 'good' : 'grey'}>

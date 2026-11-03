@@ -7,10 +7,16 @@ import { Button } from '@/components/ui/button';
 import { P } from '@/lib/permissions';
 import type { Contact } from '@/lib/types';
 
+import { LeadDetails, SOURCE_NOTE } from './lead-details';
 import { SourceChip } from './source-chip';
-import { SOURCE_NOTE, SourceDetailsDialog } from './source-details';
 
-/** Conversations › chat sidebar › Source. Agents see the chip only; details need growth.view. */
+/**
+ * Conversations › chat sidebar › Source (Technical Specification v1.2 §6, prototype): status chip,
+ * source name, campaign (only from permitted evidence) and landing page, the explanation for
+ * Multiple sources / details unavailable / Before tracking, and "View source details" (opens Lead
+ * details; not for Agents). Agents see the source to tailor the reply, never codes or click IDs.
+ * Starter (chip tier): the chip only.
+ */
 export function SourceSection({ contact }: { contact: Contact }) {
     const { can, me } = useSession();
     const full = me.growth?.tier === 'full';
@@ -18,45 +24,39 @@ export function SourceSection({ contact }: { contact: Contact }) {
     const a = contact.acquisition;
     if (!a) return null;
 
-    const details = full && can(P.GrowthView); // Starter: the chip only
-    const touch = a.original && a.status !== 'before' ? a.original : a.latest;
+    const evidence = full && can(P.GrowthView);
+    const s = a.source;
 
     return (
         <section className="grid gap-2 border-b px-5 py-4 text-[13px]" aria-label="Lead source">
-            <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground">Source</span>
+            <h4 className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Source</h4>
+            <div className="grid gap-1.5 rounded-lg border bg-muted/40 p-3">
                 <SourceChip acquisition={a} />
+                {full && s && (
+                    <>
+                        <p className="text-[15px] font-semibold">{s.name}</p>
+                        <p className="text-[12.5px] break-words text-muted-foreground">{s.campaign ?? 'No campaign details'}</p>
+                        {s.landing_page && (
+                            <p className="text-[12.5px]">
+                                Landing page: <b className="font-mono text-[12px] break-all">{s.landing_page}</b>
+                            </p>
+                        )}
+                    </>
+                )}
+                {full && SOURCE_NOTE[a.status] && <p className="mt-1 rounded-md bg-card px-2.5 py-1.5 text-[12px] leading-snug">{SOURCE_NOTE[a.status]}</p>}
+                {evidence && (
+                    <>
+                        <Button size="sm" variant="outline" className="mt-1.5 w-full" onClick={() => setOpen(true)}>
+                            View source details
+                        </Button>
+                        <LeadDetails contact={contact} open={open} onOpenChange={setOpen} />
+                    </>
+                )}
             </div>
-            {details && touch && (
-                <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
-                    {touch.headline && (
-                        <>
-                            <dt className="text-muted-foreground">Ad headline</dt>
-                            <dd className="break-words">{touch.headline}</dd>
-                        </>
-                    )}
-                    {touch.campaign && (
-                        <>
-                            <dt className="text-muted-foreground">Campaign</dt>
-                            <dd className="break-words">{touch.campaign}</dd>
-                        </>
-                    )}
-                    {a.landing_page && (
-                        <>
-                            <dt className="text-muted-foreground">Landing page</dt>
-                            <dd className="font-mono text-[12px] break-all">{a.landing_page}</dd>
-                        </>
-                    )}
-                </dl>
-            )}
-            {SOURCE_NOTE[a.status] && <p className="text-[12px] leading-snug text-muted-foreground">{SOURCE_NOTE[a.status]}</p>}
-            {details && (
-                <>
-                    <Button size="sm" variant="outline" className="w-fit" onClick={() => setOpen(true)}>
-                        View source details
-                    </Button>
-                    <SourceDetailsDialog contact={contact} open={open} onOpenChange={setOpen} />
-                </>
+            {full && !evidence && (
+                <p className="text-[12px] leading-snug text-muted-foreground">
+                    You see the source to tailor your reply. Codes, click IDs and costs are hidden for agents.
+                </p>
             )}
         </section>
     );

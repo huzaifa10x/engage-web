@@ -3,7 +3,7 @@
 import { dateTime } from '@/lib/format';
 import { useStageHistory } from '@/lib/queries';
 
-import { StageBadge } from './stage-select';
+import { StageBadge } from './stage-badge';
 
 /** The last stage changes of a contact (newest first). */
 export function StageHistory({ contactId, limit = 5 }: { contactId: string; limit?: number }) {

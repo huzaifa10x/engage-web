@@ -288,6 +288,8 @@ export type Acquisition = {
     status: AcquisitionStatus;
     /** Chip text, e.g. "Meta ad", "Meta ad · Instagram", "Before tracking · Latest: Meta ad". */
     label: string;
+    /** Source panel line (full tier, every role that sees the chat): no codes, click IDs or costs. */
+    source?: { name: string; campaign: string | null; landing_page: string | null };
     // Only with growth.view:
     original?: AcquisitionTouch;
     latest?: AcquisitionTouch | null;
@@ -308,7 +310,8 @@ export type LeadEvidence = {
     message_id: string | null;
     platform: string | null;
     platform_proof: string | null;
-    details: { headline?: string; body?: string; source_type?: string; media_type?: string; source_url?: string; ad_id?: string; click_id?: string };
+    /** Meta ad referral only. The ad click ID itself is never sent, only whether Meta included one. */
+    details: { headline?: string; body?: string; source_type?: string; source_url?: string; ad_id?: string; click_id_sent?: boolean };
 };
 
 export type Conversation = {

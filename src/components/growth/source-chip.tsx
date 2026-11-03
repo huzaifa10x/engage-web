@@ -2,14 +2,27 @@ import { Badge, type Tone } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { Acquisition, AcquisitionStatus } from '@/lib/types';
 
-/** Growth Hub lead status colours (Blueprint v1.4): one look in the inbox, CRM and Leads. */
+/**
+ * Growth Hub lead status colours, as in the R1 prototype: Reference matched green, Meta ad blue,
+ * Multiple sources violet, Website · details unavailable teal, Unattributed grey, Before tracking amber.
+ */
 export const SOURCE_TONE: Record<AcquisitionStatus, Tone> = {
-    meta: 'info',
     ref: 'good',
-    multi: 'brand',
-    web: 'warn',
+    meta: 'info',
+    multi: 'violet',
+    web: 'teal',
     unattributed: 'grey',
-    before: 'grey',
+    before: 'warn',
+};
+
+/** Acquisition card › Confidence: the line under the chip (prototype wording). */
+export const CONFIDENCE_TEXT: Record<AcquisitionStatus, string> = {
+    ref: 'Confirmed · website reference',
+    meta: 'Confirmed · Meta referral',
+    multi: 'Confirmed · two sources (conflict kept)',
+    web: 'Website, details unavailable',
+    unattributed: 'Unknown',
+    before: 'Before tracking',
 };
 
 /** The coloured source chip. Renders nothing when Growth Hub is off for the workspace. */

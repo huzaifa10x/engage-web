@@ -1,10 +1,13 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { ResizeHandle } from '@/components/app/resize-handle';
-import { StageSelect } from '@/components/contacts/stage-select';
+import { ChangeStageButton } from '@/components/contacts/change-stage-dialog';
+import { ContactDialog } from '@/components/contacts/contact-dialog';
+import { StageBadge } from '@/components/contacts/stage-badge';
 import { SourceSection } from '@/components/growth/source-section';
 import { useSession } from '@/components/app/session';
 import { Avatar } from '@/components/ui/avatar';
@@ -26,6 +29,7 @@ export function ContactPanel({ conversation }: { conversation: Conversation }) {
     const members = useMembers(can(P.TeamView) && can(P.InboxAssign));
     const contact = conversation.contact;
     const [width, setWidth] = useStored<number>('engage.inbox.panel-width', 320);
+    const [crmOpen, setCrmOpen] = useState(false);
 
     const refresh = () => {
         void qc.invalidateQueries({ queryKey: keys.conversation(conversation.id) });
@@ -89,6 +93,28 @@ export function ContactPanel({ conversation }: { conversation: Conversation }) {
 
                 <SourceSection contact={contact} />
 
+                {/* Contacts & CRM owns the stage: shown here, changed only through "Change stage" (prototype › Contact). */}
+                <section className="grid gap-2.5 border-b px-5 py-4 text-[13px]" aria-label="Contact">
+                    <h4 className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Contact</h4>
+                    <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5">
+                        <dt className="text-muted-foreground">Stage</dt>
+                        <dd>
+                            <StageBadge stage={contact.stage} />
+                        </dd>
+                        <dt className="text-muted-foreground">First contact</dt>
+                        <dd>{dateTime(contact.created_at)}</dd>
+                    </dl>
+                    <div className="flex flex-wrap gap-2">
+                        <ChangeStageButton contact={contact} />
+                        {can(P.ContactsView) && (
+                            <Button size="sm" variant="outline" onClick={() => setCrmOpen(true)}>
+                                Open CRM record
+                            </Button>
+                        )}
+                    </div>
+                    {crmOpen && <ContactDialog open={crmOpen} onOpenChange={setCrmOpen} contact={contact} />}
+                </section>
+
                 <section className="grid gap-3 border-b px-5 py-4 text-[13px]">
                     <div className="flex items-center justify-between">
                         <span className="text-muted-foreground">Service window</span>
@@ -108,10 +134,6 @@ export function ContactPanel({ conversation }: { conversation: Conversation }) {
                                 {conversation.status === 'open' ? 'Close' : 'Reopen'}
                             </Button>
                         )}
-                    </div>
-                    <div className="grid gap-1.5">
-                        <span className="text-muted-foreground">Stage</span>
-                        <StageSelect contact={contact} className="w-full" />
                     </div>
                     <div className="grid gap-1.5">
                         <span className="text-muted-foreground">Assigned to</span>

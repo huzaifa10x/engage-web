@@ -14,6 +14,8 @@ const badgeVariants = cva(
                 info: 'bg-info-bg text-info',
                 grey: 'bg-grey-bg text-grey',
                 brand: 'bg-brand-100 text-brand-600',
+                violet: 'bg-[#f1ebff] text-[#5b3fc9]',
+                teal: 'bg-[#e6f7f4] text-[#0b7c6a]',
                 outline: 'border text-muted-foreground',
             },
         },
