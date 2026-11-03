@@ -11,7 +11,6 @@ import { Field, FormError } from '@/components/app/field';
 import { AcquisitionCard } from '@/components/growth/acquisition-card';
 import { StageHistory } from './stage-history';
 import { StageBadge } from './stage-badge';
-import { ChangeStageButton } from './change-stage-dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -20,7 +19,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api, ApiError } from '@/lib/api';
 import { applyServerErrors } from '@/lib/form';
-import { keys, useContactFields, useTags } from '@/lib/queries';
+import { useSession } from '@/components/app/session';
+import { keys, useContactFields, useStages, useTags } from '@/lib/queries';
 import type { Contact, ContactField } from '@/lib/types';
 
 import { TagInput } from './tag-input';
@@ -32,6 +32,8 @@ const schema = z.object({
     opted_in: z.boolean(),
 });
 type Values = z.infer<typeof schema>;
+
+const NO_STAGE = '__none__';
 
 type AttributeValue = string | boolean | string[] | undefined;
 
@@ -116,8 +118,16 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
     const [tags, setTags] = useState<string[]>([]);
     const [attributes, setAttributes] = useState<Record<string, AttributeValue>>({});
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+    // Contacts & CRM only shows the stage. Owners and Admins may set it here as part of editing the
+    // contact; everyone else changes it from the chat or Growth Hub › Leads.
+    const { membership } = useSession();
+    const role = membership.role?.is_system ? membership.role.key : null;
+    const editsStage = editing && (role === 'owner' || role === 'admin');
+    const stages = (useStages(open && editsStage).data ?? []).filter((s) => !s.archived);
+    const [stageId, setStageId] = useState<string>(NO_STAGE);
     if (open && loaded !== (contact?.id ?? null)) {
         setLoaded(contact?.id ?? null);
+        setStageId(contact?.stage?.id ?? NO_STAGE);
         setTags(contact?.tags ?? []);
         setAttributes(Object.fromEntries(Object.entries(contact?.attributes ?? {}).map(([k, v]) => [k, toFormValue(v)])));
         setFieldErrors({});
@@ -146,6 +156,13 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
         try {
             if (editing) {
                 await api(`contacts/${contact.id}`, { method: 'PATCH', body: { name: v.name || null, email: v.email || null, tags, attributes: extra } });
+                const nextStage = stageId === NO_STAGE ? null : stageId;
+                if (editsStage && nextStage !== (contact.stage?.id ?? null)) {
+                    await api(`contacts/${contact.id}/stage`, { method: 'POST', body: { stage_id: nextStage, via: 'contact' } });
+                    void qc.invalidateQueries({ queryKey: keys.stageHistory(contact.id) });
+                    void qc.invalidateQueries({ queryKey: keys.stages });
+                    void qc.invalidateQueries({ queryKey: keys.leadsAll });
+                }
             } else {
                 await api('contacts', {
                     method: 'POST',
@@ -188,12 +205,9 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
                 </DialogHeader>
                 {editing && contact && (
                     <section className="grid gap-2 rounded-lg border p-3.5" aria-label="Stage">
-                        <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2">
-                                <h3 className="text-[13.5px] font-semibold">Stage</h3>
-                                <StageBadge stage={contact.stage} />
-                            </div>
-                            <ChangeStageButton contact={contact} />
+                        <div className="flex items-center gap-2">
+                            <h3 className="text-[13.5px] font-semibold">Stage</h3>
+                            <StageBadge stage={contact.stage} />
                         </div>
                         <StageHistory contactId={contact.id} />
                     </section>
@@ -215,6 +229,28 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
                     <Field label="Email" htmlFor="c-email" error={formState.errors.email?.message}>
                         <Input id="c-email" type="email" aria-invalid={!!formState.errors.email} {...register('email')} />
                     </Field>
+                    {editsStage && stages.length > 0 && (
+                        <Field label="Stage" htmlFor="c-stage" hint="Saved with the contact and kept in the stage history">
+                            <Select value={stageId} onValueChange={setStageId}>
+                                <SelectTrigger id="c-stage">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value={NO_STAGE}>No stage</SelectItem>
+                                    {stages.map((s) => (
+                                        <SelectItem key={s.id} value={s.id}>
+                                            {s.name}
+                                        </SelectItem>
+                                    ))}
+                                    {contact?.stage?.archived && (
+                                        <SelectItem value={contact.stage.id} disabled>
+                                            {contact.stage.name} (archived)
+                                        </SelectItem>
+                                    )}
+                                </SelectContent>
+                            </Select>
+                        </Field>
+                    )}
                     <Field label="Tags" htmlFor="c-tags" hint="Used to build segments and campaign audiences">
                         <TagInput id="c-tags" value={tags} onChange={setTags} suggestions={(tagList.data ?? []).map((t) => t.name)} />
                     </Field>

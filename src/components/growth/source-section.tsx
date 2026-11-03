@@ -49,7 +49,7 @@ export function SourceSection({ contact }: { contact: Contact }) {
                         <Button size="sm" variant="outline" className="mt-1.5 w-full" onClick={() => setOpen(true)}>
                             View source details
                         </Button>
-                        <LeadDetails contact={contact} open={open} onOpenChange={setOpen} />
+                        <LeadDetails contact={contact} stageVia="chat" open={open} onOpenChange={setOpen} />
                     </>
                 )}
             </div>

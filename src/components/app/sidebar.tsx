@@ -20,7 +20,8 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             </div>
             <div className="flex-1 overflow-y-auto px-3 pb-4">
                 {NAV.map((section) => {
-                    const items = section.items.filter((i) => isVisible(i) && (!i.permission || can(i.permission)));
+                    const growth = me.growth?.tier === 'full';
+                    const items = section.items.filter((i) => isVisible(i) && (!i.permission || can(i.permission)) && (!i.growth || growth));
                     if (items.length === 0) return null;
 
                     return (
@@ -32,11 +33,26 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                                     const base = item.href?.split('?')[0];
                                     const active = !!base && (pathname === base || pathname.startsWith(`${base}/`)) && !(item.label === 'Billing');
 
+                                    if (item.heading) {
+                                        return (
+                                            <li key={item.label}>
+                                                <span className="flex cursor-default items-center gap-2.5 px-2.5 py-1.5 text-[13.5px] font-semibold text-white">
+                                                    <Icon className="size-4" />
+                                                    <span className="flex-1">{item.label}</span>
+                                                    <span className="rounded bg-sidebar-2 px-1.5 py-0.5 text-[10px] font-semibold">R1</span>
+                                                </span>
+                                            </li>
+                                        );
+                                    }
+
                                     if (!item.href) {
                                         return (
                                             <li key={item.label}>
                                                 <span
-                                                    className="flex cursor-default items-center gap-2.5 rounded-md px-2 py-1.5 text-[13.5px] text-sidebar-muted"
+                                                    className={cn(
+                                                        'flex cursor-default items-center gap-2.5 rounded-md px-2 py-1.5 text-[13.5px] text-sidebar-muted',
+                                                        item.sub && 'pl-8',
+                                                    )}
                                                     title="Coming soon"
                                                 >
                                                     <Icon className="size-4" />
@@ -55,6 +71,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                                                 aria-current={active ? 'page' : undefined}
                                                 className={cn(
                                                     'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13.5px] font-medium transition-colors hover:bg-sidebar-2 hover:text-white',
+                                                    item.sub && 'pl-8',
                                                     active && 'bg-primary font-semibold text-primary-foreground hover:bg-primary hover:text-primary-foreground',
                                                 )}
                                             >

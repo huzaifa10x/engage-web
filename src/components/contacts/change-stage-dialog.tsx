@@ -16,30 +16,51 @@ import { cn } from '@/lib/utils';
 
 import { StageBadge } from './stage-badge';
 
-/**
- * Contacts & CRM owns the stage (Technical Specification v1.2 §1). It is changed only through this
- * deliberate action on the contact record — never inline in a list — and every change is written to
- * the contact's stage history (CN-01).
- */
-export function ChangeStageDialog({ contact, open, onOpenChange }: { contact: Contact; open: boolean; onOpenChange: (open: boolean) => void }) {
+/** Where a stage change is made. "contact" (the Contacts & CRM edit form) is Owner and Admin only. */
+export type StageVia = 'chat' | 'leads' | 'contact';
+
+export function useMoveStage(contact: Contact, via: StageVia, onDone?: () => void) {
     const qc = useQueryClient();
+
+    return useMutation({
+        mutationFn: (stageId: string | null) => api(`contacts/${contact.id}/stage`, { method: 'POST', body: { stage_id: stageId, via } }),
+        onSuccess: () => {
+            void qc.invalidateQueries({ queryKey: keys.contactsAll });
+            void qc.invalidateQueries({ queryKey: keys.conversationsAll });
+            void qc.invalidateQueries({ queryKey: keys.leadsAll });
+            void qc.invalidateQueries({ queryKey: keys.stages });
+            void qc.invalidateQueries({ queryKey: keys.stageHistory(contact.id) });
+            void qc.invalidateQueries({ queryKey: ['inbox', 'conversation'] });
+            onDone?.();
+        },
+        onError: (e) => toast.error(errorMessage(e)),
+    });
+}
+
+/**
+ * Contacts & CRM owns the stage (Technical Specification v1.2 §1); Contacts & CRM itself only shows
+ * it. It is changed from the chat sidebar and Growth Hub › Leads with this action, or by an Owner or
+ * Admin in the contact's edit form. Every change goes to the stage history (CN-01).
+ */
+export function ChangeStageDialog({
+    contact,
+    via,
+    open,
+    onOpenChange,
+}: {
+    contact: Contact;
+    via: StageVia;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
     const stages = (useStages(open).data ?? []).filter((s) => !s.archived);
     const [picked, setPicked] = useState<string | null | undefined>(undefined);
     const current = contact.stage?.id ?? null;
     const choice = picked === undefined ? current : picked;
 
-    const move = useMutation({
-        mutationFn: (stageId: string | null) => api(`contacts/${contact.id}/stage`, { method: 'POST', body: { stage_id: stageId } }),
-        onSuccess: () => {
-            void qc.invalidateQueries({ queryKey: keys.contactsAll });
-            void qc.invalidateQueries({ queryKey: keys.conversationsAll });
-            void qc.invalidateQueries({ queryKey: keys.stages });
-            void qc.invalidateQueries({ queryKey: keys.stageHistory(contact.id) });
-            void qc.invalidateQueries({ queryKey: ['inbox', 'conversation'] });
-            toast.success('Stage updated · saved to Contacts & CRM');
-            onOpenChange(false);
-        },
-        onError: (e) => toast.error(errorMessage(e)),
+    const move = useMoveStage(contact, via, () => {
+        toast.success('Stage updated · saved to Contacts & CRM');
+        onOpenChange(false);
     });
 
     const close = (o: boolean) => {
@@ -94,8 +115,8 @@ export function ChangeStageDialog({ contact, open, onOpenChange }: { contact: Co
     );
 }
 
-/** "Change stage" for people who may edit contacts (Owner, Admin, Agent). Nothing for read-only roles. */
-export function ChangeStageButton({ contact, className }: { contact: Contact; className?: string }) {
+/** "Change stage" (chat sidebar, Leads) for people who may edit contacts. Nothing for read-only roles. */
+export function ChangeStageButton({ contact, via, className }: { contact: Contact; via: Exclude<StageVia, 'contact'>; className?: string }) {
     const { can } = useSession();
     const [open, setOpen] = useState(false);
     if (!can(P.ContactsUpdate)) return null;
@@ -105,7 +126,7 @@ export function ChangeStageButton({ contact, className }: { contact: Contact; cl
             <Button type="button" size="sm" variant="outline" className={className} onClick={() => setOpen(true)}>
                 Change stage
             </Button>
-            <ChangeStageDialog contact={contact} open={open} onOpenChange={setOpen} />
+            <ChangeStageDialog contact={contact} via={via} open={open} onOpenChange={setOpen} />
         </>
     );
 }

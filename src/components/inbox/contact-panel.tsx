@@ -105,7 +105,7 @@ export function ContactPanel({ conversation }: { conversation: Conversation }) {
                         <dd>{dateTime(contact.created_at)}</dd>
                     </dl>
                     <div className="flex flex-wrap gap-2">
-                        <ChangeStageButton contact={contact} />
+                        <ChangeStageButton contact={contact} via="chat" />
                         {can(P.ContactsView) && (
                             <Button size="sm" variant="outline" onClick={() => setCrmOpen(true)}>
                                 Open CRM record

@@ -314,6 +314,34 @@ export type LeadEvidence = {
     details: { headline?: string; body?: string; source_type?: string; source_url?: string; ad_id?: string; click_id_sent?: boolean };
 };
 
+/** Growth Hub › Leads: a CRM contact on one WhatsApp number (its conversation), with its source. */
+export type Lead = {
+    id: string;
+    conversation_id: string;
+    status: 'open' | 'closed';
+    contact: Contact;
+    phone_number: { id: string; display_phone_number: string | null; verified_name: string | null } | null;
+    assigned: { id: string; name: string | null } | null;
+    first_contact_at: string | null;
+    last_activity_at: string | null;
+};
+
+export type LeadPage = CursorPage<Lead> & { meta: { counts: { all: number; new: number; unattributed: number }; sees_all: boolean } };
+
+export type LeadSummary = {
+    leads: number;
+    confirmed: number;
+    confirmed_rate: number | null;
+    meta: number;
+    meta_instagram: number;
+    website_lost: number;
+    /** null for people who only see their own leads. */
+    unmatched_clicks: { total: number; pending: number } | null;
+    sees_all: boolean;
+};
+
+export type UnmatchedClick = { id: string; received_at: string; page: string | null; source: string; status: 'pending' | 'unattributed'; note: string };
+
 export type Conversation = {
     /** Set while the conversation is snoozed (hidden from the inbox until then). */
     snoozed_until: string | null;

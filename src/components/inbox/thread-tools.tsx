@@ -14,9 +14,9 @@ import { P } from '@/lib/permissions';
 import { addConversationNote, keys, snoozeConversation, useConversationNotes, useMembers } from '@/lib/queries';
 import type { Conversation } from '@/lib/types';
 
-const inHours = (h: number) => new Date(Date.now() + h * 3_600_000);
+export const inHours = (h: number) => new Date(Date.now() + h * 3_600_000);
 
-function tomorrowAt(hour: number, addDays = 1): Date {
+export function tomorrowAt(hour: number, addDays = 1): Date {
     const d = new Date();
     d.setDate(d.getDate() + addDays);
     d.setHours(hour, 0, 0, 0);
@@ -24,7 +24,7 @@ function tomorrowAt(hour: number, addDays = 1): Date {
     return d;
 }
 
-function nextMonday(): Date {
+export function nextMonday(): Date {
     const d = new Date();
     d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7));
     d.setHours(9, 0, 0, 0);

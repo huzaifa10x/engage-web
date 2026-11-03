@@ -4,6 +4,9 @@ import {
     CodeIcon,
     CreditCardIcon,
     FileTextIcon,
+    GlobeIcon,
+    TargetIcon,
+    TrendingUpIcon,
     InboxIcon,
     LayoutDashboardIcon,
     ListChecksIcon,
@@ -36,13 +39,18 @@ export type NavItem = {
     href?: string;
     permission?: PermissionKey;
     preview?: boolean;
+    /** Shown only when the workspace has Growth Hub (feature flag on, full tier — CN-01). */
+    growth?: boolean;
+    /** A group label (no link), e.g. "Growth Hub"; `sub` items under it are indented. */
+    heading?: boolean;
+    sub?: boolean;
 };
 export type NavSection = { title: string; items: NavItem[] };
 
 export const isReleased = (item: NavItem): boolean => !!item.href && !item.preview;
 
 /** Whether this build shows the item at all (permissions are checked separately). */
-export const isVisible = (item: NavItem): boolean => SHOW_UNRELEASED || isReleased(item);
+export const isVisible = (item: NavItem): boolean => SHOW_UNRELEASED || isReleased(item) || !!item.heading;
 
 /** Same information architecture as the prototype; modules ship phase by phase. */
 export const NAV: NavSection[] = [
@@ -67,6 +75,10 @@ export const NAV: NavSection[] = [
         items: [
             { label: 'Campaigns', icon: MegaphoneIcon, href: '/campaigns', permission: P.CampaignsView },
             { label: 'Templates', icon: FileTextIcon, href: '/templates', permission: P.TemplatesView },
+            // Growth Hub (R1): new parent below Templates with Leads and Tracking Setup (Developer Handover §I.3).
+            { label: 'Growth Hub', icon: TrendingUpIcon, heading: true, growth: true, permission: P.InboxView },
+            { label: 'Leads', icon: TargetIcon, href: '/growth/leads', permission: P.InboxView, growth: true, sub: true },
+            { label: 'Tracking Setup', icon: GlobeIcon, permission: P.GrowthManage, growth: true, sub: true },
             { label: 'Commerce', icon: ShoppingCartIcon },
             { label: 'Analytics', icon: BarChart3Icon, href: '/analytics', permission: P.AnalyticsView },
         ],

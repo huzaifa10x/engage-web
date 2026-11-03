@@ -1,14 +1,17 @@
 'use client';
 
+import { useSession } from '@/components/app/session';
 import { ChangeStageButton } from '@/components/contacts/change-stage-dialog';
 import { StageBadge } from '@/components/contacts/stage-badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { dateTime, humanize } from '@/lib/format';
+import { P } from '@/lib/permissions';
 import { useLeadEvidence, useStageHistory } from '@/lib/queries';
-import type { Acquisition, Contact, LeadEvidence, StageEvent } from '@/lib/types';
+import type { Acquisition, Contact, Lead, LeadEvidence, StageEvent } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
+import { LeadActions } from './lead-actions';
 import { SourceChip } from './source-chip';
 
 /** The explanation shown under the chip for the statuses that need one (prototype wording). */
@@ -134,11 +137,27 @@ function journey(contact: Contact, a: Acquisition, evidence: LeadEvidence[], sta
 
 /**
  * Lead details (Developer Handover §I.4): source and match status, campaign, landing page, first
- * contact; evidence (masked, never for Agents); journey timeline; CRM block with the stage and the
- * CRM's own "Change stage" action. Opened from "View source details" and "See lead journey".
+ * contact; evidence (masked, never for Agents); journey timeline; CRM block with owner and stage.
+ *  - from Growth Hub › Leads (`lead`): the CRM actions Open chat, Assign, Change stage, Add note, Follow-up;
+ *  - from the chat sidebar (`stageVia="chat"`): Change stage;
+ *  - from Contacts & CRM ("See lead journey"): read-only — the contact record only shows the stage.
  */
-export function LeadDetails({ contact, open, onOpenChange }: { contact: Contact; open: boolean; onOpenChange: (open: boolean) => void }) {
-    const evidence = useLeadEvidence(contact.id, open);
+export function LeadDetails({
+    contact,
+    lead,
+    stageVia,
+    open,
+    onOpenChange,
+}: {
+    contact: Contact;
+    lead?: Lead;
+    stageVia?: 'chat';
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+}) {
+    const { can } = useSession();
+    const proof = can(P.GrowthView); // evidence: Owner and Admin only
+    const evidence = useLeadEvidence(contact.id, open && proof);
     const stages = useStageHistory(contact.id, open);
     const a = contact.acquisition;
     if (!a) return null;
@@ -176,15 +195,17 @@ export function LeadDetails({ contact, open, onOpenChange }: { contact: Contact;
                     {SOURCE_NOTE[a.status] && <p className="rounded-md bg-muted px-3 py-2 text-[12.5px] leading-snug">{SOURCE_NOTE[a.status]}</p>}
                 </section>
 
-                <Section title="Evidence">
-                    {evidence.isLoading ? (
-                        <Skeleton className="h-24 w-full" />
-                    ) : evidence.isError ? (
-                        <p className="text-[13px] text-bad">The evidence could not be loaded.</p>
-                    ) : (
-                        <Rows rows={evidenceRows(a, shown, contact)} />
-                    )}
-                </Section>
+                {proof && (
+                    <Section title="Evidence">
+                        {evidence.isLoading ? (
+                            <Skeleton className="h-24 w-full" />
+                        ) : evidence.isError ? (
+                            <p className="text-[13px] text-bad">The evidence could not be loaded.</p>
+                        ) : (
+                            <Rows rows={evidenceRows(a, shown, contact)} />
+                        )}
+                    </Section>
+                )}
 
                 <Section title="Journey">
                     {steps.length === 0 ? (
@@ -207,9 +228,14 @@ export function LeadDetails({ contact, open, onOpenChange }: { contact: Contact;
                     )}
                 </Section>
 
-                <Section title="Contacts & CRM">
-                    <Rows rows={[['Stage', <StageBadge key="s" stage={contact.stage} />]]} />
-                    <ChangeStageButton contact={contact} className="w-fit" />
+                <Section title="CRM · updates the same contact record">
+                    <Rows
+                        rows={[
+                            ...(lead ? ([['Owner', lead.assigned?.name ?? 'Unassigned']] as [string, React.ReactNode][]) : []),
+                            ['Stage', <StageBadge key="s" stage={contact.stage} />],
+                        ]}
+                    />
+                    {lead ? <LeadActions lead={lead} /> : stageVia ? <ChangeStageButton contact={contact} via={stageVia} className="w-fit" /> : null}
                 </Section>
             </DialogContent>
         </Dialog>

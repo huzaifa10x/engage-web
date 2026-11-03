@@ -4,6 +4,9 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api, upload } from './api';
 import type {
+    LeadPage,
+    LeadSummary,
+    UnmatchedClick,
     CrmStage,
     LeadEvidence,
     StageEvent,
@@ -69,6 +72,10 @@ import type {
 export const keys = {
     me: ['me'] as const,
     leadEvidence: (contactId: string) => ['growth', 'evidence', contactId] as const,
+    leads: (filters: LeadFilters) => ['growth', 'leads', filters] as const,
+    leadsAll: ['growth', 'leads'] as const,
+    leadSummary: ['growth', 'leads-summary'] as const,
+    unmatchedClicks: ['growth', 'unmatched-clicks'] as const,
     stages: ['crm', 'stages'] as const,
     stageHistory: (contactId: string) => ['crm', 'stage-history', contactId] as const,
     tenant: ['tenant'] as const,
@@ -632,6 +639,33 @@ export const testIntegrationRule = (id: string, event: string, phone: string) =>
     api(`integrations/${id}/rules/${event}/test`, { method: 'POST', body: { phone } });
 
 /** Growth Hub: the proof behind one lead's source (Owner, Admin; IDs masked by the server). */
+export type LeadFilters = {
+    tab?: 'all' | 'new' | 'unattributed';
+    q?: string;
+    source?: string;
+    status?: string;
+    phone_number_id?: string;
+    assigned?: string;
+    stage_id?: string;
+    days?: number;
+};
+
+/** Growth Hub › Leads: the CRM's WhatsApp leads with their source (own leads only for agents). */
+export const useLeads = (filters: LeadFilters, enabled = true) =>
+    useInfiniteQuery({
+        queryKey: keys.leads(filters),
+        queryFn: ({ pageParam }) => api<LeadPage>('growth/leads', { query: { ...filters, cursor: pageParam, per_page: 50 } }),
+        initialPageParam: null as string | null,
+        getNextPageParam: (last) => last.meta.next_cursor ?? null,
+        enabled,
+    });
+
+export const useLeadSummary = (enabled = true) =>
+    useQuery({ queryKey: keys.leadSummary, queryFn: () => api<Data<LeadSummary>>('growth/leads/summary').then((r) => r.data), enabled });
+
+export const useUnmatchedClicks = (enabled = true) =>
+    useQuery({ queryKey: keys.unmatchedClicks, queryFn: () => api<Data<UnmatchedClick[]>>('growth/leads/unmatched-clicks').then((r) => r.data), enabled });
+
 export const useLeadEvidence = (contactId: string | undefined, enabled = true) =>
     useQuery({
         queryKey: keys.leadEvidence(contactId ?? ''),

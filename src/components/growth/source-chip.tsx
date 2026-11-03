@@ -40,3 +40,22 @@ export function SourceChip({ acquisition, compact = false, className }: { acquis
         </Badge>
     );
 }
+
+/** The match status names (Blueprint v1.4), for the Leads "Match" column and filter. */
+export const STATUS_LABEL: Record<AcquisitionStatus, string> = {
+    ref: 'Reference matched',
+    meta: 'Meta ad',
+    multi: 'Multiple sources',
+    web: 'Website · details unavailable',
+    unattributed: 'Unattributed',
+    before: 'Before tracking',
+};
+
+/** The match-status chip (status name only, e.g. "Meta ad"), as in the Leads table. */
+export function StatusChip({ status, className }: { status: AcquisitionStatus; className?: string }) {
+    return (
+        <Badge tone={SOURCE_TONE[status] ?? 'grey'} dot className={className}>
+            {STATUS_LABEL[status]}
+        </Badge>
+    );
+}
