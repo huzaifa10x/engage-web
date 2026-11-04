@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { FormError } from '@/components/app/field';
 import { Button } from '@/components/ui/button';
 import { api, ApiError, errorMessage } from '@/lib/api';
+import { safeNext } from '@/lib/navigation';
 import { keys, useMe } from '@/lib/queries';
 
 const LENGTH = 6;
@@ -35,8 +36,11 @@ export default function VerifyEmailPage() {
     const verified = me.data?.user.email_verified === true;
 
     useEffect(() => {
-        if (unauthenticated) router.replace('/login?next=/verify-email');
-        else if (verified) router.replace(me.data?.active_tenant_id ? '/dashboard' : '/select-workspace');
+        // ?next= (e.g. back to an invitation) survives the sign-in and is followed once verified.
+        const next = new URLSearchParams(window.location.search).get('next');
+        if (unauthenticated)
+            router.replace(`/login?next=${encodeURIComponent(next ? `/verify-email?next=${encodeURIComponent(safeNext(next))}` : '/verify-email')}`);
+        else if (verified) router.replace(next ? safeNext(next) : me.data?.active_tenant_id ? '/dashboard' : '/select-workspace');
     }, [unauthenticated, verified, me.data?.active_tenant_id, router]);
 
     useEffect(() => {

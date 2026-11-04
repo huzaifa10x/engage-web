@@ -59,7 +59,9 @@ function RegisterForm() {
             const res = await api<{ data: Me }>('auth/register', { method: 'POST', body: { ...values, timezone } });
             qc.setQueryData(keys.me, res.data);
             // The account exists; it becomes usable once the emailed code is entered on the next screen.
-            router.replace('/verify-email');
+            // Arriving from an invitation (?next=/invitations/…), go back there after verifying.
+            const next = params.get('next');
+            router.replace(next ? `/verify-email?next=${encodeURIComponent(safeNext(next))}` : '/verify-email');
         } catch (err) {
             setFormError(applyServerErrors(err, setError, FIELDS));
         }
