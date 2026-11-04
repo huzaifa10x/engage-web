@@ -6,6 +6,10 @@ import { api, upload } from './api';
 import type {
     LeadPage,
     LeadSummary,
+    MarketingCampaignRow,
+    MarketingOverview,
+    MarketingSourceRow,
+    MarketingTrendPoint,
     MetaAd,
     UnmatchedClick,
     CrmStage,
@@ -661,7 +665,36 @@ export type LeadFilters = {
     days?: number;
     /** A Meta ad (Tracking Setup id): leads whose original source is that ad. */
     ad?: string;
+    /** Drill-down from Analytics → Marketing: the period's new-lead cohort (local dates). */
+    from?: string;
+    to?: string;
+    bucket?: string;
+    campaign?: string;
+    step?: 'contacted' | 'qualified';
 };
+
+export type MarketingFilters = { from: string; to: string; compare?: 'previous' | 'none'; number_id?: string };
+
+const useMarketingQuery = <T>(path: string, f: MarketingFilters, enabled: boolean) =>
+    useQuery({
+        queryKey: ['analytics', 'marketing', path, f],
+        queryFn: () => api<Data<T>>(`analytics/marketing/${path}`, { query: f }).then((r) => r.data),
+        enabled,
+        retry: false,
+    });
+
+export const useMarketingOverview = (f: MarketingFilters, enabled = true) => useMarketingQuery<MarketingOverview>('overview', f, enabled);
+export const useMarketingSources = (f: MarketingFilters, enabled = true) => useMarketingQuery<{ rows: MarketingSourceRow[] }>('sources', f, enabled);
+export const useMarketingCampaigns = (f: MarketingFilters, enabled = true) => useMarketingQuery<{ rows: MarketingCampaignRow[] }>('campaigns', f, enabled);
+export const useMarketingFunnel = (f: MarketingFilters, enabled = true) =>
+    useMarketingQuery<{ steps: { step: 'new' | 'contacted' | 'qualified'; count: number | null }[] }>('funnel', f, enabled);
+export const useMarketingTrend = (f: MarketingFilters, enabled = true) => useMarketingQuery<{ points: MarketingTrendPoint[] }>('trend', f, enabled);
+export const useStageMapping = (enabled = true) =>
+    useQuery({
+        queryKey: ['analytics', 'marketing', 'stage-mapping'],
+        queryFn: () => api<Data<{ contacted: string[]; qualified: string[]; ready: boolean }>>('analytics/marketing/stage-mapping').then((r) => r.data),
+        enabled,
+    });
 
 /** Growth Hub › Leads: the CRM's WhatsApp leads with their source (own leads only for agents). */
 export const useLeads = (filters: LeadFilters, enabled = true) =>

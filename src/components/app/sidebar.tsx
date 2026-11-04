@@ -21,7 +21,10 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             <div className="flex-1 overflow-y-auto px-3 pb-4">
                 {NAV.map((section) => {
                     const growth = me.growth?.tier === 'full';
-                    const items = section.items.filter((i) => isVisible(i) && (!i.permission || can(i.permission)) && (!i.growth || growth));
+                    const growthAny = growth || me.growth?.tier === 'chip';
+                    const items = section.items.filter(
+                        (i) => isVisible(i) && (!i.permission || can(i.permission)) && (!i.growth || growth) && (!i.growthAny || growthAny),
+                    );
                     if (items.length === 0) return null;
 
                     return (
@@ -31,7 +34,20 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                                 {items.map((item) => {
                                     const Icon = item.icon;
                                     const base = item.href?.split('?')[0];
-                                    const active = !!base && (pathname === base || pathname.startsWith(`${base}/`)) && !(item.label === 'Billing');
+                                    // The most specific link wins: /analytics/marketing highlights Marketing, not Analytics.
+                                    const matches = (h?: string) => {
+                                        const b = h?.split('?')[0];
+                                        return !!b && (pathname === b || pathname.startsWith(`${b}/`));
+                                    };
+                                    const deeper = items.some(
+                                        (o) =>
+                                            o !== item &&
+                                            o.href &&
+                                            o.href.length > (item.href?.length ?? 0) &&
+                                            matches(o.href) &&
+                                            o.href.startsWith(item.href ?? ''),
+                                    );
+                                    const active = matches(item.href) && !deeper && !(item.label === 'Billing');
 
                                     if (item.heading) {
                                         return (

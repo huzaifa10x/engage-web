@@ -13,6 +13,7 @@ import {
     type LucideIcon,
     MegaphoneIcon,
     MessageCircleIcon,
+    PieChartIcon,
     PhoneIcon,
     PlugIcon,
     SettingsIcon,
@@ -41,6 +42,8 @@ export type NavItem = {
     preview?: boolean;
     /** Shown only when the workspace has Growth Hub (feature flag on, full tier — CN-01). */
     growth?: boolean;
+    /** Shown when Growth Hub is on at any tier (Starter sees an upgrade prompt on the page). */
+    growthAny?: boolean;
     /** A group label (no link), e.g. "Growth Hub"; `sub` items under it are indented. */
     heading?: boolean;
     sub?: boolean;
@@ -81,6 +84,8 @@ export const NAV: NavSection[] = [
             { label: 'Tracking Setup', icon: GlobeIcon, href: '/growth/setup', permission: P.GrowthView, growth: true, sub: true },
             { label: 'Commerce', icon: ShoppingCartIcon },
             { label: 'Analytics', icon: BarChart3Icon, href: '/analytics', permission: P.AnalyticsView },
+            // Analytics › Marketing (CN-01): Owner and Admin; Starter gets an upgrade prompt.
+            { label: 'Marketing', icon: PieChartIcon, href: '/analytics/marketing', permission: P.GrowthView, growthAny: true, sub: true },
         ],
     },
     {

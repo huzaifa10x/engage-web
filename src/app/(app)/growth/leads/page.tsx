@@ -155,7 +155,25 @@ function LeadsPage() {
     const [tab, setTab] = useState<Tab>('all');
     // Tracking Setup links here with ?ad=<id> to show one ad's leads.
     const params = useSearchParams();
-    const [filters, setFilters] = useState<LeadFilters>(() => (params.get('ad') ? { days: 365, ad: params.get('ad') ?? undefined } : { days: 30 }));
+    // Analytics › Marketing links here with the clicked period, source, campaign and funnel step.
+    const [filters, setFilters] = useState<LeadFilters>(() => {
+        const v = (k: string) => params.get(k) ?? undefined;
+        if (v('from') && v('to')) {
+            const step = v('step');
+
+            return {
+                from: v('from'),
+                to: v('to'),
+                bucket: v('bucket'),
+                campaign: v('campaign'),
+                step: step === 'contacted' || step === 'qualified' ? step : undefined,
+                phone_number_id: v('number_id'),
+            };
+        }
+
+        return v('ad') ? { days: 365, ad: v('ad') } : { days: 30 };
+    });
+    const drilled = !!filters.from;
     const [search, setSearch] = useState('');
     const [openId, setOpenId] = useState<string | null>(null);
 
@@ -210,6 +228,20 @@ function LeadsPage() {
                 }
             />
 
+            {drilled && (
+                <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-info/30 bg-info-bg/50 px-3 py-2 text-[13px]">
+                    <span>
+                        From <b>Analytics › Marketing</b>: new leads with a first message from {filters.from} to {filters.to}
+                        {filters.bucket ? ' · one source' : ''}
+                        {filters.campaign ? ' · one campaign' : ''}
+                        {filters.step ? ` · ${filters.step} within 30 days` : ''}
+                        {filters.phone_number_id ? ' · one number' : ''}.
+                    </span>
+                    <Button size="sm" variant="outline" className="ml-auto" onClick={() => setFilters({ days: 30 })}>
+                        Show all leads
+                    </Button>
+                </div>
+            )}
             <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
                 {!k ? (
                     Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-[104px]" />)

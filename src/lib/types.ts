@@ -373,6 +373,47 @@ export type MetaAd = {
     last_seen_at: string;
 };
 
+/** Analytics → Marketing. null = can't be calculated ("—"), 0 = a measured zero. */
+export type MarketingMetric = { value: number | null; previous: number | null; change_pct?: number | null };
+
+export type MarketingOverview = {
+    period: { from: string; to: string; timezone: string };
+    previous_period: { from: string; to: string } | null;
+    provisional: boolean;
+    stage_mapping_ready: boolean;
+    new_leads: MarketingMetric;
+    qualified_leads: MarketingMetric;
+    qualification_rate: MarketingMetric;
+    confirmed_coverage: MarketingMetric & { confirmed: number };
+    returning_contacts: number;
+    updated_at: string | null;
+};
+
+export type MarketingSourceRow = {
+    bucket: string;
+    label: string;
+    new_leads: number;
+    qualified: number | null;
+    rate: number | null;
+    previous: { new_leads: number; qualified: number | null };
+    change_pct: number | null;
+};
+
+export type MarketingCampaignRow = {
+    campaign_key: string;
+    label: string;
+    bucket: string | null;
+    source: string;
+    new_leads: number;
+    qualified: number | null;
+    rate: number | null;
+    previous_new_leads: number;
+    change_pct: number | null;
+    is_new: boolean;
+};
+
+export type MarketingTrendPoint = { date: string; new_leads: number; qualified: number | null; prev_date: string | null; prev_new_leads: number | null };
+
 export type UnmatchedClick = { id: string; received_at: string; page: string | null; source: string; status: 'pending' | 'unattributed'; note: string };
 
 export type Conversation = {
