@@ -55,19 +55,21 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                                                 <span className="flex cursor-default items-center gap-2.5 px-2.5 py-1.5 text-[13.5px] font-semibold text-white">
                                                     <Icon className="size-4" />
                                                     <span className="flex-1">{item.label}</span>
-                                                    <span className="rounded bg-sidebar-2 px-1.5 py-0.5 text-[10px] font-semibold">R1</span>
                                                 </span>
                                             </li>
                                         );
                                     }
 
+                                    // Sub-items sit under their parent (Growth Hub › Leads, Tracking Setup; Analytics ›
+                                    // Marketing) with a guide line, so the nesting is visible.
+                                    const nested = item.sub ? '-mt-0.5 ml-[17px] border-l border-white/15 pt-0.5 pl-2' : undefined;
+
                                     if (!item.href) {
                                         return (
-                                            <li key={item.label}>
+                                            <li key={item.label} className={nested}>
                                                 <span
                                                     className={cn(
                                                         'flex cursor-default items-center gap-2.5 rounded-md px-2 py-1.5 text-[13.5px] text-sidebar-muted',
-                                                        item.sub && 'pl-8',
                                                     )}
                                                     title="Coming soon"
                                                 >
@@ -80,14 +82,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                                     }
 
                                     return (
-                                        <li key={item.label}>
+                                        <li key={item.label} className={nested}>
                                             <Link
                                                 href={item.href}
                                                 onClick={onNavigate}
                                                 aria-current={active ? 'page' : undefined}
                                                 className={cn(
                                                     'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13.5px] font-medium transition-colors hover:bg-sidebar-2 hover:text-white',
-                                                    item.sub && 'pl-8',
+                                                    item.sub && 'text-[13px]',
                                                     active && 'bg-primary font-semibold text-primary-foreground hover:bg-primary hover:text-primary-foreground',
                                                 )}
                                             >

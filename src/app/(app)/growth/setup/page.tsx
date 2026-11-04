@@ -2,12 +2,14 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { CopyIcon, GlobeIcon, MegaphoneIcon } from 'lucide-react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
 
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
 import { StageBadge } from '@/components/contacts/stage-badge';
+import { WebsitesTab } from '@/components/growth/websites-tab';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -19,6 +21,7 @@ import { relative } from '@/lib/format';
 import { P } from '@/lib/permissions';
 import { keys, useMetaAds } from '@/lib/queries';
 import type { MetaAd } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 const BOTH = '__both__';
 const UTM = 'utm_source={{site_source_name}}&utm_medium=paid&utm_campaign={{campaign.name}}&utm_content={{ad.name}}';
@@ -56,16 +59,15 @@ function PlatformSelect({ ad, editable }: { ad: MetaAd; editable: boolean }) {
 }
 
 /**
- * Growth Hub › Tracking Setup (Developer Handover §I.4). R1 part available now: the Click-to-WhatsApp
- * ads leads came from, and the one-platform tag that proves "Meta ad · Instagram / Facebook" (Meta's
- * referral has no platform field). Website tracking (sites, wizard, health) comes with the tracker.
+ * Growth Hub › Tracking Setup (Developer Handover §I.4): Websites (site cards with health, the Add
+ * website wizard, the Google Ads tagging card) and Meta ads (the Click-to-WhatsApp ads leads came
+ * from, and the one-platform tag that proves "Meta ad · Instagram / Facebook").
  */
 export default function TrackingSetupPage() {
     const { can, me } = useSession();
     const full = me.growth?.tier === 'full';
-    const allowed = can(P.GrowthView) && full;
     const editable = can(P.GrowthManage);
-    const ads = useMetaAds(allowed);
+    const [tab, setTab] = useState<'websites' | 'meta'>('websites');
 
     if (!can(P.GrowthView)) return <Forbidden />;
     if (!full) {
@@ -78,6 +80,39 @@ export default function TrackingSetupPage() {
         );
     }
 
+    return (
+        <>
+            <PageHeader title="Tracking Setup" description="Connect your website and see which ads start your WhatsApp chats." />
+            <div className="mb-4 flex gap-1 border-b" role="tablist" aria-label="Tracking Setup">
+                {(
+                    [
+                        ['websites', 'Websites'],
+                        ['meta', 'Meta ads'],
+                    ] as const
+                ).map(([key, label]) => (
+                    <button
+                        key={key}
+                        type="button"
+                        role="tab"
+                        aria-selected={tab === key}
+                        onClick={() => setTab(key)}
+                        className={cn(
+                            '-mb-px border-b-2 border-transparent px-3 py-2 text-[13.5px] font-medium text-muted-foreground hover:text-foreground',
+                            tab === key && 'border-primary text-foreground',
+                        )}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+            {tab === 'websites' ? <WebsitesTab editable={editable} /> : <MetaAdsTab editable={editable} />}
+        </>
+    );
+}
+
+function MetaAdsTab({ editable }: { editable: boolean }) {
+    const ads = useMetaAds();
+
     const copy = async () => {
         try {
             await navigator.clipboard.writeText(UTM);
@@ -89,8 +124,6 @@ export default function TrackingSetupPage() {
 
     return (
         <>
-            <PageHeader title="Tracking Setup" description="See which Meta ads start your WhatsApp chats, and tell us where each ad runs." />
-
             <Card className="mb-4 gap-0 overflow-hidden p-0">
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b p-4">
                     <div>
@@ -208,15 +241,6 @@ export default function TrackingSetupPage() {
                 <p className="max-w-3xl text-[12.5px] text-muted-foreground">
                     Your inbox only sees people who sent a message, not everyone who tapped. Taps, impressions and ad spend come later, with access to your ad
                     account.
-                </p>
-            </Card>
-
-            <Card className="gap-1 p-4">
-                <h2 className="flex items-center gap-2 text-[15px] font-semibold">
-                    <GlobeIcon className="size-4" /> Websites <Badge tone="grey">Coming next</Badge>
-                </h2>
-                <p className="max-w-2xl text-[13px] text-muted-foreground">
-                    Connect your website so WhatsApp taps there are matched to the chats they start, with campaign and landing page.
                 </p>
             </Card>
         </>

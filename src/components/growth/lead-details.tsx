@@ -101,6 +101,50 @@ function evidenceRows(a: Acquisition, e: LeadEvidence | undefined, contact: Cont
         ]);
         if (e.conflict) rows.push(['Multiple sources', 'The same message also carried a website reference; both are kept']);
     }
+    if (e?.type === 'website_reference') {
+        const d = e.details;
+        rows.push(['How it started', 'Tapped WhatsApp on your website and sent the message with its reference; matched to the registered tap']);
+        rows.push(['Source', e.label]);
+        if (d.site) rows.push(['Website', d.site]);
+        if (d.page_path)
+            rows.push([
+                'Tapped on',
+                <span key="p" className="font-mono text-[12px]">
+                    {d.page_path}
+                </span>,
+            ]);
+        if (d.landing_path && d.landing_path !== d.page_path)
+            rows.push([
+                'Landing page',
+                <span key="l" className="font-mono text-[12px]">
+                    {d.landing_path}
+                </span>,
+            ]);
+        if (d.campaign)
+            rows.push([
+                'Campaign details',
+                <span key="c" className="font-mono text-[12px] break-all">
+                    {Object.entries(d.campaign)
+                        .map(([k, v]) => `${k}=${v}`)
+                        .join(' · ')}
+                </span>,
+            ]);
+        rows.push([
+            'Ad click ID',
+            d.click_ids_sent?.length ? `Present (${d.click_ids_sent.join(', ')})` : <span className="text-muted-foreground">None on the visit</span>,
+        ]);
+        if (d.referrer_host) rows.push(['Came from', d.referrer_host]);
+        if (d.campaign_params_origin === 'session_landing') rows.push(['Campaign memory', 'From the landing page earlier in the same browser tab']);
+        if (d.reference)
+            rows.push([
+                'Reference',
+                <span key="r" className="font-mono text-[12px]">
+                    {d.reference}
+                </span>,
+            ]);
+        if (e.platform) rows.push(['Platform', `${humanize(e.platform)} · ${e.platform_proof ?? 'proof stored'}`]);
+        if (e.conflict) rows.push(['Multiple sources', 'The same message also came from a Meta ad; the ad counts as the message origin']);
+    }
     if (a.status === 'web')
         rows.push(['Why limited', 'The code in the message is valid, but the website click never reached us. Campaign details are not available.']);
     if (a.status === 'unattributed') rows.push(['Why', 'No reference and no ad referral in the first message.']);
@@ -134,8 +178,15 @@ function journey(contact: Contact, a: Acquisition, evidence: LeadEvidence[], sta
                 detail: `Click was never registered (likely blocked) · ${when}`,
                 proof: true,
             });
+        } else if (e.confidence === 'reused_other_sender') {
+            steps.push({ at: e.occurred_at, title: 'Sent a website reference already used by someone else', detail: `Not counted · ${when}`, proof: false });
         } else {
-            steps.push({ at: e.occurred_at, title: 'Sent first message, reference matched', detail: when, proof: true });
+            steps.push({
+                at: e.occurred_at,
+                title: a.status === 'before' ? 'New touch: website tap (not counted as a new lead)' : 'Tapped WhatsApp on the website, reference matched',
+                detail: [e.label, e.details.page_path, when].filter(Boolean).join(' · '),
+                proof: true,
+            });
         }
     }
     for (const s of stages) {

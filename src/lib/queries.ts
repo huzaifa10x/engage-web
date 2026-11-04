@@ -4,6 +4,8 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api, upload } from './api';
 import type {
+    GrowthSite,
+    SiteTest,
     LeadPage,
     LeadSummary,
     MarketingCampaignRow,
@@ -81,6 +83,8 @@ export const keys = {
     leadsAll: ['growth', 'leads'] as const,
     leadSummary: ['growth', 'leads-summary'] as const,
     unmatchedClicks: ['growth', 'unmatched-clicks'] as const,
+    sites: ['growth', 'sites'] as const,
+    siteTest: (id: string) => ['growth', 'sites', id, 'test'] as const,
     stages: ['crm', 'stages'] as const,
     stageHistory: (contactId: string) => ['crm', 'stage-history', contactId] as const,
     tenant: ['tenant'] as const,
@@ -711,6 +715,19 @@ export const useLeadSummary = (enabled = true) =>
 
 export const useMetaAds = (enabled = true) =>
     useQuery({ queryKey: ['growth', 'meta-ads'], queryFn: () => api<Data<MetaAd[]>>('growth/meta-ads').then((r) => r.data), enabled });
+
+/** Tracking Setup › Websites, with each site's health (refreshed every 30 s while open). */
+export const useSites = (enabled = true) =>
+    useQuery({ queryKey: keys.sites, queryFn: () => api<Data<GrowthSite[]>>('growth/sites').then((r) => r.data), enabled, refetchInterval: 30_000 });
+
+/** The live test after "Test tracking": polled every 3 s while it runs. */
+export const useSiteTest = (id: string | undefined, enabled = true) =>
+    useQuery({
+        queryKey: keys.siteTest(id ?? ''),
+        queryFn: () => api<Data<SiteTest>>(`growth/sites/${id}/test`).then((r) => r.data),
+        enabled: enabled && !!id,
+        refetchInterval: 3_000,
+    });
 
 export const useUnmatchedClicks = (enabled = true) =>
     useQuery({ queryKey: keys.unmatchedClicks, queryFn: () => api<Data<UnmatchedClick[]>>('growth/leads/unmatched-clicks').then((r) => r.data), enabled });

@@ -26,18 +26,24 @@ const ALL = '__all__';
 
 type Tab = 'all' | 'new' | 'clicks';
 
-// Leads are paid-advertising leads only (Click-to-WhatsApp ads and boosted posts for now; paid
-// website campaigns join with website tracking). Ordinary chats stay in Chat and Contacts.
-const SOURCES: [string, string][] = [
+// Leads are paid-advertising leads only: Meta Click-to-WhatsApp ads and boosted posts, and taps on
+// your website from Google Ads, Meta ads or another paid campaign. Ordinary chats stay in Chat and Contacts.
+const META_SOURCES: [string, string][] = [
     ['meta', 'Meta (ads and boosted posts)'],
     ['meta_paid', 'Meta ad (paid)'],
     ['meta_post', 'Meta boosted post'],
     ['meta_instagram', 'Meta ad · Instagram'],
     ['meta_facebook', 'Meta ad · Facebook'],
 ];
+const WEBSITE_SOURCES: [string, string][] = [
+    ['google_ads', 'Google Ads'],
+    ['paid_other', 'Other paid campaign'],
+    ['website', 'Any website tap'],
+];
 
 const STATUSES: [string, string][] = [
     ['meta', 'Meta ad (first message)'],
+    ['ref', 'Reference matched (website)'],
     ['multi', 'Multiple sources'],
     ['before', 'Returning customer (before tracking)'],
     ['unattributed', 'Came back through an ad'],
@@ -97,7 +103,7 @@ function UnmatchedClicks() {
                 <EmptyState
                     icon={<TargetIcon className="size-5" />}
                     title="No unmatched clicks"
-                    description="WhatsApp taps on your website that don’t become a chat show here once a site is connected in Tracking Setup."
+                    description="WhatsApp taps on your website that didn’t become a chat show here."
                 />
             ) : (
                 <Table>
@@ -105,8 +111,10 @@ function UnmatchedClicks() {
                         <TableRow>
                             <TableHead>Click</TableHead>
                             <TableHead>When</TableHead>
+                            <TableHead>Website</TableHead>
                             <TableHead>Page</TableHead>
-                            <TableHead>Campaign details</TableHead>
+                            <TableHead>Source</TableHead>
+                            <TableHead>Campaign</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead />
                         </TableRow>
@@ -116,8 +124,10 @@ function UnmatchedClicks() {
                             <TableRow key={c.id}>
                                 <TableCell className="font-mono text-[12px] text-muted-foreground">{c.id}</TableCell>
                                 <TableCell>{dateTime(c.received_at)}</TableCell>
+                                <TableCell className="text-[12.5px]">{c.site ?? '—'}</TableCell>
                                 <TableCell className="font-mono text-[12px]">{c.page ?? '—'}</TableCell>
                                 <TableCell>{c.source}</TableCell>
+                                <TableCell className="text-[12.5px]">{c.campaign ?? <span className="text-muted-foreground">—</span>}</TableCell>
                                 <TableCell>
                                     <Badge tone={c.status === 'pending' ? 'warn' : 'grey'} dot>
                                         {c.status === 'pending' ? 'Pending match' : 'Unattributed'}
@@ -180,6 +190,9 @@ function LeadsPage() {
     const members = useMembers(allowed && seesAll && can(P.TeamView));
     // Leads grouped by the Meta ad (ad ID) that started them.
     const ads = useMetaAds(allowed && seesAll).data ?? [];
+    // Website cards (details lost, unmatched clicks) only once a website is tracked.
+    const websites = (summary.data?.websites ?? 0) > 0;
+    const SOURCES = websites ? [...META_SOURCES, ...WEBSITE_SOURCES] : META_SOURCES;
 
     const rows = leads.data?.pages.flatMap((p) => p.data) ?? [];
     const counts = leads.data?.pages[0]?.meta.counts;
@@ -210,7 +223,7 @@ function LeadsPage() {
                 title="Leads"
                 description={
                     seesAll
-                        ? 'Chats that came from your paid ads, with the ad behind each. Same records as Contacts & CRM.'
+                        ? 'Chats that came from your paid ads (Meta ads, and Google Ads or other paid campaigns on your website), with the ad behind each. Same records as Contacts & CRM.'
                         : 'Your assigned ad leads and the ad behind each.'
                 }
                 actions={
@@ -239,20 +252,25 @@ function LeadsPage() {
                     </Button>
                 </div>
             )}
-            <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className={cn('mb-4 grid gap-3 sm:grid-cols-2', websites && seesAll ? 'lg:grid-cols-6' : 'lg:grid-cols-4')}>
                 {!k ? (
-                    Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-[104px]" />)
+                    Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-[104px]" />)
                 ) : (
                     <>
-                        <Kpi hero label="Ad leads · 30 days" value={String(k.leads)} hint="chats from your Meta ads in the last 30 days" />
+                        <Kpi hero label="Ad leads · 30 days" value={String(k.leads)} hint="chats from your paid ads in the last 30 days" />
                         <Kpi label="New customers" value={String(k.new_customers)} hint="their first message came from an ad" />
                         <Kpi label="Returning" value={String(k.returning)} hint="existing contacts who came back through an ad" />
                         <Kpi label="From boosted posts" value={String(k.meta_posts)} hint={`${k.meta_instagram} proven Instagram · rest not split`} />
-                        <Kpi
-                            label="Unmatched clicks"
-                            value={k.unmatched_clicks ? String(k.unmatched_clicks.total) : '—'}
-                            hint={k.unmatched_clicks ? `${k.unmatched_clicks.pending} still pending` : 'not available for agents'}
-                        />
+                        {websites && seesAll && k.unmatched_clicks && (
+                            <>
+                                <Kpi
+                                    label="Website details lost"
+                                    value={String(k.website_lost ?? 0)}
+                                    hint="came from your website, but the tap didn’t register (ad blocker, network)"
+                                />
+                                <Kpi label="Unmatched clicks" value={String(k.unmatched_clicks.total)} hint={`${k.unmatched_clicks.pending} still pending`} />
+                            </>
+                        )}
                     </>
                 )}
             </div>
@@ -263,7 +281,7 @@ function LeadsPage() {
                         [
                             ['all', 'All leads', counts?.all],
                             ['new', 'New', counts?.new],
-                            ...(seesAll ? ([['clicks', 'Unmatched clicks', k?.unmatched_clicks?.total]] as const) : []),
+                            ...(seesAll && websites ? ([['clicks', 'Unmatched clicks', k?.unmatched_clicks?.total]] as const) : []),
                         ] as [Tab, string, number | undefined][]
                     ).map(([key, label, n]) => (
                         <button
@@ -370,7 +388,7 @@ function LeadsPage() {
                             <EmptyState
                                 icon={<TargetIcon className="size-5" />}
                                 title="No leads match these filters"
-                                description="Leads appear here when someone taps the WhatsApp button on one of your Meta ads and sends a message."
+                                description="Leads appear here when someone taps the WhatsApp button on one of your Meta ads, or on your website after a paid ad, and sends a message."
                             />
                         ) : (
                             <Table>

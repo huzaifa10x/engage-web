@@ -322,6 +322,16 @@ export type LeadEvidence = {
         video_url?: string;
         ad_id?: string;
         click_id_sent?: boolean;
+        /** Website taps: the site, the page with the button, the landing page, UTMs, masked reference. */
+        site?: string;
+        page_path?: string;
+        landing_path?: string;
+        campaign?: Record<string, string>;
+        referrer_host?: string;
+        campaign_params_origin?: string;
+        reference?: string;
+        /** Which click IDs (gclid, gbraid, wbraid, fbclid) came with the tap — never their values. */
+        click_ids_sent?: string[];
     };
     conversation_id?: string | null;
 };
@@ -348,9 +358,12 @@ export type LeadSummary = {
     meta_instagram: number;
     /** Of the Meta leads, those from boosted posts. */
     meta_posts: number;
-    website_lost: number;
-    /** null for people who only see their own leads. */
+    /** null until a website is tracked. */
+    website_lost: number | null;
+    /** null for people who only see their own leads, and until a website is tracked. */
     unmatched_clicks: { total: number; pending: number } | null;
+    /** Websites in Tracking Setup: the website cards and the Unmatched clicks tab show only when > 0. */
+    websites: number;
     sees_all: boolean;
 };
 
@@ -414,7 +427,57 @@ export type MarketingCampaignRow = {
 
 export type MarketingTrendPoint = { date: string; new_leads: number; qualified: number | null; prev_date: string | null; prev_new_leads: number | null };
 
-export type UnmatchedClick = { id: string; received_at: string; page: string | null; source: string; status: 'pending' | 'unattributed'; note: string };
+export type UnmatchedClick = {
+    id: string;
+    received_at: string;
+    site: string | null;
+    page: string | null;
+    source: string;
+    campaign: string | null;
+    status: 'pending' | 'unattributed';
+    note: string;
+};
+
+/** Tracking Setup › Websites: a client website with the tracker. */
+export type GrowthSite = {
+    id: string;
+    domain: string;
+    display_name: string | null;
+    enabled: boolean;
+    verified_at: string | null;
+    consent_mode: 'click_only' | 'consent';
+    session_landing_mode: boolean;
+    site_key: string;
+    snippet: string;
+    gtm_snippet: string;
+    privacy_line: string;
+    numbers: {
+        mapping_id: string;
+        phone_number_id: string;
+        public_number: string;
+        display_phone_number: string | null;
+        verified_name: string | null;
+        status: string;
+    }[];
+    health: SiteHealth;
+    created_at: string | null;
+};
+
+export type SiteHealth = {
+    tracking_status: 'not_installed' | 'awaiting_verification' | 'active' | 'not_seen' | 'paused';
+    sdk_last_seen_at: string | null;
+    last_click_at: string | null;
+    last_match_at: string | null;
+    accepted_clicks_24h: number;
+    matched_24h: number;
+    filtered_24h: number;
+    errors_24h: number;
+    last_error_code: string | null;
+    last_error_at: string | null;
+    config_version: number;
+};
+
+export type SiteTest = { started_at: string | null; tracker_seen: boolean; tap_received: boolean; message_received: boolean; matched: boolean };
 
 export type Conversation = {
     /** Set while the conversation is snoozed (hidden from the inbox until then). */
@@ -472,7 +535,10 @@ export type Message = {
     origin: 'customer' | 'agent' | 'api' | 'campaign' | 'automation' | 'app_echo' | 'history';
     type: string;
     status: MessageStatus;
+    /** Inbound messages are shown without a Growth Hub website code. */
     body: string | null;
+    /** The message as received, when it carried a website code: Owners and Admins only (audit). */
+    raw_body?: string | null;
     content: Record<string, unknown>;
     template: {
         name?: string;

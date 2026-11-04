@@ -1,6 +1,7 @@
 'use client';
 
 import { AlertCircleIcon, BotIcon, CheckCheckIcon, CheckIcon, ClockIcon, FileIcon, HistoryIcon, MapPinIcon, ReplyIcon, SmartphoneIcon } from 'lucide-react';
+import { useState } from 'react';
 
 import { clockTime, fileSize } from '@/lib/format';
 import type { Message } from '@/lib/types';
@@ -194,6 +195,23 @@ function Body({ message }: { message: Message }) {
     }
 }
 
+/**
+ * Growth Hub: the customer's message is shown without its website code ("… (Ref: XG-…)"). Owners
+ * and Admins can show the raw text as received (audit); the server sends it only to them.
+ */
+function RawText({ raw }: { raw: string }) {
+    const [open, setOpen] = useState(false);
+
+    return (
+        <div className="mt-1 text-[11.5px]">
+            <button type="button" onClick={() => setOpen((o) => !o)} className="text-muted-foreground underline-offset-2 hover:underline">
+                {open ? 'Hide raw text' : 'Show raw text'}
+            </button>
+            {open && <p className="mt-0.5 rounded bg-black/5 px-1.5 py-1 font-mono break-words whitespace-pre-wrap">{raw}</p>}
+        </div>
+    );
+}
+
 export function MessageBubble({
     message,
     quoted,
@@ -232,6 +250,7 @@ export function MessageBubble({
                     </div>
                 )}
                 <Body message={message} />
+                {message.raw_body && <RawText raw={message.raw_body} />}
                 {message.status === 'failed' && (
                     <div className="mt-1.5 rounded border border-bad/30 bg-bad-bg px-2 py-1.5 text-[12.5px] text-bad" role="alert">
                         <p className="font-semibold">
