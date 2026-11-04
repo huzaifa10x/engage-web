@@ -18,7 +18,7 @@ import { useStored } from '@/hooks/use-stored';
 import { api, errorMessage } from '@/lib/api';
 import { dateTime, humanize, timeLeft } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { keys, useMembers } from '@/lib/queries';
+import { keys, useAssignees } from '@/lib/queries';
 import type { Contact, Conversation } from '@/lib/types';
 
 const UNASSIGNED = '__none__';
@@ -26,7 +26,7 @@ const UNASSIGNED = '__none__';
 export function ContactPanel({ conversation }: { conversation: Conversation }) {
     const { can, membership } = useSession();
     const qc = useQueryClient();
-    const members = useMembers(can(P.TeamView) && can(P.InboxAssign));
+    const assignees = useAssignees(conversation.id, can(P.InboxAssign));
     const contact = conversation.contact;
     const [width, setWidth] = useStored<number>('engage.inbox.panel-width', 320);
     const [crmOpen, setCrmOpen] = useState(false);
@@ -137,7 +137,7 @@ export function ContactPanel({ conversation }: { conversation: Conversation }) {
                     </div>
                     <div className="grid gap-1.5">
                         <span className="text-muted-foreground">Assigned to</span>
-                        {can(P.InboxAssign) && members.data ? (
+                        {can(P.InboxAssign) && assignees.data ? (
                             <Select
                                 value={conversation.assigned_membership_id ?? UNASSIGNED}
                                 onValueChange={(v) => update.mutate({ assigned_membership_id: v === UNASSIGNED ? null : v })}
@@ -147,10 +147,12 @@ export function ContactPanel({ conversation }: { conversation: Conversation }) {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value={UNASSIGNED}>Unassigned</SelectItem>
-                                    {members.data.data.map((m) => (
-                                        <SelectItem key={m.id} value={m.id}>
-                                            {m.user?.name}
+                                    {assignees.data.map((m) => (
+                                        // Teammates without this number can't take the chat: shown, but not selectable.
+                                        <SelectItem key={m.id} value={m.id} disabled={!m.can_access}>
+                                            {m.name}
                                             {m.id === membership.id ? ' (you)' : ''}
+                                            {!m.can_access ? ' · no access to this number' : ''}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

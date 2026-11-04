@@ -116,6 +116,16 @@ export const useEntitlements = () =>
 export const useRoles = (enabled = true) =>
     useQuery({ queryKey: keys.roles, queryFn: () => api<Data<Role[]>>('roles').then((r) => r.data), enabled, staleTime: 300_000 });
 
+/** Teammates a conversation can be assigned to, each marked with access to its WhatsApp number. */
+export type Assignee = { id: string; name: string; role: string | null; can_access: boolean };
+export const useAssignees = (conversationId: string | undefined, enabled = true) =>
+    useQuery({
+        queryKey: ['inbox', 'assignees', conversationId],
+        queryFn: () => api<Data<Assignee[]>>(`conversations/${conversationId}/assignees`).then((r) => r.data),
+        enabled: enabled && !!conversationId,
+        staleTime: 30_000,
+    });
+
 export const useMembers = (enabled = true) =>
     useQuery({ queryKey: keys.members, queryFn: () => api<Paginated<Membership>>('team/members', { query: { per_page: 100 } }), enabled });
 

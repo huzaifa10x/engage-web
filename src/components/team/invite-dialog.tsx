@@ -3,18 +3,19 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Controller, useForm } from 'react-hook-form';
+import { Controller, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
 import { Field, FormError } from '@/components/app/field';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api, ApiError } from '@/lib/api';
 import { applyServerErrors } from '@/lib/form';
-import { keys } from '@/lib/queries';
+import { keys, usePhoneNumbers } from '@/lib/queries';
 import type { Role } from '@/lib/types';
 
 const schema = z.object({
@@ -22,6 +23,10 @@ const schema = z.object({
     role_id: z.string().min(1, 'Choose a role.'),
 });
 type Values = z.infer<typeof schema>;
+
+/** Owners, Admins and roles that manage channels reach every number; others only the ones they are given. */
+const allNumbers = (role?: Role) =>
+    !!role && (['owner', 'admin'].includes(role.key) || role.permissions.includes('*') || role.permissions.includes('channels.manage'));
 
 export function InviteDialog({ open, onOpenChange, roles }: { open: boolean; onOpenChange: (o: boolean) => void; roles: Role[] }) {
     const qc = useQueryClient();
@@ -31,14 +36,28 @@ export function InviteDialog({ open, onOpenChange, roles }: { open: boolean; onO
         resolver: zodResolver(schema),
         values: { email: '', role_id: defaultRole },
     });
+    // The numbers the person can use once they join. Without any, an Agent sees an empty inbox and
+    // cannot be assigned chats, so every connected number is ticked to start with.
+    const numbers = (usePhoneNumbers().data ?? []).filter((n) => n.status !== 'disconnected');
+    const [picked, setPicked] = useState<string[] | null>(null);
+    const chosen = picked ?? numbers.map((n) => n.id);
+    const roleId = useWatch({ control, name: 'role_id' });
+    const role = roles.find((r) => r.id === roleId);
+    const needsNumbers = !allNumbers(role) && numbers.length > 0;
 
     const onSubmit = handleSubmit(async (values) => {
         setFormError(null);
         try {
-            await api('team/invitations', { method: 'POST', body: values });
+            if (needsNumbers && chosen.length === 0) {
+                setFormError('Choose at least one WhatsApp number this teammate can use.');
+
+                return;
+            }
+            await api('team/invitations', { method: 'POST', body: needsNumbers ? { ...values, phone_number_ids: chosen } : values });
             toast.success(`Invitation sent to ${values.email}`);
             void qc.invalidateQueries({ queryKey: keys.invitations });
             reset();
+            setPicked(null);
             onOpenChange(false);
         } catch (e) {
             setFormError(
@@ -88,6 +107,37 @@ export function InviteDialog({ open, onOpenChange, roles }: { open: boolean; onO
                             )}
                         />
                     </Field>
+                    {needsNumbers && (
+                        <Field
+                            label="WhatsApp numbers"
+                            htmlFor="invite-numbers"
+                            hint="The chats, contacts and reports they can see, and the chats they can be assigned"
+                        >
+                            <ul id="invite-numbers" className="grid max-h-56 gap-1 overflow-y-auto">
+                                {numbers.map((n) => {
+                                    const id = `invite-n-${n.id}`;
+
+                                    return (
+                                        <li key={n.id}>
+                                            <label htmlFor={id} className="flex cursor-pointer items-center gap-3 rounded-md border p-2.5 hover:bg-muted/50">
+                                                <Checkbox
+                                                    id={id}
+                                                    checked={chosen.includes(n.id)}
+                                                    onCheckedChange={(v) =>
+                                                        setPicked(v === true ? [...new Set([...chosen, n.id])] : chosen.filter((x) => x !== n.id))
+                                                    }
+                                                />
+                                                <span className="min-w-0">
+                                                    <span className="block truncate text-sm font-semibold">{n.verified_name ?? 'Unnamed number'}</span>
+                                                    <span className="block font-mono text-[12px] text-muted-foreground">{n.display_phone_number}</span>
+                                                </span>
+                                            </label>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </Field>
+                    )}
                 </form>
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>

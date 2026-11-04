@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { api, errorMessage } from '@/lib/api';
 import { P } from '@/lib/permissions';
-import { addConversationNote, keys, snoozeConversation, useMembers } from '@/lib/queries';
+import { addConversationNote, keys, snoozeConversation, useAssignees } from '@/lib/queries';
 import type { Lead } from '@/lib/types';
 
 /**
@@ -26,7 +26,7 @@ export function LeadActions({ lead }: { lead: Lead }) {
     const qc = useQueryClient();
     const [noteOpen, setNoteOpen] = useState(false);
     const [note, setNote] = useState('');
-    const members = useMembers(can(P.TeamView) && can(P.InboxAssign));
+    const assignees = useAssignees(lead.conversation_id, can(P.InboxAssign));
     const done = (what: string) => {
         toast.success(`${what} · saved to Contacts & CRM`);
         void qc.invalidateQueries({ queryKey: keys.leadsAll });
@@ -60,7 +60,7 @@ export function LeadActions({ lead }: { lead: Lead }) {
             <Button size="sm" asChild>
                 <Link href={`/inbox?c=${lead.conversation_id}`}>Open chat</Link>
             </Button>
-            {can(P.InboxAssign) && members.data && (
+            {can(P.InboxAssign) && assignees.data && (
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                         <Button size="sm" variant="outline" disabled={assign.isPending}>
@@ -69,9 +69,10 @@ export function LeadActions({ lead }: { lead: Lead }) {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
                         <DropdownMenuItem onSelect={() => assign.mutate(null)}>Unassigned</DropdownMenuItem>
-                        {members.data.data.map((m) => (
-                            <DropdownMenuItem key={m.id} onSelect={() => assign.mutate(m.id)}>
-                                {m.user?.name}
+                        {assignees.data.map((m) => (
+                            <DropdownMenuItem key={m.id} disabled={!m.can_access} onSelect={() => assign.mutate(m.id)}>
+                                {m.name}
+                                {!m.can_access ? ' · no access to this number' : ''}
                                 {m.id === membership.id ? ' (you)' : ''}
                                 {m.id === lead.assigned?.id ? ' ✓' : ''}
                             </DropdownMenuItem>
