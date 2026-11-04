@@ -5,10 +5,12 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { StageBadge } from '@/components/contacts/stage-badge';
+import { StagesTab } from '@/components/contacts/stages-tab';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { api, errorMessage } from '@/lib/api';
-import { useStageMapping, useStages } from '@/lib/queries';
+import { keys, useStageMapping, useStages } from '@/lib/queries';
+import type { CrmStage } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 type Step = 'contacted' | 'qualified';
@@ -23,6 +25,7 @@ export function StageMappingDialog({ open, onOpenChange }: { open: boolean; onOp
     const stages = (useStages(open).data ?? []).filter((s) => !s.archived);
     const mapping = useStageMapping(open);
     const [draft, setDraft] = useState<Record<string, Step | null> | null>(null);
+    const [editing, setEditing] = useState(false); // add, rename or reorder stages right here
     const current: Record<string, Step | null> =
         draft ??
         Object.fromEntries(
@@ -51,6 +54,18 @@ export function StageMappingDialog({ open, onOpenChange }: { open: boolean; onOp
         onError: (e) => toast.error(errorMessage(e)),
     });
 
+    // No stages yet: add the suggested pipeline and pre-fill the usual mapping (Contacted → Contacted;
+    // Qualified and Won → Qualified). Nothing is saved until "Save stages".
+    const suggest = useMutation({
+        mutationFn: () => api<{ data: CrmStage[] }>('crm/stages/suggested', { method: 'POST' }).then((r) => r.data),
+        onSuccess: (created) => {
+            void qc.invalidateQueries({ queryKey: keys.stages });
+            const step = (name: string): Step | null => (name === 'Contacted' ? 'contacted' : name === 'Qualified' || name === 'Won' ? 'qualified' : null);
+            setDraft(Object.fromEntries(created.map((s) => [s.id, step(s.name)])));
+        },
+        onError: (e) => toast.error(errorMessage(e)),
+    });
+
     const set = (id: string, step: Step | null) => setDraft({ ...current, [id]: step });
     const anyQualified = Object.values(current).includes('qualified');
 
@@ -58,7 +73,10 @@ export function StageMappingDialog({ open, onOpenChange }: { open: boolean; onOp
         <Dialog
             open={open}
             onOpenChange={(o) => {
-                if (!o) setDraft(null);
+                if (!o) {
+                    setDraft(null);
+                    setEditing(false);
+                }
                 onOpenChange(o);
             }}
         >
@@ -70,10 +88,25 @@ export function StageMappingDialog({ open, onOpenChange }: { open: boolean; onOp
                         within 30 days of its first message; Qualified stages also count as Contacted.
                     </DialogDescription>
                 </DialogHeader>
-                {stages.length === 0 ? (
-                    <p className="rounded-lg border border-dashed p-4 text-center text-[13px] text-muted-foreground">
-                        No CRM stages yet. Add them under Contacts › Segments, tags, fields and stages › Stages.
-                    </p>
+                {editing ? (
+                    <div className="grid gap-3">
+                        <StagesTab open={open} />
+                        <Button size="sm" variant="outline" className="w-fit" onClick={() => setEditing(false)}>
+                            Done: choose Contacted and Qualified
+                        </Button>
+                    </div>
+                ) : stages.length === 0 ? (
+                    <div className="grid justify-items-center gap-3 rounded-lg border border-dashed p-4 text-center text-[13px] text-muted-foreground">
+                        <p>Your workspace has no CRM stages yet. Start with the suggested pipeline, or create your own.</p>
+                        <div className="flex flex-wrap justify-center gap-2">
+                            <Button size="sm" onClick={() => suggest.mutate()} disabled={suggest.isPending}>
+                                {suggest.isPending ? 'Adding…' : 'Add suggested stages (New, Contacted, Qualified, Won, Lost)'}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
+                                Create my own stages
+                            </Button>
+                        </div>
+                    </div>
                 ) : (
                     <ul className="grid gap-1.5">
                         {stages.map((s) => (
@@ -106,7 +139,14 @@ export function StageMappingDialog({ open, onOpenChange }: { open: boolean; onOp
                         ))}
                     </ul>
                 )}
-                {!anyQualified && stages.length > 0 && <p className="text-[12.5px] text-warn">Choose at least one Qualified stage to see qualified leads.</p>}
+                {!editing && stages.length > 0 && (
+                    <button type="button" className="w-fit text-[12.5px] text-info underline-offset-2 hover:underline" onClick={() => setEditing(true)}>
+                        Add or change stages
+                    </button>
+                )}
+                {!editing && !anyQualified && stages.length > 0 && (
+                    <p className="text-[12.5px] text-warn">Choose at least one Qualified stage to see qualified leads.</p>
+                )}
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
                         Cancel

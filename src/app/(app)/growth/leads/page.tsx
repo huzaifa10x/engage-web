@@ -24,28 +24,23 @@ import { cn } from '@/lib/utils';
 
 const ALL = '__all__';
 
-type Tab = 'all' | 'new' | 'unattributed' | 'clicks';
+type Tab = 'all' | 'new' | 'clicks';
 
+// Leads are paid-advertising leads only (Click-to-WhatsApp ads and boosted posts for now; paid
+// website campaigns join with website tracking). Ordinary chats stay in Chat and Contacts.
 const SOURCES: [string, string][] = [
-    ['google_ads', 'Google Ads'],
     ['meta', 'Meta (ads and boosted posts)'],
     ['meta_paid', 'Meta ad (paid)'],
     ['meta_post', 'Meta boosted post'],
     ['meta_instagram', 'Meta ad · Instagram'],
     ['meta_facebook', 'Meta ad · Facebook'],
-    ['organic', 'Organic'],
-    ['direct', 'Direct'],
-    ['unknown', 'Unknown'],
-    ['before', 'Before tracking'],
 ];
 
 const STATUSES: [string, string][] = [
-    ['ref', 'Reference matched'],
-    ['meta', 'Meta ad'],
+    ['meta', 'Meta ad (first message)'],
     ['multi', 'Multiple sources'],
-    ['web', 'Website · details unavailable'],
-    ['unattributed', 'Unattributed'],
-    ['before', 'Before tracking'],
+    ['before', 'Returning customer (before tracking)'],
+    ['unattributed', 'Came back through an ad'],
 ];
 
 function Kpi({ label, value, hint, hero = false }: { label: string; value: string; hint: string; hero?: boolean }) {
@@ -214,7 +209,9 @@ function LeadsPage() {
             <PageHeader
                 title="Leads"
                 description={
-                    seesAll ? 'Every WhatsApp lead with where it came from. Same records as Contacts & CRM.' : 'Your assigned leads and where they came from.'
+                    seesAll
+                        ? 'Chats that came from your paid ads, with the ad behind each. Same records as Contacts & CRM.'
+                        : 'Your assigned ad leads and the ad behind each.'
                 }
                 actions={
                     seesAll &&
@@ -247,14 +244,10 @@ function LeadsPage() {
                     Array.from({ length: 5 }, (_, i) => <Skeleton key={i} className="h-[104px]" />)
                 ) : (
                     <>
-                        <Kpi hero label="WhatsApp leads · 30 days" value={String(k.leads)} hint="new enquiries after tracking began" />
-                        <Kpi
-                            label="Confirmed source"
-                            value={k.confirmed_rate === null ? '—' : `${k.confirmed_rate}%`}
-                            hint={`${k.confirmed} by reference or Meta ad`}
-                        />
-                        <Kpi label="From Meta ads" value={String(k.meta)} hint={`${k.meta_posts} boosted posts · ${k.meta_instagram} proven Instagram`} />
-                        <Kpi label="Website, details lost" value={String(k.website_lost)} hint="valid code, click not registered" />
+                        <Kpi hero label="Ad leads · 30 days" value={String(k.leads)} hint="chats from your Meta ads in the last 30 days" />
+                        <Kpi label="New customers" value={String(k.new_customers)} hint="their first message came from an ad" />
+                        <Kpi label="Returning" value={String(k.returning)} hint="existing contacts who came back through an ad" />
+                        <Kpi label="From boosted posts" value={String(k.meta_posts)} hint={`${k.meta_instagram} proven Instagram · rest not split`} />
                         <Kpi
                             label="Unmatched clicks"
                             value={k.unmatched_clicks ? String(k.unmatched_clicks.total) : '—'}
@@ -270,7 +263,6 @@ function LeadsPage() {
                         [
                             ['all', 'All leads', counts?.all],
                             ['new', 'New', counts?.new],
-                            ['unattributed', 'Unattributed', counts?.unattributed],
                             ...(seesAll ? ([['clicks', 'Unmatched clicks', k?.unmatched_clicks?.total]] as const) : []),
                         ] as [Tab, string, number | undefined][]
                     ).map(([key, label, n]) => (
@@ -378,7 +370,7 @@ function LeadsPage() {
                             <EmptyState
                                 icon={<TargetIcon className="size-5" />}
                                 title="No leads match these filters"
-                                description="Leads appear here as customers message your WhatsApp numbers."
+                                description="Leads appear here when someone taps the WhatsApp button on one of your Meta ads and sends a message."
                             />
                         ) : (
                             <Table>

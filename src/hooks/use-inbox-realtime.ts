@@ -3,6 +3,8 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 
+import { useSession } from '@/components/app/session';
+import { P } from '@/lib/permissions';
 import { keys, usePhoneNumbers } from '@/lib/queries';
 import { getEcho, realtimeConfigured } from '@/lib/realtime';
 
@@ -11,11 +13,15 @@ type MessageEvent = { id: string; conversation_id: string; direction: string; st
 export type RealtimeState = 'live' | 'connecting' | 'polling';
 
 /**
- * Subscribes to `tenant.{tenant}.number.{number}` for every number this member can use and
- * refreshes the affected queries (batched, so a campaign burst causes one refetch, not 500).
+ * Owners and Admins (who see every chat) subscribe to `tenant.{tenant}.number.{number}` for every
+ * number they can use; everyone also listens on `tenant.{tenant}.member.{membership}` for the chats
+ * assigned to them (that is all an agent gets). Refreshes the affected queries, batched, so a
+ * campaign burst causes one refetch, not 500. The server refuses number channels to agents.
  */
 export function useInboxRealtime(tenantId: string, onInbound?: (e: MessageEvent) => void): RealtimeState {
     const qc = useQueryClient();
+    const { can, membership } = useSession();
+    const seesAll = can(P.InboxAssign);
     const numbers = usePhoneNumbers();
     const [state, setState] = useState<RealtimeState>(realtimeConfigured ? 'connecting' : 'polling');
     const pending = useRef<{ threads: Set<string>; list: boolean; timer: ReturnType<typeof setTimeout> | null }>({
@@ -29,18 +35,21 @@ export function useInboxRealtime(tenantId: string, onInbound?: (e: MessageEvent)
         onInboundRef.current = onInbound;
     }, [onInbound]);
 
-    const ids = (numbers.data ?? [])
-        .filter((n) => n.status !== 'disconnected')
-        .map((n) => n.id)
-        .sort()
-        .join(',');
+    const ids = seesAll
+        ? (numbers.data ?? [])
+              .filter((n) => n.status !== 'disconnected')
+              .map((n) => n.id)
+              .sort()
+              .join(',')
+        : '';
+    const memberId = membership.id;
 
     useEffect(() => {
         const echoPromise = getEcho();
-        if (!echoPromise || ids === '') return;
+        if (!echoPromise) return;
 
         let disposed = false;
-        const channels = ids.split(',').map((id) => `tenant.${tenantId}.number.${id}`);
+        const channels = [...(ids === '' ? [] : ids.split(',').map((id) => `tenant.${tenantId}.number.${id}`)), `tenant.${tenantId}.member.${memberId}`];
 
         const flush = () => {
             const p = pending.current;
@@ -73,7 +82,14 @@ export function useInboxRealtime(tenantId: string, onInbound?: (e: MessageEvent)
             for (const name of channels) {
                 echo.private(name)
                     .listen('.message.created', (e: MessageEvent) => schedule(e, true))
-                    .listen('.message.updated', (e: MessageEvent) => schedule(e, false));
+                    .listen('.message.updated', (e: MessageEvent) => schedule(e, false))
+                    // A chat changed hands: the list gains or loses it (agents), or shows the new assignee.
+                    .listen('.conversation.assigned', (e: { conversation_id: string }) => {
+                        const p = pending.current;
+                        p.list = true;
+                        p.threads.add(e.conversation_id);
+                        p.timer ??= setTimeout(flush, 250);
+                    });
             }
         });
 
@@ -81,7 +97,7 @@ export function useInboxRealtime(tenantId: string, onInbound?: (e: MessageEvent)
             disposed = true;
             void echoPromise.then((echo) => channels.forEach((name) => echo.leave(name)));
         };
-    }, [ids, tenantId, qc]);
+    }, [ids, memberId, tenantId, qc]);
 
     return state;
 }

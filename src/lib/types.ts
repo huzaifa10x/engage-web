@@ -341,10 +341,10 @@ export type Lead = {
 export type LeadPage = CursorPage<Lead> & { meta: { counts: { all: number; new: number; unattributed: number }; sees_all: boolean } };
 
 export type LeadSummary = {
+    /** Ad leads with a paid touch in the last 30 days (= the All leads tab). */
     leads: number;
-    confirmed: number;
-    confirmed_rate: number | null;
-    meta: number;
+    new_customers: number;
+    returning: number;
     meta_instagram: number;
     /** Of the Meta leads, those from boosted posts. */
     meta_posts: number;
