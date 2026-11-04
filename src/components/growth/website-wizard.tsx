@@ -20,6 +20,9 @@ const STEPS = ['Website', 'WhatsApp number', 'Install', 'Mode', 'Check and test'
 
 type Install = 'snippet' | 'gtm' | 'wordpress' | 'shopify';
 
+/** The tracker's host, from the snippet the server built (e.g. e.10xdigital.ae). */
+const collectorHost = (snippet: string) => /https:\/\/([^/"]+)\//.exec(snippet)?.[1] ?? 'the tracker host';
+
 export async function copyText(text: string) {
     try {
         await navigator.clipboard.writeText(text);
@@ -264,8 +267,8 @@ export function WebsiteWizard({ open, onOpenChange, site: initial }: { open: boo
                             </div>
                             <p className="text-[12.5px] text-muted-foreground">
                                 Works with wa.me, api.whatsapp.com and whatsapp:// links. For a chat widget that opens WhatsApp from code, call{' '}
-                                <code>XG.link(url)</code> in its click handler. If your site has a Content Security Policy, allow <code>e.10xengage.com</code>{' '}
-                                in script-src and connect-src.
+                                <code>XG.link(url)</code> in its click handler. If your site has a Content Security Policy, allow{' '}
+                                <code>{collectorHost(site.snippet)}</code> in script-src and connect-src.
                             </p>
                         </div>
                     )}
