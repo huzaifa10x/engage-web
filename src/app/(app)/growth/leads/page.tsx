@@ -28,7 +28,9 @@ type Tab = 'all' | 'new' | 'unattributed' | 'clicks';
 
 const SOURCES: [string, string][] = [
     ['google_ads', 'Google Ads'],
-    ['meta', 'Meta ad'],
+    ['meta', 'Meta (ads and boosted posts)'],
+    ['meta_paid', 'Meta ad (paid)'],
+    ['meta_post', 'Meta boosted post'],
     ['meta_instagram', 'Meta ad · Instagram'],
     ['meta_facebook', 'Meta ad · Facebook'],
     ['organic', 'Organic'],
@@ -219,7 +221,7 @@ function LeadsPage() {
                             value={k.confirmed_rate === null ? '—' : `${k.confirmed_rate}%`}
                             hint={`${k.confirmed} by reference or Meta ad`}
                         />
-                        <Kpi label="From Meta ads" value={String(k.meta)} hint={`${k.meta_instagram} proven Instagram · rest not split`} />
+                        <Kpi label="From Meta ads" value={String(k.meta)} hint={`${k.meta_posts} boosted posts · ${k.meta_instagram} proven Instagram`} />
                         <Kpi label="Website, details lost" value={String(k.website_lost)} hint="valid code, click not registered" />
                         <Kpi
                             label="Unmatched clicks"

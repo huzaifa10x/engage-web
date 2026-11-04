@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
+import { StageBadge } from '@/components/contacts/stage-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -119,10 +120,12 @@ export default function TrackingSetupPage() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Ad</TableHead>
+                                <TableHead className="min-w-48">Ad</TableHead>
                                 <TableHead>Meta ad ID</TableHead>
                                 <TableHead className="text-right">New leads</TableHead>
                                 <TableHead className="text-right">Chats started</TableHead>
+                                <TableHead>Within 30 days</TableHead>
+                                <TableHead>Number</TableHead>
                                 <TableHead>Last chat</TableHead>
                                 <TableHead>Runs on</TableHead>
                             </TableRow>
@@ -143,6 +146,27 @@ export default function TrackingSetupPage() {
                                         </Link>
                                     </TableCell>
                                     <TableCell className="text-right tabular-nums">{ad.messages}</TableCell>
+                                    <TableCell>
+                                        {ad.outcomes.length === 0 ? (
+                                            <span className="text-[12.5px] text-muted-foreground">No stage changes yet</span>
+                                        ) : (
+                                            <div className="flex max-w-56 flex-wrap gap-1">
+                                                {ad.outcomes.map((o) => (
+                                                    <span key={o.stage.id} className="inline-flex items-center gap-1 text-[12px] tabular-nums">
+                                                        <StageBadge stage={o.stage} /> {o.leads}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="text-[12.5px]">
+                                        {ad.numbers.map((n) => (
+                                            <p key={n.id} className="font-mono whitespace-nowrap" title={n.verified_name ?? undefined}>
+                                                {n.display_phone_number}
+                                                {ad.numbers.length > 1 && <span className="text-muted-foreground"> · {n.chats}</span>}
+                                            </p>
+                                        ))}
+                                    </TableCell>
                                     <TableCell className="text-[12.5px] text-muted-foreground">{relative(ad.last_seen_at)}</TableCell>
                                     <TableCell>
                                         <PlatformSelect ad={ad} editable={editable} />
@@ -156,6 +180,7 @@ export default function TrackingSetupPage() {
                     Meta doesn’t say whether a chat came from Facebook or Instagram, and an ad on both keeps one ad ID. Set <b>Instagram only</b> or{' '}
                     <b>Facebook only</b> for an ad whose placements are on one platform: its leads then show “Meta ad · Instagram” or “Meta ad · Facebook”.
                     Otherwise they show “Meta ad”. New leads counts people whose first message came from the ad; chats started also counts returning customers.
+                    “Within 30 days” is the furthest CRM stage those new leads reached within 30 days of their first message.
                 </p>
             </Card>
 

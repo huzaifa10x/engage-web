@@ -346,6 +346,8 @@ export type LeadSummary = {
     confirmed_rate: number | null;
     meta: number;
     meta_instagram: number;
+    /** Of the Meta leads, those from boosted posts. */
+    meta_posts: number;
     website_lost: number;
     /** null for people who only see their own leads. */
     unmatched_clicks: { total: number; pending: number } | null;
@@ -363,6 +365,10 @@ export type MetaAd = {
     platform: 'instagram' | 'facebook' | null;
     leads: number;
     messages: number;
+    /** The receiving numbers this ad's chats came in on. */
+    numbers: { id: string; display_phone_number: string | null; verified_name: string | null; chats: number }[];
+    /** New leads by the furthest CRM stage reached within 30 days (leads never moved are not listed). */
+    outcomes: { stage: StageRef; leads: number }[];
     first_seen_at: string;
     last_seen_at: string;
 };
