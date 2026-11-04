@@ -311,7 +311,19 @@ export type LeadEvidence = {
     platform: string | null;
     platform_proof: string | null;
     /** Meta ad referral only. The ad click ID itself is never sent, only whether Meta included one. */
-    details: { headline?: string; body?: string; source_type?: string; source_url?: string; ad_id?: string; click_id_sent?: boolean };
+    details: {
+        headline?: string;
+        body?: string;
+        source_type?: string;
+        source_url?: string;
+        /** The ad creative: image | video (and its link). */
+        media_type?: string;
+        creative_url?: string;
+        video_url?: string;
+        ad_id?: string;
+        click_id_sent?: boolean;
+    };
+    conversation_id?: string | null;
 };
 
 /** Growth Hub › Leads: a CRM contact on one WhatsApp number (its conversation), with its source. */
@@ -338,6 +350,21 @@ export type LeadSummary = {
     /** null for people who only see their own leads. */
     unmatched_clicks: { total: number; pending: number } | null;
     sees_all: boolean;
+};
+
+/** Tracking Setup › Meta ads: a Click-to-WhatsApp ad leads came from (ad ID masked). */
+export type MetaAd = {
+    id: string;
+    ad_id: string;
+    source_type: string | null;
+    headline: string | null;
+    source_url: string | null;
+    /** Set when the ad runs on one platform only: the proof for "Meta ad · Instagram / Facebook". */
+    platform: 'instagram' | 'facebook' | null;
+    leads: number;
+    messages: number;
+    first_seen_at: string;
+    last_seen_at: string;
 };
 
 export type UnmatchedClick = { id: string; received_at: string; page: string | null; source: string; status: 'pending' | 'unattributed'; note: string };

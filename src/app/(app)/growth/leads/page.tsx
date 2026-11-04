@@ -1,7 +1,8 @@
 'use client';
 
 import { DownloadIcon, SearchIcon, TargetIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
@@ -17,7 +18,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { dateTime, relative } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { type LeadFilters, useLeads, useLeadSummary, useMembers, usePhoneNumbers, useStages, useUnmatchedClicks } from '@/lib/queries';
+import { type LeadFilters, useLeads, useLeadSummary, useMembers, useMetaAds, usePhoneNumbers, useStages, useUnmatchedClicks } from '@/lib/queries';
 import type { Lead } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -144,13 +145,15 @@ function UnmatchedClicks() {
  * from — the same records as Contacts & CRM. Owners and Admins see all leads, evidence, Unmatched
  * clicks and Export; Agents see their own leads and the source only.
  */
-export default function LeadsPage() {
+function LeadsPage() {
     const { can, me } = useSession();
     const full = me.growth?.tier === 'full';
     const allowed = can(P.InboxView) && full;
     const seesAll = can(P.GrowthView);
     const [tab, setTab] = useState<Tab>('all');
-    const [filters, setFilters] = useState<LeadFilters>({ days: 30 });
+    // Tracking Setup links here with ?ad=<id> to show one ad's leads.
+    const params = useSearchParams();
+    const [filters, setFilters] = useState<LeadFilters>(() => (params.get('ad') ? { days: 365, ad: params.get('ad') ?? undefined } : { days: 30 }));
     const [search, setSearch] = useState('');
     const [openId, setOpenId] = useState<string | null>(null);
 
@@ -160,6 +163,8 @@ export default function LeadsPage() {
     const numbers = usePhoneNumbers();
     const stages = (useStages(allowed).data ?? []).filter((s) => !s.archived);
     const members = useMembers(allowed && seesAll && can(P.TeamView));
+    // Leads grouped by the Meta ad (ad ID) that started them.
+    const ads = useMetaAds(allowed && seesAll).data ?? [];
 
     const rows = leads.data?.pages.flatMap((p) => p.data) ?? [];
     const counts = leads.data?.pages[0]?.meta.counts;
@@ -281,6 +286,15 @@ export default function LeadsPage() {
                                 options={STATUSES}
                                 all="All match statuses"
                             />
+                            {seesAll && ads.length > 0 && (
+                                <FilterSelect
+                                    label="Meta ad"
+                                    value={filters.ad}
+                                    onChange={(v) => set({ ad: v })}
+                                    options={ads.map((ad) => [ad.id, `${ad.headline ?? 'Untitled ad'} · ${ad.ad_id}`] as [string, string])}
+                                    all="All Meta ads"
+                                />
+                            )}
                             <FilterSelect
                                 label="Number"
                                 value={filters.phone_number_id}
@@ -388,5 +402,13 @@ export default function LeadsPage() {
 
             {open && <LeadDetails contact={open.contact} lead={open} open={!!open} onOpenChange={(o) => !o && setOpenId(null)} />}
         </>
+    );
+}
+
+export default function LeadsRoute() {
+    return (
+        <Suspense>
+            <LeadsPage />
+        </Suspense>
     );
 }

@@ -6,6 +6,7 @@ import { api, upload } from './api';
 import type {
     LeadPage,
     LeadSummary,
+    MetaAd,
     UnmatchedClick,
     CrmStage,
     LeadEvidence,
@@ -658,6 +659,8 @@ export type LeadFilters = {
     assigned?: string;
     stage_id?: string;
     days?: number;
+    /** A Meta ad (Tracking Setup id): leads whose original source is that ad. */
+    ad?: string;
 };
 
 /** Growth Hub › Leads: the CRM's WhatsApp leads with their source (own leads only for agents). */
@@ -672,6 +675,9 @@ export const useLeads = (filters: LeadFilters, enabled = true) =>
 
 export const useLeadSummary = (enabled = true) =>
     useQuery({ queryKey: keys.leadSummary, queryFn: () => api<Data<LeadSummary>>('growth/leads/summary').then((r) => r.data), enabled });
+
+export const useMetaAds = (enabled = true) =>
+    useQuery({ queryKey: ['growth', 'meta-ads'], queryFn: () => api<Data<MetaAd[]>>('growth/meta-ads').then((r) => r.data), enabled });
 
 export const useUnmatchedClicks = (enabled = true) =>
     useQuery({ queryKey: keys.unmatchedClicks, queryFn: () => api<Data<UnmatchedClick[]>>('growth/leads/unmatched-clicks').then((r) => r.data), enabled });

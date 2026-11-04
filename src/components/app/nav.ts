@@ -78,7 +78,7 @@ export const NAV: NavSection[] = [
             // Growth Hub (R1): new parent below Templates with Leads and Tracking Setup (Developer Handover §I.3).
             { label: 'Growth Hub', icon: TrendingUpIcon, heading: true, growth: true, permission: P.InboxView },
             { label: 'Leads', icon: TargetIcon, href: '/growth/leads', permission: P.InboxView, growth: true, sub: true },
-            { label: 'Tracking Setup', icon: GlobeIcon, permission: P.GrowthManage, growth: true, sub: true },
+            { label: 'Tracking Setup', icon: GlobeIcon, href: '/growth/setup', permission: P.GrowthView, growth: true, sub: true },
             { label: 'Commerce', icon: ShoppingCartIcon },
             { label: 'Analytics', icon: BarChart3Icon, href: '/analytics', permission: P.AnalyticsView },
         ],

@@ -22,7 +22,7 @@ export const SOURCE_NOTE: Partial<Record<Acquisition['status'], string>> = {
 };
 
 /** Meta's referral source_type: "ad" (a click-to-WhatsApp ad) or "post" (a boosted/organic post). */
-const SOURCE_TYPE: Record<string, string> = { ad: 'Click-to-WhatsApp ad', post: 'Facebook or Instagram post' };
+const SOURCE_TYPE: Record<string, string> = { ad: 'Click-to-WhatsApp ad', post: 'Boosted post' };
 
 function Rows({ rows }: { rows: [string, React.ReactNode][] }) {
     return (
@@ -54,7 +54,10 @@ function evidenceRows(a: Acquisition, e: LeadEvidence | undefined, contact: Cont
     const rows: [string, React.ReactNode][] = [];
     if (e?.type === 'meta_ctwa') {
         const d = e.details;
-        rows.push(['How it started', 'Customer tapped the WhatsApp button on a Meta ad; Meta sent the ad referral with their first message']);
+        rows.push([
+            'How it started',
+            `Customer tapped the WhatsApp button on a ${d.source_type === 'post' ? 'boosted post' : 'Click-to-WhatsApp ad'} and sent a message; Meta attached the ad details to it`,
+        ]);
         rows.push(['Meta ad headline', d.headline ?? <span className="text-muted-foreground">Not sent by Meta</span>]);
         if (d.body) rows.push(['Ad text', d.body]);
         if (d.source_type) rows.push(['Ad type', SOURCE_TYPE[d.source_type] ?? humanize(d.source_type)]);
@@ -63,6 +66,18 @@ function evidenceRows(a: Acquisition, e: LeadEvidence | undefined, contact: Cont
                 'Meta ad ID',
                 <span key="id" className="font-mono text-[12px]">
                     {d.ad_id}
+                </span>,
+            ]);
+        if (d.media_type || d.creative_url || d.video_url)
+            rows.push([
+                'Ad creative',
+                <span key="cr" className="flex flex-wrap items-center gap-2">
+                    {d.media_type ? humanize(d.media_type) : 'Creative'}
+                    {(d.video_url ?? d.creative_url) && (
+                        <a href={d.video_url ?? d.creative_url} target="_blank" rel="noreferrer noopener" className="text-info underline underline-offset-2">
+                            View
+                        </a>
+                    )}
                 </span>,
             ]);
         rows.push(['Ad click ID', d.click_id_sent ? 'Present' : <span className="text-muted-foreground">Not sent by Meta</span>]);
