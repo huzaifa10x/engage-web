@@ -1168,10 +1168,124 @@ export type Integration = {
     last_event_at: string | null;
     created_at: string | null;
     rules?: IntegrationRule[];
+    // WooCommerce only (Engagement Plan step D):
+    /** plugin = "10X Engage for WooCommerce" connected · waiting = key issued, plugin not connected yet · rest = REST keys only */
+    via?: 'plugin' | 'waiting' | 'rest';
+    pending?: boolean;
+    link_days?: number;
+    paid_stage_id?: string | null;
+    tracker_auto?: boolean;
+    orders_30d?: number;
+    health?: StoreHealth;
+};
+
+export type StoreHealth = {
+    state: 'waiting' | 'connected' | 'warning';
+    last_event_at: string | null;
+    heartbeat_at: string | null;
+    latest_order_at: string | null;
+    reconciled_at: string | null;
+    plugin_version: string | null;
+    wc_version: string | null;
+    hpos: boolean | null;
+    block_checkout: boolean | null;
+    key_expires_at: string | null;
+    warnings: { code: string; message: string }[];
+};
+
+export type SalesMatch = 'link' | 'review' | 'phone' | 'unavailable' | 'none';
+
+export type SalesSource = { label: string; campaign: string | null; source: string | null };
+
+/** Growth Hub › Sales: one store order and how it is connected to WhatsApp. Money in the order's currency. */
+export type SalesOrder = {
+    id: string;
+    store: string;
+    number: string;
+    status: string;
+    currency: string;
+    total: string;
+    refunded: string;
+    net: string;
+    paid: boolean;
+    items_count: number;
+    match: SalesMatch;
+    match_label: string;
+    counts_as_chat_revenue: boolean;
+    customer: { id: string | null; display_name: string; phone: string | null };
+    conversation_id: string | null;
+    original_source: SalesSource | null;
+    conversation_source: SalesSource | null;
+    placed_at: string;
+    paid_at: string | null;
+};
+
+export type SalesOrderDetails = SalesOrder & {
+    explain: string | null;
+    match_note: string | null;
+    match_reviewed: boolean;
+    billing_phone: string | null;
+    store_source: Record<string, string> | null;
+    first_chat_at: string | null;
+    hours_to_order: number | null;
+    completed_at: string | null;
+    cancelled_at: string | null;
+    refunded_at: string | null;
+    link: { sent_at: string | null; sent_by: string; url: string; expires_at: string; conversation_id: string } | null;
+    items: { name: string; sku: string | null; quantity: number; total: string }[];
+    events: { event: string; status: string | null; total: string | null; refunded: string | null; via: string; at: string }[];
+};
+
+export type SalesPage = {
+    data: SalesOrder[];
+    meta: { next_cursor: string | null; counts: Record<'all' | SalesMatch, number>; stores: { id: string; name: string }[] };
+};
+
+export type SalesColumn = { orders: number; paid_orders: number; revenue: string; aov: string; refunded: string };
+
+/** Analytics › Sales & Revenue. */
+export type SalesAnalytics =
+    | { locked: true }
+    | {
+          locked: false;
+          stores: number;
+          range: { days: number; from: string; timezone: string };
+          currency: string;
+          other_currencies: string[];
+          chat_link: SalesColumn;
+          phone: SalesColumn;
+          review: SalesColumn;
+          unavailable: SalesColumn;
+          website: SalesColumn;
+          total: { orders: number; paid_orders: number; net: string; refunded: string; aov: string };
+          by_original_source: { label: string; source: string; orders: number; revenue: string }[];
+          by_conversation_source: { label: string; source: string; orders: number; revenue: string }[];
+          products: { name: string; source: string; match: SalesMatch; quantity: number; revenue: string }[];
+          time_to_order: { median_hours: number | null; average_hours: number | null };
+          daily: { day: string; link: string; phone: string; other: string }[];
+      };
+
+/** Conversation sidebar: the contact's orders and total spend (never ad cost). */
+export type ContactOrders = {
+    orders: {
+        id: string;
+        number: string;
+        store: string;
+        status: string;
+        currency: string;
+        total: string;
+        net: string;
+        match: SalesMatch;
+        match_label: string;
+        placed_at: string;
+        items_count: number;
+    }[];
+    total_spend: { currency: string; net: string }[];
+    count: number;
 };
 
 export type IntegrationsOverview = {
-    can: { stores: boolean; api: boolean; webhooks: boolean };
+    can: { stores: boolean; api: boolean; webhooks: boolean; sales?: boolean };
     providers: Record<IntegrationProvider, { available: boolean }>;
     api_base_url: string;
     events: { key: string; label: string; hint: string; providers: IntegrationProvider[] }[];

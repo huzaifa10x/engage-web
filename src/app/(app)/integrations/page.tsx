@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { Field, FormError } from '@/components/app/field';
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
+import { PluginConnectDialog, StoreSalesSettings, StoreViaBadge } from '@/components/integrations/woo-plugin';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -50,7 +51,10 @@ const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString(undefin
 const firstError = (e: unknown) => (e instanceof ApiError ? (Object.values(e.fields)[0]?.[0] ?? e.message) : errorMessage(e));
 const PROVIDER: Record<IntegrationProvider, { name: string; blurb: string }> = {
     shopify: { name: 'Shopify', blurb: 'Order confirmations, shipping updates and abandoned-checkout reminders on WhatsApp.' },
-    woocommerce: { name: 'WooCommerce', blurb: 'Order confirmations and shipping updates on WhatsApp for your WordPress store.' },
+    woocommerce: {
+        name: 'WooCommerce',
+        blurb: 'See which WhatsApp chats became orders (with the plugin), and send order confirmations and shipping updates on WhatsApp.',
+    },
 };
 const CUSTOM = '__custom__';
 
@@ -721,7 +725,7 @@ function StoreSettings({
                             <CardTitle>Pause or disconnect</CardTitle>
                             <CardDescription>
                                 While paused, orders are still recorded but no messages are sent. Disconnecting removes the store, its messages and its activity
-                                here; contacts and conversations stay.
+                                here; orders already in Sales, contacts and conversations stay.
                             </CardDescription>
                         </div>
                     </CardHeader>
@@ -794,6 +798,7 @@ function StoreDetail({ id, overview, canManage, onBack }: { id: string; overview
         void qc.invalidateQueries({ queryKey: ['integrations', 'overview'] });
     };
     const integration = store.data;
+    const [plugin, setPlugin] = useState(false);
 
     return (
         <>
@@ -812,7 +817,9 @@ function StoreDetail({ id, overview, canManage, onBack }: { id: string; overview
                             </>
                         }
                         actions={
-                            integration.status === 'active' ? (
+                            integration.via === 'waiting' ? (
+                                <StoreViaBadge integration={integration} />
+                            ) : integration.status === 'active' ? (
                                 <Badge tone="good" dot>
                                     Connected
                                 </Badge>
@@ -859,7 +866,16 @@ function StoreDetail({ id, overview, canManage, onBack }: { id: string; overview
                         <TabsContent value="activity">
                             <Activity integration={integration} overview={overview} />
                         </TabsContent>
-                        <TabsContent value="settings">
+                        <TabsContent value="settings" className="grid gap-5">
+                            {integration.provider === 'woocommerce' && (
+                                <StoreSalesSettings
+                                    integration={integration}
+                                    canManage={canManage}
+                                    canSales={overview.can.sales ?? false}
+                                    onSaved={saved}
+                                    onInstallPlugin={() => setPlugin(true)}
+                                />
+                            )}
                             <StoreSettings
                                 integration={integration}
                                 canManage={canManage}
@@ -871,6 +887,17 @@ function StoreDetail({ id, overview, canManage, onBack }: { id: string; overview
                             />
                         </TabsContent>
                     </Tabs>
+                    {plugin && (
+                        <PluginConnectDialog
+                            open
+                            upgrade={integration}
+                            onClose={() => setPlugin(false)}
+                            onConnected={() => {
+                                setPlugin(false);
+                                void qc.invalidateQueries({ queryKey: ['integrations', 'one', id] });
+                            }}
+                        />
+                    )}
                 </>
             )}
         </>
@@ -910,6 +937,7 @@ export default function IntegrationsPage() {
     const [selected, setSelected] = useState<string | null>(arrival.connected);
     const [shopify, setShopify] = useState<{ open: boolean; shop: string }>({ open: arrival.shop !== null, shop: arrival.shop ?? '' });
     const [woo, setWoo] = useState(false);
+    const [wooPlugin, setWooPlugin] = useState(false);
     const [platform, setPlatform] = useState<'Zapier' | 'Make' | null>(null);
 
     useEffect(() => {
@@ -965,7 +993,8 @@ export default function IntegrationsPage() {
                                     </span>
                                 </span>
                                 <span className="flex items-center gap-2 text-[13px] text-muted-foreground">
-                                    {i.active_rules === 0 ? (
+                                    <StoreViaBadge integration={i} />
+                                    {i.via === 'waiting' ? null : i.active_rules === 0 ? (
                                         <Badge tone="warn">No messages switched on</Badge>
                                     ) : (
                                         <Badge tone="brand">
@@ -1000,11 +1029,24 @@ export default function IntegrationsPage() {
                         {!data.providers[provider].available ? (
                             <Badge>Coming soon</Badge>
                         ) : (
-                            canManage && (
+                            canManage &&
+                            (provider === 'woocommerce' ? (
+                                <>
+                                    <Button onClick={() => setWooPlugin(true)} disabled={!data.can.sales}>
+                                        <PlugIcon /> Connect with plugin
+                                    </Button>
+                                    <Button variant="outline" onClick={() => connect(provider)} disabled={!data.can.stores}>
+                                        Use REST keys
+                                    </Button>
+                                    {!data.can.sales && data.can.stores && (
+                                        <p className="w-full text-[12px] text-muted-foreground">The plugin and sales from chats are part of the Pro plan.</p>
+                                    )}
+                                </>
+                            ) : (
                                 <Button onClick={() => connect(provider)} disabled={!data.can.stores}>
                                     <PlugIcon /> Connect
                                 </Button>
-                            )
+                            ))
                         )}
                     </CatalogCard>
                 ))}
@@ -1040,6 +1082,19 @@ export default function IntegrationsPage() {
                     setSelected(i.id);
                 }}
             />
+            {wooPlugin && (
+                <PluginConnectDialog
+                    open
+                    onClose={() => {
+                        setWooPlugin(false);
+                        void qc.invalidateQueries({ queryKey: ['integrations', 'overview'] });
+                    }}
+                    onConnected={(id) => {
+                        setWooPlugin(false);
+                        setSelected(id);
+                    }}
+                />
+            )}
             <AutomationDialog platform={platform} overview={data} onClose={() => setPlatform(null)} />
         </>
     );

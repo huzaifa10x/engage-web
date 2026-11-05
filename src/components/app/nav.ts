@@ -1,4 +1,5 @@
 import {
+    BanknoteIcon,
     BarChart3Icon,
     BotIcon,
     CodeIcon,
@@ -82,10 +83,12 @@ export const NAV: NavSection[] = [
             { label: 'Growth Hub', icon: TrendingUpIcon, heading: true, growth: true, permission: P.InboxView },
             { label: 'Leads', icon: TargetIcon, href: '/growth/leads', permission: P.InboxView, growth: true, sub: true },
             { label: 'Tracking Setup', icon: GlobeIcon, href: '/growth/setup', permission: P.GrowthView, growth: true, sub: true },
-            { label: 'Commerce', icon: ShoppingCartIcon },
+            // Growth Hub › Sales (Engagement Plan step D): store orders matched to chats.
+            { label: 'Sales', icon: ShoppingCartIcon, href: '/growth/sales', permission: P.GrowthView, growth: true, sub: true },
             { label: 'Analytics', icon: BarChart3Icon, href: '/analytics', permission: P.AnalyticsView },
             // Analytics › Marketing (CN-01): Owner and Admin; Starter gets an upgrade prompt.
             { label: 'Marketing', icon: PieChartIcon, href: '/analytics/marketing', permission: P.GrowthView, growthAny: true, sub: true },
+            { label: 'Sales & Revenue', icon: BanknoteIcon, href: '/analytics/sales', permission: P.AnalyticsView, sub: true },
         ],
     },
     {

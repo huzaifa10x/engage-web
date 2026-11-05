@@ -22,7 +22,12 @@ import type {
     LeadEvidence,
     StageEvent,
     ApiKey,
+    ContactOrders,
     Integration,
+    SalesAnalytics,
+    SalesMatch,
+    SalesOrderDetails,
+    SalesPage,
     IntegrationEvent,
     IntegrationRule,
     IntegrationsOverview,
@@ -687,8 +692,60 @@ export const connectWooCommerce = (body: { store_url: string; consumer_key: stri
 
 export const updateIntegration = (
     id: string,
-    body: Partial<{ status: 'active' | 'paused'; default_country_code: string | null; tag: string | null; trust_store_consent: boolean }>,
+    body: Partial<{
+        status: 'active' | 'paused';
+        default_country_code: string | null;
+        tag: string | null;
+        trust_store_consent: boolean;
+        link_days: number;
+        paid_stage_id: string | null;
+        tracker_auto: boolean;
+    }>,
 ) => api<Data<Integration>>(`integrations/${id}`, { method: 'PATCH', body }).then((r) => r.data);
+
+/** A workspace key for the "10X Engage for WooCommerce" plugin (shown once). With an id: upgrades that store to the plugin. */
+export const createPluginKey = (integrationId?: string) =>
+    api<Data<{ key: string; expires_in_days: number; integration: Integration }>>('integrations/woocommerce/plugin-key', {
+        method: 'POST',
+        body: integrationId ? { integration_id: integrationId } : {},
+    }).then((r) => r.data);
+
+/** Where the plugin zip downloads from (same origin as the API). */
+export const PLUGIN_ZIP_URL = '/api/integrations/woocommerce/plugin.zip';
+
+// ── Sales (Engagement Plan step D): store orders matched to chats ────────────────────────
+
+export type SalesFilters = { match?: 'all' | SalesMatch; q?: string; days?: number; store?: string };
+
+export const useSales = (filters: SalesFilters, enabled = true) =>
+    useInfiniteQuery({
+        queryKey: ['growth', 'sales', filters],
+        queryFn: ({ pageParam }) => api<SalesPage>('growth/sales', { query: { ...filters, cursor: pageParam, per_page: 50 } }),
+        initialPageParam: null as string | null,
+        getNextPageParam: (last) => last.meta.next_cursor ?? null,
+        enabled,
+    });
+
+export const useSale = (id: string | null) =>
+    useQuery({ queryKey: ['growth', 'sale', id], queryFn: () => api<Data<SalesOrderDetails>>(`growth/sales/${id}`).then((r) => r.data), enabled: id !== null });
+
+export const reviewSale = (id: string, action: 'attach' | 'keep_apart') =>
+    api<Data<SalesOrderDetails>>(`growth/sales/${id}/review`, { method: 'POST', body: { action } }).then((r) => r.data);
+
+export const useSalesAnalytics = (days: number, enabled = true) =>
+    useQuery({
+        queryKey: ['analytics', 'sales', days],
+        queryFn: () => api<Data<SalesAnalytics>>('analytics/sales', { query: { days } }).then((r) => r.data),
+        enabled,
+    });
+
+export const useContactOrders = (contactId: string | undefined, enabled = true) =>
+    useQuery({
+        queryKey: ['contacts', 'orders', contactId],
+        queryFn: () => api<Data<ContactOrders>>(`contacts/${contactId}/orders`).then((r) => r.data),
+        enabled: enabled && !!contactId,
+        staleTime: 30_000,
+    });
 
 export const disconnectIntegration = (id: string) => api(`integrations/${id}`, { method: 'DELETE' });
 

@@ -9,6 +9,7 @@ import { ChangeStageButton } from '@/components/contacts/change-stage-dialog';
 import { ContactDialog } from '@/components/contacts/contact-dialog';
 import { StageBadge } from '@/components/contacts/stage-badge';
 import { SourceSection } from '@/components/growth/source-section';
+import { ContactOrders } from '@/components/inbox/contact-orders';
 import { useSession } from '@/components/app/session';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -212,6 +213,7 @@ export function ContactPanel({ conversation }: { conversation: Conversation }) {
                         <dd className="truncate">{conversation.phone_number?.verified_name ?? conversation.phone_number?.display_phone_number}</dd>
                     </dl>
                 </section>
+                <ContactOrders contactId={contact.id} />
             </aside>
         </>
     );
