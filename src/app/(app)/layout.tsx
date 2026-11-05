@@ -6,6 +6,7 @@ import { useEffect } from 'react';
 import { AppShell } from '@/components/app/app-shell';
 import { CenteredCard } from '@/components/app/centered-card';
 import { SessionProvider } from '@/components/app/session';
+import { TwoFactorSetup } from '@/components/auth/two-factor';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ApiError, errorMessage } from '@/lib/api';
@@ -30,6 +31,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         else if (unverified) router.replace('/verify-email');
         else if (needsWorkspace) router.replace('/select-workspace');
     }, [unauthenticated, unverified, needsWorkspace, router, pathname]);
+
+    // Owners must turn on two-factor sign-in first (the API refuses workspace requests until then).
+    if (me.data && me.data.active_tenant_id && !unverified && me.data.two_factor?.required && !me.data.two_factor.enabled && !me.data.impersonation) {
+        return (
+            <CenteredCard>
+                <h1 className="text-lg font-semibold">Turn on two-factor sign-in</h1>
+                <p className="mt-1 mb-5 text-sm text-muted-foreground">
+                    As a workspace Owner you sign in with your password and a code from an authenticator app on your phone. It protects your WhatsApp numbers,
+                    customers and billing. It takes a minute.
+                </p>
+                <TwoFactorSetup onDone={() => void me.refetch()} />
+            </CenteredCard>
+        );
+    }
 
     if (me.data && me.data.active_tenant_id && !unverified) {
         return (

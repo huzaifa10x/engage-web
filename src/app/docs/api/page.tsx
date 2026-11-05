@@ -485,7 +485,12 @@ export default function ApiDocsPage() {
                             </Section>
 
                             <Section id="rate-limits" title="Rate limits">
-                                <p className="max-w-3xl">Limits apply per workspace, across all its keys. They come from the workspace&apos;s plan:</p>
+                                <p className="max-w-3xl">
+                                    Limits apply per workspace, across all its API keys, and come from the workspace&apos;s plan. They are separate from your
+                                    team&apos;s use of the 10X Engage portal, so an integration never slows your agents down. Over the limit you get{' '}
+                                    <code>429</code> with a <code>Retry-After</code> header: wait that many seconds and send again. The Developer page shows the
+                                    requests of this minute and today.
+                                </p>
                                 <div className="max-w-md overflow-x-auto rounded-xl border bg-card">
                                     <table className="w-full text-left text-[14px]">
                                         <thead>

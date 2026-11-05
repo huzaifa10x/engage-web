@@ -72,7 +72,7 @@ function buildUrl(path: string, query?: Options['query']): string {
     return qs ? `${url}?${qs}` : url;
 }
 
-export async function api<T>(path: string, options: Options = {}, retried = false): Promise<T> {
+export async function api<T>(path: string, options: Options = {}, retried = false, waited = false): Promise<T> {
     const method = options.method ?? 'GET';
     const mutating = method !== 'GET';
 
@@ -96,6 +96,15 @@ export async function api<T>(path: string, options: Options = {}, retried = fals
         await ensureCsrfCookie(true);
 
         return api<T>(path, options, true);
+    }
+
+    // Too many requests at once (the portal's per-user abuse limit): reads wait as long as the server
+    // asks (at most 5 s) and try once more, so an agent never sees an error for a busy moment.
+    if (response.status === 429 && method === 'GET' && !waited) {
+        const wait = Math.min(5, Math.max(1, Number(response.headers.get('Retry-After')) || 2));
+        await new Promise((r) => setTimeout(r, wait * 1000));
+
+        return api<T>(path, options, retried, true);
     }
 
     if (response.status === 204) return undefined as T;

@@ -14,6 +14,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { OtpForm } from '@/components/app/otp-form';
+import { TwoFactorChallenge } from '@/components/auth/two-factor';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { applyServerErrors } from '@/lib/form';
 import { safeNext } from '@/lib/navigation';
@@ -28,6 +29,7 @@ const schema = z.object({
 type Values = z.infer<typeof schema>;
 
 type CodeStep = { otp_required: true; email: string; retry_in: number; expires_in: number };
+type TwoFactorStep = { two_factor_required: true };
 
 function LoginForm() {
     const router = useRouter();
@@ -40,6 +42,7 @@ function LoginForm() {
     const { register, control, handleSubmit, setError, formState } = form;
 
     const [codeStep, setCodeStep] = useState<CodeStep | null>(null);
+    const [twoFactor, setTwoFactor] = useState(false);
 
     const enter = (me: Me) => {
         qc.setQueryData(keys.me, me);
@@ -50,14 +53,18 @@ function LoginForm() {
     const onSubmit = handleSubmit(async (values) => {
         setFormError(null);
         try {
-            const res = await api<{ data: Me | CodeStep }>('auth/login', { method: 'POST', body: values });
-            // Password accepted. Unless this browser was verified in the last 24 hours, a code was emailed.
-            if ('otp_required' in res.data) setCodeStep(res.data);
+            const res = await api<{ data: Me | CodeStep | TwoFactorStep }>('auth/login', { method: 'POST', body: values });
+            // Password accepted. With two-factor sign-in on, the authenticator app code comes next; otherwise,
+            // unless this browser was verified in the last 24 hours, a code was emailed.
+            if ('two_factor_required' in res.data) setTwoFactor(true);
+            else if ('otp_required' in res.data) setCodeStep(res.data);
             else enter(res.data);
         } catch (e) {
             setFormError(applyServerErrors(e, setError, ['email', 'password']));
         }
     });
+
+    if (twoFactor) return <TwoFactorChallenge onSignedIn={enter} onCancel={() => setTwoFactor(false)} />;
 
     if (codeStep) {
         return (

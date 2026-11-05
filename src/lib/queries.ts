@@ -633,7 +633,7 @@ export const useDashboardSummary = (enabled = true) =>
 // ── Developer: API keys, webhook endpoints, delivery log ─────────────────────────────────
 
 export const useDeveloperOverview = () =>
-    useQuery({ queryKey: ['developer', 'overview'], queryFn: () => api<Data<DeveloperOverview>>('developer').then((r) => r.data) });
+    useQuery({ queryKey: ['developer', 'overview'], queryFn: () => api<Data<DeveloperOverview>>('developer').then((r) => r.data), refetchInterval: 30_000 });
 
 export const useApiKeys = (enabled = true) =>
     useQuery({ queryKey: ['developer', 'keys'], queryFn: () => api<Data<ApiKey[]>>('developer/api-keys').then((r) => r.data), enabled });

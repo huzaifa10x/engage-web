@@ -666,6 +666,38 @@ function ReferenceTab({ overview }: { overview: DeveloperOverview }) {
     );
 }
 
+/** Public API requests this minute and today, against the plan's per-minute allowance. */
+function UsageStrip({ overview }: { overview: DeveloperOverview }) {
+    const u = overview.api_usage;
+    if (!u) return null;
+    const limit = overview.rate_limit_per_minute;
+    const near = limit !== null && limit > 0 && u.this_minute >= limit * 0.8;
+
+    return (
+        <div className="mb-4 grid gap-3 sm:grid-cols-3">
+            {(
+                [
+                    [
+                        'API requests this minute',
+                        limit ? `${u.this_minute.toLocaleString()} of ${limit.toLocaleString()}` : u.this_minute.toLocaleString(),
+                        near
+                            ? 'Close to your plan’s limit — requests over it get a 429 with Retry-After.'
+                            : 'Public API only; your team’s use of the portal is not counted.',
+                    ],
+                    ['API requests today', u.today.toLocaleString(), 'Since midnight UTC'],
+                    ['Allowance', limit ? `${limit.toLocaleString()} / minute` : 'No per-minute cap', 'Shared by all API keys of this workspace'],
+                ] as const
+            ).map(([label, value, hint]) => (
+                <Card key={label} className={near && label === 'API requests this minute' ? 'gap-1 border-warn/40 p-4' : 'gap-1 p-4'}>
+                    <p className="text-[12.5px] text-muted-foreground">{label}</p>
+                    <p className="text-xl font-semibold tabular-nums">{value}</p>
+                    <p className="text-[12px] text-muted-foreground">{hint}</p>
+                </Card>
+            ))}
+        </div>
+    );
+}
+
 export default function DeveloperPage() {
     const { can } = useSession();
     const overview = useDeveloperOverview();
@@ -680,6 +712,7 @@ export default function DeveloperPage() {
                 <Skeleton className="h-64" />
             ) : (
                 <Tabs defaultValue="keys">
+                    <UsageStrip overview={overview.data} />
                     <TabsList>
                         <TabsTrigger value="keys">API keys</TabsTrigger>
                         <TabsTrigger value="webhooks">Webhooks</TabsTrigger>

@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { Field, FormError } from '@/components/app/field';
 import { Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
+import { TwoFactorCard } from '@/components/auth/two-factor';
 import { FollowUpsCard } from '@/components/settings/followups-card';
 import { BusinessHoursCard, CannedResponsesCard } from '@/components/settings/inbox-cards';
 import { Button } from '@/components/ui/button';
@@ -484,10 +485,12 @@ function AutoReplyCard({ canManage }: { canManage: boolean }) {
 }
 
 export default function SettingsPage() {
-    const { can, feature } = useSession();
+    const { can, feature, me } = useSession();
     const tenant = useTenant();
+    const security = me.two_factor ? <TwoFactorCard status={me.two_factor} /> : null;
 
-    if (!can(P.SettingsView)) return <Forbidden />;
+    // Everyone may protect their own sign-in, even without access to the workspace settings.
+    if (!can(P.SettingsView)) return security ? <div className="grid gap-4">{security}</div> : <Forbidden />;
 
     return (
         <>
@@ -497,6 +500,7 @@ export default function SettingsPage() {
             />
             {tenant.data ? (
                 <div className="grid gap-4">
+                    {security}
                     <WorkspaceForm key={tenant.data.id} tenant={tenant.data} canManage={can(P.SettingsManage)} />
                     <BusinessHoursCard canManage={can(P.SettingsManage)} />
                     <AutoReplyCard canManage={can(P.SettingsManage)} />

@@ -74,7 +74,11 @@ export type Me = {
     /** Growth Hub pilot switch for the active workspace (set by 10X Engage, not part of a plan). */
     /** tier: off | chip (Starter: Meta ad source chip only) | full (Growth Hub and Analytics → Marketing). */
     growth?: { enabled: boolean; tier?: 'off' | 'chip' | 'full' };
+    /** Two-factor sign-in; an Owner without it must set it up before using the workspace. */
+    two_factor?: TwoFactorStatus;
 };
+
+export type TwoFactorStatus = { enabled: boolean; required: boolean; confirmed_at: string | null; recovery_codes_left: number };
 
 export type FeatureUsage = {
     label: string;
@@ -1074,6 +1078,8 @@ export type DeveloperOverview = {
     base_url: string;
     can: { api: boolean; webhooks: boolean };
     rate_limit_per_minute: number | null;
+    /** Public API requests of this workspace (the portal is counted apart and never held to the plan limit). */
+    api_usage?: { this_minute: number; today: number };
     scopes: { key: string; label: string }[];
     events: { key: string; label: string }[];
 };
