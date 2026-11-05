@@ -1,17 +1,46 @@
 'use client';
 
+import { ChevronDownIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { Logo } from '@/components/brand/logo';
+import { useStored } from '@/hooks/use-stored';
 import { cn } from '@/lib/utils';
 
-import { isVisible, NAV } from './nav';
+import { isVisible, NAV, type NavItem } from './nav';
 import { useSession } from './session';
+
+/** "Growth Hub:1,Analytics:0" — groups the person opened or closed; the rest follow the current page. */
+function parseGroups(raw: string): Record<string, boolean> {
+    return Object.fromEntries(
+        raw
+            .split(',')
+            .filter(Boolean)
+            .map((p) => {
+                const i = p.lastIndexOf(':');
+                return [p.slice(0, i), p.slice(i + 1) === '1'] as const;
+            }),
+    );
+}
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     const pathname = usePathname();
     const { can, me } = useSession();
+    // Groups with sub-items (Growth Hub, Analytics) fold: open when the current page is inside them,
+    // or as the person last left them (remembered in this browser).
+    const [storedGroups, setStoredGroups] = useStored<string>('engage:nav:groups', '');
+    const groups = parseGroups(storedGroups);
+    const setGroup = (label: string, open: boolean) =>
+        setStoredGroups(
+            Object.entries({ ...groups, [label]: open })
+                .map(([k, v]) => `${k}:${v ? 1 : 0}`)
+                .join(','),
+        );
+    const matches = (h?: string) => {
+        const b = h?.split('?')[0];
+        return !!b && (pathname === b || pathname.startsWith(`${b}/`));
+    };
 
     return (
         <nav aria-label="Main" className="flex h-full w-64 flex-col bg-sidebar text-sidebar-foreground">
@@ -27,18 +56,50 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                     );
                     if (items.length === 0) return null;
 
+                    // Each sub-item belongs to the nearest item above it that is not a sub-item.
+                    const parentOf = new Map<NavItem, NavItem>();
+                    const childrenOf = new Map<NavItem, NavItem[]>();
+                    let parent: NavItem | null = null;
+                    for (const i of items) {
+                        if (!i.sub) parent = i;
+                        else if (parent) {
+                            parentOf.set(i, parent);
+                            childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), i]);
+                        }
+                    }
+                    const isOpen = (p: NavItem) => groups[p.label] ?? (childrenOf.get(p) ?? []).some((c) => matches(c.href));
+
                     return (
                         <div key={section.title} className="mt-4">
                             <p className="px-2 pb-1.5 text-[11px] font-semibold tracking-wider text-sidebar-muted uppercase">{section.title}</p>
                             <ul className="grid gap-0.5">
                                 {items.map((item) => {
                                     const Icon = item.icon;
-                                    const base = item.href?.split('?')[0];
+                                    const owner = parentOf.get(item);
+                                    if (owner && !isOpen(owner)) return null; // folded away
+                                    const kids = childrenOf.get(item);
+                                    const open = kids ? isOpen(item) : false;
+                                    // Folded with the current page inside: a small dot keeps "where am I" visible.
+                                    const hiddenHere = !!kids && !open && kids.some((c) => matches(c.href));
+                                    const here = hiddenHere ? (
+                                        <span className="size-1.5 rounded-full bg-primary" aria-label="Current page is in this group" />
+                                    ) : null;
+                                    const toggle = kids ? (
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setGroup(item.label, !open);
+                                            }}
+                                            aria-expanded={open}
+                                            aria-label={`${open ? 'Collapse' : 'Expand'} ${item.label}`}
+                                            className="absolute top-1/2 right-1.5 -translate-y-1/2 rounded p-0.5 text-sidebar-muted transition-colors hover:bg-white/10 hover:text-white"
+                                        >
+                                            <ChevronDownIcon className={cn('size-4 transition-transform', !open && '-rotate-90')} />
+                                        </button>
+                                    ) : null;
                                     // The most specific link wins: /analytics/marketing highlights Marketing, not Analytics.
-                                    const matches = (h?: string) => {
-                                        const b = h?.split('?')[0];
-                                        return !!b && (pathname === b || pathname.startsWith(`${b}/`));
-                                    };
                                     const deeper = items.some(
                                         (o) =>
                                             o !== item &&
@@ -50,12 +111,24 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                                     const active = matches(item.href) && !deeper && !(item.label === 'Billing');
 
                                     if (item.heading) {
+                                        // A group label: the whole row folds and unfolds its sub-items.
                                         return (
                                             <li key={item.label}>
-                                                <span className="flex cursor-default items-center gap-2.5 px-2.5 py-1.5 text-[13.5px] font-semibold text-white">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => kids && setGroup(item.label, !open)}
+                                                    aria-expanded={kids ? open : undefined}
+                                                    className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-[13.5px] font-semibold text-white transition-colors hover:bg-sidebar-2"
+                                                >
                                                     <Icon className="size-4" />
                                                     <span className="flex-1">{item.label}</span>
-                                                </span>
+                                                    {here}
+                                                    {kids && (
+                                                        <ChevronDownIcon
+                                                            className={cn('size-4 text-sidebar-muted transition-transform', !open && '-rotate-90')}
+                                                        />
+                                                    )}
+                                                </button>
                                             </li>
                                         );
                                     }
@@ -82,7 +155,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                                     }
 
                                     return (
-                                        <li key={item.label} className={nested}>
+                                        <li key={item.label} className={cn(nested, kids && 'relative')}>
                                             <Link
                                                 href={item.href}
                                                 onClick={onNavigate}
@@ -103,7 +176,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                                                         Preview
                                                     </span>
                                                 )}
+                                                {here && <span className="mr-6 ml-auto">{here}</span>}
                                             </Link>
+                                            {toggle}
                                         </li>
                                     );
                                 })}
