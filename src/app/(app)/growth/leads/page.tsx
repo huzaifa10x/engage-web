@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
 
 const ALL = '__all__';
 
-type Tab = 'all' | 'new' | 'clicks';
+type Tab = 'all' | 'new' | 'returning' | 'clicks';
 
 // Leads are paid-advertising leads only: Meta Click-to-WhatsApp ads and boosted posts, and taps on
 // your website from Google Ads, Meta ads or another paid campaign. Ordinary chats stay in Chat and Contacts.
@@ -258,7 +258,7 @@ function LeadsPage() {
                 ) : (
                     <>
                         <Kpi hero label="Ad leads · 30 days" value={String(k.leads)} hint="chats from your paid ads in the last 30 days" />
-                        <Kpi label="New customers" value={String(k.new_customers)} hint="their first message came from an ad" />
+                        <Kpi label="New customers" value={String(k.new_customers)} hint="their first-ever message came from an ad — same as the New tab" />
                         <Kpi label="Returning" value={String(k.returning)} hint="existing contacts who came back through an ad" />
                         <Kpi label="From boosted posts" value={String(k.meta_posts)} hint={`${k.meta_instagram} proven Instagram · rest not split`} />
                         {websites && seesAll && k.unmatched_clicks && (
@@ -281,6 +281,7 @@ function LeadsPage() {
                         [
                             ['all', 'All leads', counts?.all],
                             ['new', 'New', counts?.new],
+                            ['returning', 'Returning', counts?.returning],
                             ...(seesAll && websites ? ([['clicks', 'Unmatched clicks', k?.unmatched_clicks?.total]] as const) : []),
                         ] as [Tab, string, number | undefined][]
                     ).map(([key, label, n]) => (
@@ -415,8 +416,16 @@ function LeadsPage() {
                                                     <p className="font-mono text-[12px] text-muted-foreground">{l.contact.phone}</p>
                                                 </TableCell>
                                                 <TableCell>{a?.source?.name ?? '—'}</TableCell>
-                                                <TableCell className="max-w-56 truncate text-[12.5px]" title={a?.source?.campaign ?? undefined}>
-                                                    {a?.source?.campaign ?? <span className="text-muted-foreground">—</span>}
+                                                <TableCell
+                                                    className="max-w-56 text-[12.5px]"
+                                                    title={a?.source?.latest?.line ?? a?.source?.campaign ?? undefined}
+                                                >
+                                                    <p className="truncate">{a?.source?.campaign ?? <span className="text-muted-foreground">—</span>}</p>
+                                                    {a?.source?.latest && (
+                                                        <p className="truncate text-[11.5px] text-muted-foreground">
+                                                            {a.source.latest.campaign ? `Latest: ${a.source.latest.campaign}` : a.source.latest.line}
+                                                        </p>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell>{a && <StatusChip status={a.status} />}</TableCell>
                                                 <TableCell className="text-[12.5px]">{dateTime(l.first_contact_at)}</TableCell>

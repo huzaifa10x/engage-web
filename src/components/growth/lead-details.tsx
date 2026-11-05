@@ -1,5 +1,8 @@
 'use client';
 
+import { ChevronDownIcon } from 'lucide-react';
+import { useState } from 'react';
+
 import { useSession } from '@/components/app/session';
 import { ChangeStageButton } from '@/components/contacts/change-stage-dialog';
 import { StageBadge } from '@/components/contacts/stage-badge';
@@ -50,12 +53,12 @@ function Section({ title, children }: { title: string; children: React.ReactNode
  * Evidence (prototype "Lead details"): for a Meta ad the headline (or "Not sent by Meta"), the masked
  * ad ID, whether Meta sent an ad click ID (never its value) and the platform with its proof.
  */
-function evidenceRows(a: Acquisition, e: LeadEvidence | undefined, contact: Contact): [string, React.ReactNode][] {
+function evidenceRows(e: LeadEvidence | undefined): [string, React.ReactNode][] {
     const rows: [string, React.ReactNode][] = [];
     if (e?.type === 'meta_ctwa') {
         const d = e.details;
         rows.push([
-            'How it started',
+            'What happened',
             `Customer tapped the WhatsApp button on a ${d.source_type === 'post' ? 'boosted post' : 'Click-to-WhatsApp ad'} and sent a message; Meta attached the ad details to it`,
         ]);
         rows.push(['Meta ad headline', d.headline ?? <span className="text-muted-foreground">Not sent by Meta</span>]);
@@ -103,7 +106,7 @@ function evidenceRows(a: Acquisition, e: LeadEvidence | undefined, contact: Cont
     }
     if (e?.type === 'website_reference') {
         const d = e.details;
-        rows.push(['How it started', 'Tapped WhatsApp on your website and sent the message with its reference; matched to the registered tap']);
+        rows.push(['What happened', 'Tapped WhatsApp on your website and sent the message with its reference; matched to the registered tap']);
         rows.push(['Source', e.label]);
         if (d.site) rows.push(['Website', d.site]);
         if (d.page_path)
@@ -145,15 +148,34 @@ function evidenceRows(a: Acquisition, e: LeadEvidence | undefined, contact: Cont
         if (e.platform) rows.push(['Platform', `${humanize(e.platform)} · ${e.platform_proof ?? 'proof stored'}`]);
         if (e.conflict) rows.push(['Multiple sources', 'The same message also came from a Meta ad; the ad counts as the message origin']);
     }
-    if (a.status === 'web')
-        rows.push(['Why limited', 'The code in the message is valid, but the website click never reached us. Campaign details are not available.']);
-    if (a.status === 'unattributed') rows.push(['Why', 'No reference and no ad referral in the first message.']);
-    if (a.status === 'before') rows.push(['Original source', `Before tracking${contact.created_at ? ` (created ${dateTime(contact.created_at)})` : ''}`]);
+    if (e?.type === 'website_unregistered') {
+        const d = e.details;
+        rows.push([
+            'What happened',
+            d.note ?? 'The message had a valid website reference, but the website click never reached us. Campaign details are not available.',
+        ]);
+        rows.push(['Source', 'Website · details unavailable']);
+        if (d.site) rows.push(['Website', d.site]);
+        rows.push([
+            'Campaign details',
+            <span key="n" className="text-muted-foreground">
+                Not available — nothing is guessed
+            </span>,
+        ]);
+    }
+    if (e) rows.push(['When', dateTime(e.occurred_at)]);
 
     return rows;
 }
 
-type Step = { at: string; title: string; detail: string; proof: boolean };
+/** The status rows that explain an original source with no evidence row of its own. */
+function originalNote(a: Acquisition, contact: Contact): [string, React.ReactNode][] {
+    if (a.status === 'before') return [['Original source', `Before tracking${contact.created_at ? ` (contact created ${dateTime(contact.created_at)})` : ''}`]];
+    if (a.status === 'unattributed') return [['Why', 'No reference and no ad referral in the first message.']];
+    return [];
+}
+
+type Step = { at: string; title: string; detail: string; proof: boolean; evidence?: LeadEvidence };
 
 function journey(contact: Contact, a: Acquisition, evidence: LeadEvidence[], stages: StageEvent[]): Step[] {
     const steps: Step[] = [];
@@ -161,31 +183,41 @@ function journey(contact: Contact, a: Acquisition, evidence: LeadEvidence[], sta
         steps.push({ at: contact.created_at, title: 'Contact created before tracking started', detail: dateTime(contact.created_at), proof: false });
     for (const e of evidence) {
         const when = dateTime(e.occurred_at);
+        const later = a.status === 'before' || (a.original?.evidence_id !== undefined && a.original.evidence_id !== e.id);
         if (e.type === 'meta_ctwa') {
-            const title = a.status === 'before' ? 'New touch: Meta ad (not counted as a new lead)' : 'Tapped a click-to-WhatsApp ad';
+            const title = later ? 'New touch: Meta ad (not counted as a new lead)' : 'Tapped a click-to-WhatsApp ad';
             steps.push({
                 at: e.occurred_at,
                 title,
                 detail: [e.label === 'Meta ad' ? 'Meta' : e.label, e.details.headline && `“${e.details.headline}”`, when].filter(Boolean).join(' · '),
                 proof: true,
+                evidence: e,
             });
             if (e.conflict)
                 steps.push({ at: e.occurred_at, title: 'Same message also carried a website reference', detail: 'Conflict flagged, both kept', proof: true });
         } else if (e.type === 'website_unregistered') {
             steps.push({
                 at: e.occurred_at,
-                title: 'Message had a valid website reference',
-                detail: `Click was never registered (likely blocked) · ${when}`,
+                title: e.details.note ? 'Website message without its reference' : 'Message had a valid website reference',
+                detail: `${e.details.note ? 'Website · details unavailable' : 'Click was never registered (likely blocked)'} · ${when}`,
                 proof: true,
+                evidence: e,
             });
         } else if (e.confidence === 'reused_other_sender') {
-            steps.push({ at: e.occurred_at, title: 'Sent a website reference already used by someone else', detail: `Not counted · ${when}`, proof: false });
+            steps.push({
+                at: e.occurred_at,
+                title: 'Sent a website reference already used by someone else',
+                detail: `Not counted · ${when}`,
+                proof: false,
+                evidence: e,
+            });
         } else {
             steps.push({
                 at: e.occurred_at,
-                title: a.status === 'before' ? 'New touch: website tap (not counted as a new lead)' : 'Tapped WhatsApp on the website, reference matched',
-                detail: [e.label, e.details.page_path, when].filter(Boolean).join(' · '),
+                title: later ? 'New touch: website tap (not counted as a new lead)' : 'Tapped WhatsApp on the website, reference matched',
+                detail: [e.label, e.details.campaign?.utm_campaign, e.details.page_path, when].filter(Boolean).join(' · '),
                 proof: true,
+                evidence: e,
             });
         }
     }
@@ -199,6 +231,38 @@ function journey(contact: Contact, a: Acquisition, evidence: LeadEvidence[], sta
     }
 
     return steps.sort((x, y) => x.at.localeCompare(y.at));
+}
+
+/** One journey row; a row with evidence opens its own details (its own campaign, click IDs and reference). */
+function JourneyRow({ step: s }: { step: Step }) {
+    const [open, setOpen] = useState(false);
+    const dot = <span className={cn('absolute top-1.5 -left-[21px] size-2.5 rounded-full border-2 border-card', s.proof ? 'bg-good' : 'bg-grey')} />;
+    if (!s.evidence)
+        return (
+            <li className="relative text-[13px]">
+                {dot}
+                <p className="font-medium">{s.title}</p>
+                <p className="text-[12px] text-muted-foreground">{s.detail}</p>
+            </li>
+        );
+
+    return (
+        <li className="relative text-[13px]">
+            {dot}
+            <button type="button" className="group flex w-full items-start justify-between gap-2 text-left" aria-expanded={open} onClick={() => setOpen(!open)}>
+                <span>
+                    <span className="block font-medium group-hover:underline">{s.title}</span>
+                    <span className="block text-[12px] text-muted-foreground">{s.detail}</span>
+                </span>
+                <ChevronDownIcon className={cn('mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')} />
+            </button>
+            {open && (
+                <div className="mt-2 rounded-md border bg-muted/40 p-2.5">
+                    <Rows rows={evidenceRows(s.evidence)} />
+                </div>
+            )}
+        </li>
+    );
 }
 
 /**
@@ -229,15 +293,18 @@ export function LeadDetails({
     if (!a) return null;
 
     const list = evidence.data ?? [];
-    const shown = list.find((e) => e.id === (a.status === 'before' ? a.latest?.evidence_id : a.original?.evidence_id)) ?? list[list.length - 1];
+    const originalEvidence = a.status === 'before' ? undefined : (list.find((e) => e.id === a.original?.evidence_id) ?? list[0]);
+    const latestEvidence = list.find((e) => e.id === a.latest?.evidence_id && e.id !== originalEvidence?.id);
     const steps = journey(contact, a, list, stages.data ?? []);
     const na = <span className="text-muted-foreground">Not available</span>;
+    const name = a.source?.name ?? a.label;
+    const latest = a.source?.latest;
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
                 className={cn(
-                    'top-0 right-0 left-auto h-dvh max-h-dvh w-full max-w-full translate-x-0 translate-y-0 content-start rounded-none border-y-0 border-r-0 sm:max-w-md',
+                    'top-0 right-0 left-auto h-dvh max-h-dvh w-full max-w-full translate-x-0 translate-y-0 content-start overflow-y-auto rounded-none border-y-0 border-r-0 sm:max-w-md',
                     'data-[state=closed]:zoom-out-100 data-[state=closed]:slide-out-to-right data-[state=open]:zoom-in-100 data-[state=open]:slide-in-from-right',
                 )}
             >
@@ -249,27 +316,45 @@ export function LeadDetails({
                 <section className="grid gap-2.5">
                     <div className="flex flex-wrap items-center gap-2">
                         <SourceChip acquisition={a} />
-                        <span className="text-[15px] font-semibold">{a.source?.name ?? a.label}</span>
+                        {!a.label.startsWith(name) && <span className="text-[15px] font-semibold">{name}</span>}
                     </div>
                     <Rows
                         rows={[
-                            ['Campaign', a.source?.campaign ?? na],
+                            ['Original source', name],
+                            [
+                                'Campaign',
+                                <span key="c">
+                                    {a.source?.campaign ?? (latest ? '—' : na)}
+                                    {latest && <span className="block text-[12px] text-muted-foreground">{latest.line}</span>}
+                                </span>,
+                            ],
                             ['Landing page', a.source?.landing_page ? <span className="font-mono text-[12px] break-all">{a.source.landing_page}</span> : na],
                             ['First contact', contact.created_at ? dateTime(contact.created_at) : na],
                         ]}
                     />
                     {SOURCE_NOTE[a.status] && <p className="rounded-md bg-muted px-3 py-2 text-[12.5px] leading-snug">{SOURCE_NOTE[a.status]}</p>}
+                    {latest && a.status !== 'before' && (
+                        <p className="rounded-md bg-muted px-3 py-2 text-[12.5px] leading-snug">
+                            Returning contact. Marketing keeps crediting the original source; the latest touch is shown for context only.
+                        </p>
+                    )}
                 </section>
 
                 {proof && (
-                    <Section title="Evidence">
+                    <Section title="Evidence · original source">
                         {evidence.isLoading ? (
                             <Skeleton className="h-24 w-full" />
                         ) : evidence.isError ? (
                             <p className="text-[13px] text-bad">The evidence could not be loaded.</p>
                         ) : (
-                            <Rows rows={evidenceRows(a, shown, contact)} />
+                            <Rows rows={[...originalNote(a, contact), ...evidenceRows(originalEvidence)]} />
                         )}
+                    </Section>
+                )}
+
+                {proof && latestEvidence && (
+                    <Section title="Latest touch · not counted as a new lead">
+                        <Rows rows={evidenceRows(latestEvidence)} />
                     </Section>
                 )}
 
@@ -279,16 +364,7 @@ export function LeadDetails({
                     ) : (
                         <ol className="grid gap-2.5 border-l pl-4">
                             {steps.map((s, i) => (
-                                <li key={i} className="relative text-[13px]">
-                                    <span
-                                        className={cn(
-                                            'absolute top-1.5 -left-[21px] size-2.5 rounded-full border-2 border-card',
-                                            s.proof ? 'bg-good' : 'bg-grey',
-                                        )}
-                                    />
-                                    <p className="font-medium">{s.title}</p>
-                                    <p className="text-[12px] text-muted-foreground">{s.detail}</p>
-                                </li>
+                                <JourneyRow key={i} step={s} />
                             ))}
                         </ol>
                     )}

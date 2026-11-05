@@ -289,7 +289,14 @@ export type Acquisition = {
     /** Chip text, e.g. "Meta ad", "Meta ad · Instagram", "Before tracking · Latest: Meta ad". */
     label: string;
     /** Source panel line (full tier, every role that sees the chat): no codes, click IDs or costs. */
-    source?: { name: string; campaign: string | null; landing_page: string | null };
+    source?: {
+        name: string;
+        /** The original campaign: never replaced by a later touch. */
+        campaign: string | null;
+        landing_page: string | null;
+        /** A later touch, shown apart: "Latest: winter_sale (Google Ads)". */
+        latest?: { name: string; campaign: string | null; line: string; at: string | null } | null;
+    };
     // Only with growth.view:
     original?: AcquisitionTouch;
     latest?: AcquisitionTouch | null;
@@ -330,6 +337,8 @@ export type LeadEvidence = {
         referrer_host?: string;
         campaign_params_origin?: string;
         reference?: string;
+        /** Website taps without a registered click: why (e.g. the reference was removed before sending). */
+        note?: string;
         /** Which click IDs (gclid, gbraid, wbraid, fbclid) came with the tap — never their values. */
         click_ids_sent?: string[];
     };
@@ -348,7 +357,7 @@ export type Lead = {
     last_activity_at: string | null;
 };
 
-export type LeadPage = CursorPage<Lead> & { meta: { counts: { all: number; new: number; unattributed: number }; sees_all: boolean } };
+export type LeadPage = CursorPage<Lead> & { meta: { counts: { all: number; new: number; returning: number }; sees_all: boolean } };
 
 export type LeadSummary = {
     /** Ad leads with a paid touch in the last 30 days (= the All leads tab). */
@@ -451,6 +460,13 @@ export type GrowthSite = {
     snippet: string;
     gtm_snippet: string;
     privacy_line: string;
+    /** The message visitors send; the reference "(Ref: XG-…)" is always added after it. */
+    greeting: string;
+    greeting_ar: string | null;
+    default_greeting: string;
+    greeting_max: number;
+    /** Live chatbot flows on the site's numbers that start on keywords (warning when the greeting changes). */
+    keyword_flows: { name: string; keywords: string[] }[];
     numbers: {
         mapping_id: string;
         phone_number_id: string;
@@ -477,7 +493,15 @@ export type SiteHealth = {
     config_version: number;
 };
 
-export type SiteTest = { started_at: string | null; tracker_seen: boolean; tap_received: boolean; message_received: boolean; matched: boolean };
+export type SiteTest = {
+    started_at: string | null;
+    tracker_seen: boolean;
+    tap_received: boolean;
+    message_received: boolean;
+    matched: boolean;
+    /** The exact message that arrived, and its reference (null = the visitor deleted it). */
+    message?: { text: string; reference: string | null } | null;
+};
 
 export type Conversation = {
     /** Set while the conversation is snoozed (hidden from the inbox until then). */

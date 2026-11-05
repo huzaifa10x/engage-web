@@ -700,7 +700,7 @@ export const testIntegrationRule = (id: string, event: string, phone: string) =>
 
 /** Growth Hub: the proof behind one lead's source (Owner, Admin; IDs masked by the server). */
 export type LeadFilters = {
-    tab?: 'all' | 'new' | 'unattributed';
+    tab?: 'all' | 'new' | 'returning';
     q?: string;
     source?: string;
     status?: string;

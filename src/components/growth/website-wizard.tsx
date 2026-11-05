@@ -16,6 +16,47 @@ import { keys, usePhoneNumbers, useSiteTest } from '@/lib/queries';
 import type { GrowthSite } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
+const DEFAULT_GREETING = "Hi, I'd like to know more about your services.";
+const GREETING_MAX = 200;
+const LINK = /(https?:\/\/|www\.|wa\.me|\b[a-z0-9-]+\.(com|net|org|ae|io|co|me|app|info|biz)\b)/i;
+
+/** The same checks the server runs, so the customer sees the problem before saving. */
+function greetingProblem(text: string): string | null {
+    const v = text.trim();
+    if (!v) return 'Enter the message visitors will send.';
+    if (v.length > GREETING_MAX) return `Keep it to ${GREETING_MAX} characters.`;
+    if (LINK.test(v)) return 'Links are not allowed in the message.';
+    if (/XG-|\(Ref:|\(المرجع:/i.test(v)) return 'The reference is added automatically. Remove it from the message.';
+    return null;
+}
+
+/** "{greeting} (Ref: XG-…)" with the reference shown as a fixed part the customer cannot edit. */
+function MessagePreview({ text, arabic }: { text: string; arabic?: boolean }) {
+    return (
+        <div dir={arabic ? 'rtl' : 'ltr'} className="rounded-lg bg-[#dcf8c6] px-3 py-2 text-[13px] text-[#111b21] dark:bg-[#005c4b] dark:text-[#e9edef]">
+            <span className="break-words whitespace-pre-wrap">{text.trim() || '…'}</span>{' '}
+            <span
+                className="rounded bg-black/10 px-1 font-mono text-[12px] select-none dark:bg-white/15"
+                title="Added automatically to every tap. It cannot be edited or removed."
+            >
+                {arabic ? '(المرجع: XG-…)' : '(Ref: XG-…)'}
+            </span>
+        </div>
+    );
+}
+
+function Highlighted({ text, reference }: { text: string; reference: string | null }) {
+    if (!reference || !text.includes(reference)) return <span className="break-words whitespace-pre-wrap">{text}</span>;
+    const i = text.indexOf(reference);
+    return (
+        <span className="break-words whitespace-pre-wrap">
+            {text.slice(0, i)}
+            <mark className="rounded bg-yellow-200 px-0.5 font-mono font-semibold text-foreground dark:bg-yellow-500/40">{reference}</mark>
+            {text.slice(i + reference.length)}
+        </span>
+    );
+}
+
 const STEPS = ['Website', 'WhatsApp number', 'Install', 'Mode', 'Check and test'] as const;
 
 type Install = 'snippet' | 'gtm' | 'wordpress' | 'shopify';
@@ -68,14 +109,27 @@ function Stage({ done, active, label, hint }: { done: boolean; active: boolean; 
  * tracker seen → tap received → message received → reference matched. Every stage comes from the
  * server's records, never from the browser. Opening an existing site starts at step 3.
  */
-export function WebsiteWizard({ open, onOpenChange, site: initial }: { open: boolean; onOpenChange: (o: boolean) => void; site?: GrowthSite }) {
+export function WebsiteWizard({
+    open,
+    onOpenChange,
+    site: initial,
+    startStep,
+}: {
+    open: boolean;
+    onOpenChange: (o: boolean) => void;
+    site?: GrowthSite;
+    startStep?: number;
+}) {
     const qc = useQueryClient();
     const numbers = (usePhoneNumbers().data ?? []).filter((n) => n.status === 'connected');
     const [site, setSite] = useState<GrowthSite | undefined>(initial);
-    const [step, setStep] = useState(initial ? 2 : 0);
+    const [step, setStep] = useState(startStep ?? (initial ? 2 : 0));
     const [domain, setDomain] = useState(initial?.domain ?? '');
     const [name, setName] = useState(initial?.display_name ?? '');
     const [picked, setPicked] = useState<string[]>(initial?.numbers.map((n) => n.phone_number_id) ?? []);
+    const [greeting, setGreeting] = useState(initial?.greeting ?? DEFAULT_GREETING);
+    const [greetingAr, setGreetingAr] = useState(initial?.greeting_ar ?? '');
+    const [showAr, setShowAr] = useState(!!initial?.greeting_ar);
     const [install, setInstall] = useState<Install>('snippet');
     const [testing, setTesting] = useState(false);
     const test = useSiteTest(site?.id, open && testing);
@@ -89,7 +143,10 @@ export function WebsiteWizard({ open, onOpenChange, site: initial }: { open: boo
 
     const create = useMutation({
         mutationFn: () =>
-            api<{ data: GrowthSite }>('growth/sites', { method: 'POST', body: { domain, display_name: name || null, connected_phone_ids: picked } }),
+            api<{ data: GrowthSite }>('growth/sites', {
+                method: 'POST',
+                body: { domain, display_name: name || null, connected_phone_ids: picked, greeting: greeting.trim(), greeting_ar: greetingAr.trim() || null },
+            }),
         onSuccess: (r) => {
             refresh(r.data);
             setStep(2);
@@ -117,7 +174,13 @@ export function WebsiteWizard({ open, onOpenChange, site: initial }: { open: boo
             setStep(1);
         } else if (step === 1) {
             if (picked.length === 0) return toast.error('Choose at least one WhatsApp number.');
-            if (site) patch.mutate({ connected_phone_ids: picked }, { onSuccess: () => setStep(2) });
+            const problem = greetingProblem(greeting) ?? (greetingAr.trim() ? greetingProblem(greetingAr) : null);
+            if (problem) return toast.error(problem);
+            if (site)
+                patch.mutate(
+                    { connected_phone_ids: picked, greeting: greeting.trim(), greeting_ar: greetingAr.trim() || null },
+                    { onSuccess: () => setStep(2) },
+                );
             else create.mutate();
         } else {
             setStep(Math.min(step + 1, 4));
@@ -125,6 +188,9 @@ export function WebsiteWizard({ open, onOpenChange, site: initial }: { open: boo
     };
 
     const pending = create.isPending || patch.isPending;
+    const greetingChanged = greeting.trim() !== (initial?.greeting ?? DEFAULT_GREETING) || greetingAr.trim() !== (initial?.greeting_ar ?? '');
+    const keywordFlows = site?.keyword_flows ?? [];
+    const problem = greetingProblem(greeting);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -195,6 +261,77 @@ export function WebsiteWizard({ open, onOpenChange, site: initial }: { open: boo
                                     <span className="text-[12.5px] text-muted-foreground">{n.verified_name}</span>
                                 </label>
                             ))}
+
+                            <div className="mt-3 grid gap-1.5">
+                                <Label htmlFor="xg-greeting">Message visitors will send</Label>
+                                <textarea
+                                    id="xg-greeting"
+                                    rows={2}
+                                    maxLength={GREETING_MAX}
+                                    value={greeting}
+                                    onChange={(e) => setGreeting(e.target.value)}
+                                    className="w-full resize-none rounded-md border bg-transparent px-3 py-2 text-[13.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                                />
+                                <div className="flex justify-between text-[12px] text-muted-foreground">
+                                    <span className={cn(problem && greeting.trim() && 'text-bad')}>
+                                        {problem && greeting.trim() ? problem : 'Plain text, no links. Visitors can still change it before sending.'}
+                                    </span>
+                                    <span>
+                                        {greeting.length}/{GREETING_MAX}
+                                    </span>
+                                </div>
+                                <p className="text-[12px] text-muted-foreground">Preview — the reference is always added and cannot be removed:</p>
+                                <MessagePreview text={greeting} />
+                                <p className="text-[12px] text-muted-foreground">
+                                    A button that already has its own WhatsApp text keeps it and only gets the reference. To set a message for one button, add{' '}
+                                    <code className="font-mono">data-xg-message=&quot;…&quot;</code> to it.
+                                </p>
+
+                                {showAr ? (
+                                    <div className="mt-1 grid gap-1.5">
+                                        <Label htmlFor="xg-greeting-ar">Arabic message (pages with lang=&quot;ar&quot;)</Label>
+                                        <textarea
+                                            id="xg-greeting-ar"
+                                            dir="rtl"
+                                            rows={2}
+                                            maxLength={GREETING_MAX}
+                                            value={greetingAr}
+                                            onChange={(e) => setGreetingAr(e.target.value)}
+                                            placeholder="مرحباً، أود معرفة المزيد عن خدماتكم."
+                                            className="w-full resize-none rounded-md border bg-transparent px-3 py-2 text-[13.5px] outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                                        />
+                                        <p className="text-right text-[12px] text-muted-foreground">
+                                            {greetingAr.length}/{GREETING_MAX}
+                                        </p>
+                                        {greetingAr.trim() && <MessagePreview text={greetingAr} arabic />}
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        className="justify-self-start text-[12.5px] text-primary hover:underline"
+                                        onClick={() => setShowAr(true)}
+                                    >
+                                        + Add an Arabic message
+                                    </button>
+                                )}
+
+                                {greetingChanged && keywordFlows.length > 0 && (
+                                    <div className="mt-1 rounded-md bg-warn-bg px-3 py-2 text-[12.5px]">
+                                        <p className="font-medium">Check your keyword chatbots</p>
+                                        <p className="text-muted-foreground">
+                                            These chatbots start when a message contains a keyword. If the new message contains one, every website visitor will
+                                            start that chatbot:
+                                        </p>
+                                        <ul className="mt-1 list-disc pl-4">
+                                            {keywordFlows.map((f) => (
+                                                <li key={f.name}>
+                                                    {f.name}: <span className="font-mono">{f.keywords.join(', ')}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
 
@@ -353,6 +490,20 @@ export function WebsiteWizard({ open, onOpenChange, site: initial }: { open: boo
                                     hint="The chat now shows “Reference matched” with the page and campaign."
                                 />
                             </ul>
+                            {t?.message && (
+                                <div className="grid gap-1.5">
+                                    <p className="text-[12.5px] font-medium">Message received</p>
+                                    <div className="rounded-lg bg-[#dcf8c6] px-3 py-2 text-[13px] text-[#111b21] dark:bg-[#005c4b] dark:text-[#e9edef]">
+                                        <Highlighted text={t.message.text} reference={t.message.reference} />
+                                    </div>
+                                    {!t.message.reference && (
+                                        <p className="text-[12.5px] text-warn">
+                                            The reference was removed before sending, so this chat shows “Website · details unavailable”. Nothing is guessed —
+                                            tap the button again and send the message without editing the reference.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

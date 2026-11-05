@@ -52,7 +52,7 @@ function Fact({ label, value }: { label: string; value: string }) {
     );
 }
 
-function SiteCard({ site, editable, onOpen }: { site: GrowthSite; editable: boolean; onOpen: () => void }) {
+function SiteCard({ site, editable, onOpen, onMessage }: { site: GrowthSite; editable: boolean; onOpen: () => void; onMessage: () => void }) {
     const h = site.health;
     const [label, tone] = STATUS[h.tracking_status];
 
@@ -85,6 +85,17 @@ function SiteCard({ site, editable, onOpen }: { site: GrowthSite; editable: bool
                 <Fact label="Taps · matched (24 h)" value={`${h.accepted_clicks_24h} · ${h.matched_24h}`} />
                 <Fact label="Errors (24 h)" value={String(h.errors_24h)} />
             </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-muted px-3 py-2 text-[12.5px]">
+                <span>
+                    <span className="text-muted-foreground">Visitors send: </span>“{site.greeting} <span className="font-mono">(Ref: XG-…)</span>”
+                    {site.greeting_ar && <span className="text-muted-foreground"> · Arabic message set</span>}
+                </span>
+                {editable && (
+                    <Button size="sm" variant="ghost" onClick={onMessage}>
+                        Edit message
+                    </Button>
+                )}
+            </div>
             <p className="text-[12px] text-muted-foreground">
                 Mode: {site.consent_mode === 'consent' ? 'waits for cookie consent' : 'click-only, no cookies'} · multi-page memory{' '}
                 {site.session_landing_mode ? 'on' : 'off'}
@@ -104,7 +115,7 @@ function SiteCard({ site, editable, onOpen }: { site: GrowthSite; editable: bool
  */
 export function WebsitesTab({ editable }: { editable: boolean }) {
     const sites = useSites();
-    const [wizard, setWizard] = useState<{ site?: GrowthSite } | null>(null);
+    const [wizard, setWizard] = useState<{ site?: GrowthSite; step?: number } | null>(null);
     const list = sites.data ?? [];
 
     return (
@@ -134,7 +145,13 @@ export function WebsitesTab({ editable }: { editable: boolean }) {
             ) : (
                 <div className="mb-4 grid gap-3">
                     {list.map((s) => (
-                        <SiteCard key={s.id} site={s} editable={editable} onOpen={() => setWizard({ site: s })} />
+                        <SiteCard
+                            key={s.id}
+                            site={s}
+                            editable={editable}
+                            onOpen={() => setWizard({ site: s })}
+                            onMessage={() => setWizard({ site: s, step: 1 })}
+                        />
                     ))}
                 </div>
             )}
@@ -180,7 +197,7 @@ export function WebsitesTab({ editable }: { editable: boolean }) {
                 </dl>
             </Card>
 
-            {wizard && <WebsiteWizard open onOpenChange={(o) => !o && setWizard(null)} site={wizard.site} />}
+            {wizard && <WebsiteWizard open onOpenChange={(o) => !o && setWizard(null)} site={wizard.site} startStep={wizard.step} />}
         </>
     );
 }
