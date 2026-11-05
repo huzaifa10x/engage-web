@@ -1,7 +1,7 @@
 'use client';
 
-import { BotIcon, InboxIcon, SearchIcon } from 'lucide-react';
-import { useState } from 'react';
+import { BotIcon, ClockIcon, InboxIcon, MoonIcon, SearchIcon, TimerIcon } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 import { SourceChip } from '@/components/growth/source-chip';
 import { Avatar } from '@/components/ui/avatar';
@@ -10,16 +10,41 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { shortTime } from '@/lib/format';
-import { type ConversationFilters, useConversations } from '@/lib/queries';
+import { type ConversationFilters, useConversationCounts, useConversations, useInboxSettings } from '@/lib/queries';
 import type { Conversation } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-const TABS: { id: NonNullable<ConversationFilters['assigned']>; label: string }[] = [
+type Tab = NonNullable<ConversationFilters['assigned']> | 'needs_reply';
+
+// "Needs reply" first: the chats waiting on us (ad leads first, then the longest waiting).
+const TABS: { id: Tab; label: string; title?: string }[] = [
+    { id: 'needs_reply', label: 'Needs reply', title: 'Chats waiting on the team: ad leads first, then the longest waiting' },
     { id: 'any', label: 'All' },
     { id: 'me', label: 'Mine' },
     { id: 'unassigned', label: 'Unassigned' },
     { id: 'others', label: 'Team' },
 ];
+
+/** "4 min", "2 h 5 min", "3 d" */
+function waited(since: string, now: number): string {
+    const m = Math.max(0, Math.floor((now - new Date(since).getTime()) / 60_000));
+    if (m < 60) return `${m} min`;
+    if (m < 60 * 24) return `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`;
+
+    return `${Math.floor(m / 1440)} d`;
+}
+
+/** Re-render every 30 s so the waiting timers move. */
+function useNow(): number {
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        const id = setInterval(() => setNow(Date.now()), 30_000);
+
+        return () => clearInterval(id);
+    }, []);
+
+    return now;
+}
 
 type View = NonNullable<ConversationFilters['view']> | 'all';
 const VIEWS: { id: View; label: string; title: string }[] = [
@@ -43,7 +68,13 @@ export function ConversationList({
     onSelect: (c: Conversation) => void;
     polling: boolean;
 }) {
-    const [assigned, setAssigned] = useState<NonNullable<ConversationFilters['assigned']>>('any');
+    const [tab, setTab] = useState<Tab>('any');
+    const assigned = tab === 'needs_reply' ? 'any' : tab;
+    const [afterHours, setAfterHours] = useState(false);
+    const now = useNow();
+    const counts = useConversationCounts(phoneNumberId, polling ? 15_000 : false).data;
+    // Over the first-response target: the timer turns red.
+    const targetMs = (useInboxSettings().data?.reply_target_minutes ?? 10) * 60_000;
     // Closed conversations stay in the list (marked Closed); filter to Open or Closed when needed.
     const [status, setStatus] = useState<'all' | 'open' | 'closed'>('all');
     const [unread, setUnread] = useState(false);
@@ -62,6 +93,8 @@ export function ConversationList({
             snoozed: snoozed || undefined,
             q: q || undefined,
             view: view === 'all' ? undefined : view,
+            state: tab === 'needs_reply' ? 'needs_reply' : undefined,
+            after_hours: afterHours || undefined,
         },
         polling ? 15_000 : false,
     );
@@ -90,15 +123,33 @@ export function ConversationList({
                     {TABS.map((t) => (
                         <button
                             key={t.id}
-                            onClick={() => setAssigned(t.id)}
+                            onClick={() => setTab(t.id)}
+                            title={t.title}
                             className={cn(
-                                'rounded-md px-2.5 py-1 text-[12.5px] font-semibold',
-                                assigned === t.id ? 'bg-brand-50 text-brand-600' : 'text-muted-foreground hover:bg-muted',
+                                'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[12.5px] font-semibold',
+                                tab === t.id ? 'bg-brand-50 text-brand-600' : 'text-muted-foreground hover:bg-muted',
                             )}
                         >
                             {t.label}
+                            {t.id === 'needs_reply' && (counts?.needs_reply ?? 0) > 0 && (
+                                <span className="rounded-full bg-warn px-1.5 text-[10.5px] leading-4 font-bold text-white tabular-nums">
+                                    {counts?.needs_reply}
+                                </span>
+                            )}
                         </button>
                     ))}
+                    <button
+                        onClick={() => setAfterHours((v) => !v)}
+                        className={cn(
+                            'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[12.5px] font-semibold',
+                            afterHours ? 'bg-brand-50 text-brand-600' : 'text-muted-foreground hover:bg-muted',
+                        )}
+                        aria-pressed={afterHours}
+                        title="Chats that arrived while you were closed and still need a reply"
+                    >
+                        <MoonIcon className="size-3.5" /> After hours
+                        {(counts?.after_hours ?? 0) > 0 && <span className="tabular-nums">· {counts?.after_hours}</span>}
+                    </button>
                     <button
                         onClick={() => setUnread((u) => !u)}
                         className={cn(
@@ -158,9 +209,11 @@ export function ConversationList({
                 {!list.isLoading && rows.length === 0 && (
                     <li className="flex flex-col items-center gap-2 px-6 py-12 text-center text-sm text-muted-foreground">
                         <InboxIcon className="size-6" />
-                        {q || unread || snoozed || assigned !== 'any' || view !== 'all'
-                            ? 'No conversations match these filters.'
-                            : 'No conversations yet. Messages to your WhatsApp numbers appear here.'}
+                        {tab === 'needs_reply' && !q && !afterHours
+                            ? 'Nobody is waiting on the team. 🎉'
+                            : q || unread || snoozed || afterHours || tab !== 'any' || view !== 'all'
+                              ? 'No conversations match these filters.'
+                              : 'No conversations yet. Messages to your WhatsApp numbers appear here.'}
                     </li>
                 )}
                 {rows.map((c) => {
@@ -199,6 +252,30 @@ export function ConversationList({
                                             </span>
                                         )}
                                     </span>
+                                    {c.state === 'needs_reply' && c.needs_reply_since && (
+                                        <span
+                                            className={cn(
+                                                'mt-1 mr-1 inline-flex w-fit items-center gap-1 rounded-full px-1.5 py-px text-[10.5px] font-semibold',
+                                                now - new Date(c.needs_reply_since).getTime() > targetMs ? 'bg-bad-bg text-bad' : 'bg-warn-bg text-warn',
+                                            )}
+                                            title="Needs reply: waiting on the team"
+                                        >
+                                            <TimerIcon className="size-3" /> Waiting {waited(c.needs_reply_since, now)}
+                                        </span>
+                                    )}
+                                    {c.window?.closing_soon && (
+                                        <span
+                                            className="mt-1 mr-1 inline-flex w-fit items-center gap-1 rounded-full bg-bad-bg px-1.5 py-px text-[10.5px] font-semibold text-bad"
+                                            title="After the 24-hour window closes, only a paid template can reach the customer"
+                                        >
+                                            <ClockIcon className="size-3" /> Reply before window closes
+                                        </span>
+                                    )}
+                                    {c.state === 'needs_reply' && c.after_hours && (
+                                        <span className="mt-1 mr-1 inline-flex w-fit items-center gap-1 rounded-full bg-[#f1ebff] px-1.5 py-px text-[10.5px] font-semibold text-[#5b3fc9]">
+                                            <MoonIcon className="size-3" /> Arrived after hours
+                                        </span>
+                                    )}
                                     {c.contact?.acquisition && <SourceChip acquisition={c.contact.acquisition} compact className="mt-1 mr-1" />}
                                     {c.handler === 'bot' ? (
                                         <span

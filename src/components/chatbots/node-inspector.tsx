@@ -1195,7 +1195,7 @@ function Editor({ ctx, onWebhook }: { ctx: Ctx; onWebhook: (enabled: boolean) =>
                         onChange={(action) => set({ action })}
                         options={[
                             ['none', 'Leave the conversation open'],
-                            ['close', 'Close the conversation'],
+                            ['close', 'Resolve the chat (close it)'],
                             ['assign', 'Assign it to a teammate'],
                         ]}
                     />
@@ -1224,6 +1224,12 @@ function StartEditor({ ctx, onWebhook }: { ctx: Ctx; onWebhook: (enabled: boolea
                     hint="Only customers writing to this number for the first time. One greeting flow per number."
                     checked={!!c.greeting}
                     onChange={(v) => set({ greeting: v })}
+                />
+                <Toggle
+                    label="Outside business hours (after-hours reply)"
+                    hint="Answers the first message that arrives while you are closed, once per closed period, before any other flow. Turn off “Any message” so it stays quiet during opening hours. Use {{business.next_open}} to say when you are back."
+                    checked={!!c.after_hours}
+                    onChange={(v) => set(v ? { after_hours: true, any_message: false } : { after_hours: false })}
                 />
                 <Row label="Keywords" hint="Keyword flows win over the default flow.">
                     <TagInput

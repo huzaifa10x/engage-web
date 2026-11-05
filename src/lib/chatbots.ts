@@ -530,6 +530,7 @@ export function defaultConfig(type: NodeType): NodeConfig {
                 keyword_match: 'starts',
                 regex: null,
                 ad_referral: true,
+                after_hours: false,
                 qr_code: null,
                 campaign_buttons: [],
                 tags_added: [],
@@ -829,7 +830,7 @@ export function autoTitle(node: FlowNode): string {
         case 'handoff':
             return 'Talk to a person';
         case 'end':
-            return c.action === 'close' ? 'End & close' : 'End';
+            return c.action === 'close' ? 'End · resolves the chat' : 'End';
     }
 }
 
@@ -841,6 +842,7 @@ export function nodeSummary(node: FlowNode, ctx?: { titles?: Map<string, string>
             const parts = [
                 c.any_message ? 'Any message' : null,
                 c.greeting ? 'First message' : null,
+                c.after_hours ? 'After hours' : null,
                 (c.keywords ?? []).length ? `“${(c.keywords as string[]).slice(0, 3).join('”, “')}”` : null,
                 c.regex ? 'pattern' : null,
                 c.qr_code ? `QR “${c.qr_code}”` : null,
@@ -894,7 +896,7 @@ export function nodeSummary(node: FlowNode, ctx?: { titles?: Map<string, string>
         case 'handoff':
             return c.assign === 'member' ? 'To a chosen teammate' : c.assign === 'auto' ? 'To the least busy teammate' : 'To your team (inbox routing)';
         case 'end':
-            return c.action === 'close' ? 'Finish and close the chat' : c.action === 'assign' ? 'Finish and assign the chat' : 'Finish the flow';
+            return c.action === 'close' ? 'Finish and resolve the chat (closed)' : c.action === 'assign' ? 'Finish and assign the chat' : 'Finish the flow';
         case 'question': {
             const v =
                 (

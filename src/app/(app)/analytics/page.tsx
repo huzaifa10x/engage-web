@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
+import { ResponseTimesCard } from '@/components/analytics/response-times';
 import { Funnel } from '@/components/campaigns/campaign-detail';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -85,7 +86,7 @@ export default function AnalyticsPage() {
         <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
             <PageHeader
                 title="Analytics"
-                description="What was sent, delivered and read across your WhatsApp numbers."
+                description="What was sent, delivered and read across your WhatsApp numbers, and how fast the team answers."
                 actions={
                     <>
                         {(numbers.data ?? []).length > 1 && (
@@ -213,6 +214,8 @@ export default function AnalyticsPage() {
                             </TableBody>
                         </Table>
                     </Card>
+
+                    <ResponseTimesCard days={days} numberId={numberId} />
 
                     <Card className="overflow-hidden p-0">
                         <p className="px-5 pt-4 pb-2 text-sm font-semibold">Top templates</p>

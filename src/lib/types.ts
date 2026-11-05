@@ -514,7 +514,15 @@ export type Conversation = {
     last_message_preview: string | null;
     last_message_direction: 'inbound' | 'outbound' | null;
     /** `replies_allowed`: a normal message can be sent now (window open; for an opted-out contact, opened by a message sent after opting out). */
-    window: { open: boolean; expires_at: string | null; replies_allowed?: boolean };
+    window: { open: boolean; expires_at: string | null; replies_allowed?: boolean; closing_soon?: boolean };
+    /** Who the chat is waiting on, set by the system: needs_reply (on us) | waiting (on the customer) | snoozed | closed. */
+    state?: 'needs_reply' | 'waiting' | 'snoozed' | 'closed';
+    /** Needs reply: since when the customer has been waiting. */
+    needs_reply_since?: string | null;
+    /** The wait started outside business hours. */
+    after_hours?: boolean;
+    /** The wait started from a paid ad (top of the Needs reply queue). */
+    ad_lead?: boolean;
     contact?: Contact;
     /** `status` is "disconnected" once the number was offboarded: the chat stays readable, nothing can be sent. */
     phone_number?: {
@@ -942,11 +950,23 @@ export type ConversationNote = { id: string; body: string; author: string; by_bo
 
 export type DayHours = { open: boolean; from: string; to: string };
 
+export type WeekHours = Record<'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun', DayHours>;
+
 export type InboxSettings = {
-    business_hours: { enabled: boolean; days: Record<'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun', DayHours> };
+    business_hours: { enabled: boolean; days: WeekHours };
+    /** Different hours for some WhatsApp numbers (phone number id → week). */
+    number_hours: Record<string, WeekHours>;
+    /** Closed dates (Eid, National Day…). */
+    holidays: { date: string; name: string }[];
     routing: 'manual' | 'round_robin';
     timezone: string;
+    /** First-response target (business hours) for "answered within target". */
+    reply_target_minutes: number;
+    /** "Reply before window closes" shows this long before the 24 h window ends. */
+    window_warning_minutes: number;
     open_now: boolean;
+    /** When the team is next open ("tomorrow at 9:00"), what {{business.next_open}} says now. */
+    next_open: string | null;
     can: { business_hours: boolean; auto_routing: boolean };
 };
 
@@ -1103,3 +1123,26 @@ export type IntegrationEvent = {
     due_at: string | null;
     created_at: string | null;
 };
+
+/** Analytics › Conversations & Team: response times in business hours. */
+export type ResponseStat = {
+    total: number;
+    median_seconds: number | null;
+    average_seconds: number | null;
+    within_target: number;
+    within_target_pct: number | null;
+    after_hours: number;
+};
+
+export type ResponseTimes = {
+    range: { days: number; from: string; timezone: string };
+    business_hours: boolean;
+    target_seconds: number;
+    now: { needs_reply: number; over_target: number; after_hours: number };
+    first_response: ResponseStat;
+    resolution: ResponseStat;
+    agents: (ResponseStat & { membership_id: string; name: string; resolution_average_seconds: number | null })[];
+    numbers: (ResponseStat & { id: string; display: string | null })[];
+};
+
+export type ConversationCounts = { needs_reply: number; needs_reply_mine: number; after_hours: number; unassigned: number };

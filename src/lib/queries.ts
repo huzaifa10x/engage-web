@@ -4,6 +4,8 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api, upload } from './api';
 import type {
+    ConversationCounts,
+    ResponseTimes,
     GrowthSite,
     SiteTest,
     LeadPage,
@@ -215,6 +217,10 @@ export type ConversationFilters = {
     unread?: boolean;
     q?: string;
     snoozed?: boolean;
+    /** Who it is waiting on: needs_reply lists ad leads first, then the longest waiting. */
+    state?: 'needs_reply' | 'waiting';
+    /** "Arrived after hours" (still needing a reply). */
+    after_hours?: boolean;
 };
 
 export const useConversations = (filters: ConversationFilters, refetchInterval: number | false = false) =>
@@ -223,10 +229,24 @@ export const useConversations = (filters: ConversationFilters, refetchInterval: 
         refetchInterval,
         queryFn: ({ pageParam }) =>
             api<CursorPage<Conversation>>('conversations', {
-                query: { ...filters, unread: filters.unread ? 1 : undefined, cursor: pageParam, per_page: 30 },
+                query: {
+                    ...filters,
+                    unread: filters.unread ? 1 : undefined,
+                    after_hours: filters.after_hours ? 1 : undefined,
+                    cursor: pageParam,
+                    per_page: 30,
+                },
             }),
         initialPageParam: null as string | null,
         getNextPageParam: (last) => last.meta.next_cursor ?? null,
+    });
+
+/** Counts for the inbox tabs (Needs reply, after hours, unassigned), same visibility as the list. */
+export const useConversationCounts = (phoneNumberId: string | null, refetchInterval: number | false = false) =>
+    useQuery({
+        queryKey: [...keys.conversationsAll, 'counts', phoneNumberId] as const,
+        queryFn: () => api<Data<ConversationCounts>>('conversations/counts', { query: { phone_number_id: phoneNumberId ?? undefined } }).then((r) => r.data),
+        refetchInterval,
     });
 
 export const useConversation = (id: string | null, refetchInterval: number | false = false) =>
@@ -555,11 +575,19 @@ export const addConversationNote = (id: string, body: string, mentions: string[]
 export const snoozeConversation = (id: string, until: string | null) =>
     api<Data<Conversation>>(`conversations/${id}/snooze`, until ? { method: 'POST', body: { until } } : { method: 'DELETE' }).then((r) => r.data);
 
+export const useResponseTimes = (days: number, phoneNumberId?: string, enabled = true) =>
+    useQuery({
+        queryKey: ['analytics', 'response-times', days, phoneNumberId ?? null] as const,
+        queryFn: () => api<Data<ResponseTimes>>('analytics/response-times', { query: { days, phone_number_id: phoneNumberId } }).then((r) => r.data),
+        enabled,
+    });
+
 export const useInboxSettings = (enabled = true) =>
     useQuery({ queryKey: ['inbox-settings'], queryFn: () => api<Data<InboxSettings>>('tenant/inbox-settings').then((r) => r.data), enabled });
 
-export const updateInboxSettings = (body: Pick<InboxSettings, 'business_hours' | 'routing'>) =>
-    api<Data<InboxSettings>>('tenant/inbox-settings', { method: 'PUT', body }).then((r) => r.data);
+export const updateInboxSettings = (
+    body: Partial<Pick<InboxSettings, 'business_hours' | 'routing' | 'number_hours' | 'holidays' | 'reply_target_minutes' | 'window_warning_minutes'>>,
+) => api<Data<InboxSettings>>('tenant/inbox-settings', { method: 'PUT', body }).then((r) => r.data);
 
 type NotificationFeed = { unread: number; items: MemberNotification[]; unread_conversations: number; messages: UnreadConversation[] };
 

@@ -9,14 +9,15 @@ import {
     CheckIcon,
     HomeIcon,
     Loader2Icon,
-    type LucideIcon,
     MenuIcon,
+    MoonIcon,
     PlusIcon,
     SparklesIcon,
     StethoscopeIcon,
     UserIcon,
     WorkflowIcon,
     XIcon,
+    type LucideIcon,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -36,6 +37,7 @@ import { cn } from '@/lib/utils';
 const ICONS: Record<string, LucideIcon> = {
     calendar: CalendarIcon,
     cake: CakeIcon,
+    moon: MoonIcon,
     home: HomeIcon,
     stethoscope: StethoscopeIcon,
     sparkles: SparklesIcon,
