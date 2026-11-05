@@ -42,11 +42,10 @@ const WEBSITE_SOURCES: [string, string][] = [
 ];
 
 const STATUSES: [string, string][] = [
-    ['meta', 'Meta ad (first message)'],
+    ['meta', 'Meta ad'],
     ['ref', 'Reference matched (website)'],
     ['multi', 'Multiple sources'],
-    ['before', 'Returning customer (before tracking)'],
-    ['unattributed', 'Came back through an ad'],
+    ['web', 'Website · details unavailable'],
 ];
 
 function Kpi({ label, value, hint, hero = false }: { label: string; value: string; hint: string; hero?: boolean }) {
@@ -415,7 +414,10 @@ function LeadsPage() {
                                                     <p className="font-semibold">{l.contact.display_name}</p>
                                                     <p className="font-mono text-[12px] text-muted-foreground">{l.contact.phone}</p>
                                                 </TableCell>
-                                                <TableCell>{a?.source?.name ?? '—'}</TableCell>
+                                                <TableCell>
+                                                    <p>{a?.source?.name ?? '—'}</p>
+                                                    {a?.returning && <p className="text-[11.5px] text-muted-foreground">Returning contact</p>}
+                                                </TableCell>
                                                 <TableCell
                                                     className="max-w-56 text-[12.5px]"
                                                     title={a?.source?.latest?.line ?? a?.source?.campaign ?? undefined}

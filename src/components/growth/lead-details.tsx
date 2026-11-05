@@ -21,7 +21,6 @@ import { SourceChip } from './source-chip';
 export const SOURCE_NOTE: Partial<Record<Acquisition['status'], string>> = {
     multi: 'This message came from a Meta ad and also carried a website reference. Both are kept; the ad counts as the message origin.',
     web: 'Came from the website, but the click was blocked before it reached us, so campaign details aren’t available.',
-    before: 'Existing customer from before tracking. New ad taps or website visits are new touches, not new leads.',
 };
 
 /** Meta's referral source_type: "ad" (a click-to-WhatsApp ad) or "post" (a boosted/organic post). */
@@ -170,8 +169,10 @@ function evidenceRows(e: LeadEvidence | undefined): [string, React.ReactNode][] 
 
 /** The status rows that explain an original source with no evidence row of its own. */
 function originalNote(a: Acquisition, contact: Contact): [string, React.ReactNode][] {
-    if (a.status === 'before') return [['Original source', `Before tracking${contact.created_at ? ` (contact created ${dateTime(contact.created_at)})` : ''}`]];
-    if (a.status === 'unattributed') return [['Why', 'No reference and no ad referral in the first message.']];
+    if (a.returning)
+        return [
+            ['Before this ad', `${a.original?.label ?? 'Existing contact'}${contact.created_at ? ` · contact since ${dateTime(contact.created_at)}` : ''}`],
+        ];
     return [];
 }
 
@@ -179,11 +180,13 @@ type Step = { at: string; title: string; detail: string; proof: boolean; evidenc
 
 function journey(contact: Contact, a: Acquisition, evidence: LeadEvidence[], stages: StageEvent[]): Step[] {
     const steps: Step[] = [];
-    if (a.status === 'before' && contact.created_at)
-        steps.push({ at: contact.created_at, title: 'Contact created before tracking started', detail: dateTime(contact.created_at), proof: false });
+    const shownId = a.returning ? a.latest?.evidence_id : a.original?.evidence_id;
+    if (a.returning && contact.created_at)
+        steps.push({ at: contact.created_at, title: 'Became a contact (no paid ad yet)', detail: dateTime(contact.created_at), proof: false });
     for (const e of evidence) {
         const when = dateTime(e.occurred_at);
-        const later = a.status === 'before' || (a.original?.evidence_id !== undefined && a.original.evidence_id !== e.id);
+        // Every touch other than the one the lead is shown with is a new touch, never a new lead.
+        const later = shownId !== undefined && shownId !== e.id;
         if (e.type === 'meta_ctwa') {
             const title = later ? 'New touch: Meta ad (not counted as a new lead)' : 'Tapped a click-to-WhatsApp ad';
             steps.push({
@@ -293,8 +296,10 @@ export function LeadDetails({
     if (!a) return null;
 
     const list = evidence.data ?? [];
-    const originalEvidence = a.status === 'before' ? undefined : (list.find((e) => e.id === a.original?.evidence_id) ?? list[0]);
-    const latestEvidence = list.find((e) => e.id === a.latest?.evidence_id && e.id !== originalEvidence?.id);
+    // The evidence of the touch the lead is shown with: the original ad, or for a returning contact the ad that brought it back.
+    const shownId = a.returning ? a.latest?.evidence_id : a.original?.evidence_id;
+    const originalEvidence = list.find((e) => e.id === shownId) ?? (a.returning ? list[list.length - 1] : list[0]);
+    const latestEvidence = a.returning ? undefined : list.find((e) => e.id === a.latest?.evidence_id && e.id !== originalEvidence?.id);
     const steps = journey(contact, a, list, stages.data ?? []);
     const na = <span className="text-muted-foreground">Not available</span>;
     const name = a.source?.name ?? a.label;
@@ -320,7 +325,7 @@ export function LeadDetails({
                     </div>
                     <Rows
                         rows={[
-                            ['Original source', name],
+                            [a.returning ? 'Came back through' : 'Original source', name],
                             [
                                 'Campaign',
                                 <span key="c">
@@ -333,7 +338,13 @@ export function LeadDetails({
                         ]}
                     />
                     {SOURCE_NOTE[a.status] && <p className="rounded-md bg-muted px-3 py-2 text-[12.5px] leading-snug">{SOURCE_NOTE[a.status]}</p>}
-                    {latest && a.status !== 'before' && (
+                    {a.returning && (
+                        <p className="rounded-md bg-muted px-3 py-2 text-[12.5px] leading-snug">
+                            Returning contact, shown with the paid touch that brought them back. Marketing keeps crediting the original source, so this is not a
+                            new lead.
+                        </p>
+                    )}
+                    {latest && !a.returning && (
                         <p className="rounded-md bg-muted px-3 py-2 text-[12.5px] leading-snug">
                             Returning contact. Marketing keeps crediting the original source; the latest touch is shown for context only.
                         </p>
@@ -341,7 +352,7 @@ export function LeadDetails({
                 </section>
 
                 {proof && (
-                    <Section title="Evidence · original source">
+                    <Section title={a.returning ? 'Evidence · the touch that brought them back' : 'Evidence · original source'}>
                         {evidence.isLoading ? (
                             <Skeleton className="h-24 w-full" />
                         ) : evidence.isError ? (

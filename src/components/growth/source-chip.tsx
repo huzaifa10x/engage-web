@@ -4,7 +4,7 @@ import type { Acquisition, AcquisitionStatus } from '@/lib/types';
 
 /**
  * Growth Hub lead status colours, as in the R1 prototype: Reference matched green, Meta ad blue,
- * Multiple sources violet, Website · details unavailable teal, Unattributed grey, Before tracking amber.
+ * Multiple sources violet, Website · details unavailable teal, Unattributed grey ("before" is no longer sent: returning contacts show the ad that brought them back).
  */
 export const SOURCE_TONE: Record<AcquisitionStatus, Tone> = {
     ref: 'good',

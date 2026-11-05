@@ -286,8 +286,13 @@ export type AcquisitionTouch = {
 
 export type Acquisition = {
     status: AcquisitionStatus;
-    /** Chip text, e.g. "Meta ad", "Meta ad · Instagram", "Before tracking · Latest: Meta ad". */
+    /** Chip text, e.g. "Meta ad", "Meta ad · Instagram", "Reference matched · Google Ads". */
     label: string;
+    /**
+     * A returning contact (created before tracking started, or first wrote without an ad): shown with
+     * the paid touch that brought it back. Never "Before tracking".
+     */
+    returning?: boolean;
     /** Source panel line (full tier, every role that sees the chat): no codes, click IDs or costs. */
     source?: {
         name: string;

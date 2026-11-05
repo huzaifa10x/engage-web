@@ -13,7 +13,7 @@ import { SourceChip } from './source-chip';
 /**
  * Conversations › chat sidebar › Source (Technical Specification v1.2 §6, prototype): status chip,
  * source name, campaign (only from permitted evidence) and landing page, the explanation for
- * Multiple sources / details unavailable / Before tracking, and "View source details" (opens Lead
+ * Multiple sources / details unavailable / returning contacts, and "View source details" (opens Lead
  * details; not for Agents). Agents see the source to tailor the reply, never codes or click IDs.
  * Starter (chip tier): the chip only.
  */
@@ -36,6 +36,8 @@ export function SourceSection({ contact }: { contact: Contact }) {
                     <>
                         <p className="text-[15px] font-semibold">{s.name}</p>
                         <p className="text-[12.5px] break-words text-muted-foreground">{s.campaign ?? 'No campaign details'}</p>
+                        {a.returning && <p className="text-[12px] text-muted-foreground">Returning contact — came back through this ad</p>}
+                        {s.latest && <p className="text-[12px] text-muted-foreground">{s.latest.line}</p>}
                         {s.landing_page && (
                             <p className="text-[12.5px]">
                                 Landing page: <b className="font-mono text-[12px] break-all">{s.landing_page}</b>
