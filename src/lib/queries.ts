@@ -4,6 +4,8 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api, upload } from './api';
 import type {
+    FollowUps,
+    FollowUpSettings,
     ConversationCounts,
     ResponseTimes,
     GrowthSite,
@@ -541,7 +543,13 @@ export const switchToFree = () => api<Data<Billing>>('billing/switch-to-free', {
 export const useAutoReply = (enabled = true) =>
     useQuery({ queryKey: ['auto-reply'], queryFn: () => api<Data<AutoReplySettings>>('tenant/auto-reply').then((r) => r.data), enabled });
 
-export const updateAutoReply = (body: AutoReplySettings) => api<Data<AutoReplySettings>>('tenant/auto-reply', { method: 'PUT', body }).then((r) => r.data);
+export const updateAutoReply = (body: Omit<AutoReplySettings, 'flow_options'>) =>
+    api<Data<AutoReplySettings>>('tenant/auto-reply', { method: 'PUT', body }).then((r) => r.data);
+
+export const useFollowUps = (enabled = true) =>
+    useQuery({ queryKey: ['followups'], queryFn: () => api<Data<FollowUps>>('tenant/followups').then((r) => r.data), enabled });
+
+export const updateFollowUps = (body: Partial<FollowUpSettings>) => api<Data<FollowUps>>('tenant/followups', { method: 'PUT', body }).then((r) => r.data);
 
 /** Switch automatic replies on or off for one conversation. */
 export const setConversationAutoReply = (id: string, enabled: boolean) =>
@@ -586,7 +594,12 @@ export const useInboxSettings = (enabled = true) =>
     useQuery({ queryKey: ['inbox-settings'], queryFn: () => api<Data<InboxSettings>>('tenant/inbox-settings').then((r) => r.data), enabled });
 
 export const updateInboxSettings = (
-    body: Partial<Pick<InboxSettings, 'business_hours' | 'routing' | 'number_hours' | 'holidays' | 'reply_target_minutes' | 'window_warning_minutes'>>,
+    body: Partial<
+        Pick<
+            InboxSettings,
+            'business_hours' | 'routing' | 'number_hours' | 'holidays' | 'reply_target_minutes' | 'reply_warn_minutes' | 'window_warning_minutes'
+        >
+    >,
 ) => api<Data<InboxSettings>>('tenant/inbox-settings', { method: 'PUT', body }).then((r) => r.data);
 
 type NotificationFeed = { unread: number; items: MemberNotification[]; unread_conversations: number; messages: UnreadConversation[] };

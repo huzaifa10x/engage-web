@@ -73,8 +73,11 @@ export function ConversationList({
     const [afterHours, setAfterHours] = useState(false);
     const now = useNow();
     const counts = useConversationCounts(phoneNumberId, polling ? 15_000 : false).data;
-    // Over the first-response target: the timer turns red.
-    const targetMs = (useInboxSettings().data?.reply_target_minutes ?? 10) * 60_000;
+    // The live waiting timer, coloured by your own thresholds (Settings › Business hours): grey, then
+    // amber from the warning time, red from the reply target.
+    const inbox = useInboxSettings().data;
+    const targetMs = (inbox?.reply_target_minutes ?? 10) * 60_000;
+    const warnMs = Math.min(inbox?.reply_warn_minutes ?? 5, inbox?.reply_target_minutes ?? 10) * 60_000;
     // Closed conversations stay in the list (marked Closed); filter to Open or Closed when needed.
     const [status, setStatus] = useState<'all' | 'open' | 'closed'>('all');
     const [unread, setUnread] = useState(false);
@@ -256,7 +259,11 @@ export function ConversationList({
                                         <span
                                             className={cn(
                                                 'mt-1 mr-1 inline-flex w-fit items-center gap-1 rounded-full px-1.5 py-px text-[10.5px] font-semibold',
-                                                now - new Date(c.needs_reply_since).getTime() > targetMs ? 'bg-bad-bg text-bad' : 'bg-warn-bg text-warn',
+                                                now - new Date(c.needs_reply_since).getTime() >= targetMs
+                                                    ? 'bg-bad-bg text-bad'
+                                                    : now - new Date(c.needs_reply_since).getTime() >= warnMs
+                                                      ? 'bg-warn-bg text-warn'
+                                                      : 'bg-grey-bg text-grey',
                                             )}
                                             title="Needs reply: waiting on the team"
                                         >

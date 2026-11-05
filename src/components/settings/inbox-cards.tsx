@@ -114,6 +114,7 @@ export function BusinessHoursCard({ canManage }: { canManage: boolean }) {
                     routing: value.routing,
                     ...(value.can.business_hours ? { number_hours: value.number_hours, holidays: value.holidays } : {}),
                     reply_target_minutes: value.reply_target_minutes,
+                    reply_warn_minutes: value.reply_warn_minutes,
                     window_warning_minutes: value.window_warning_minutes,
                 }),
             );
@@ -156,11 +157,22 @@ export function BusinessHoursCard({ canManage }: { canManage: boolean }) {
                 </div>
                 {value.can.business_hours && <NumberHours value={value} disabled={off} onChange={(number_hours) => setDraft({ ...value, number_hours })} />}
                 {value.can.business_hours && <Holidays value={value} disabled={off} onChange={(holidays) => setDraft({ ...value, holidays })} />}
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
+                    <Field label="Waiting timer turns amber after (minutes)" htmlFor="reply-warn" hint="The live “Waiting …” timer on chats that need a reply.">
+                        <Input
+                            id="reply-warn"
+                            type="number"
+                            min={0}
+                            max={1440}
+                            disabled={!canManage}
+                            value={value.reply_warn_minutes}
+                            onChange={(e) => setDraft({ ...value, reply_warn_minutes: Math.max(0, Number(e.target.value) || 0) })}
+                        />
+                    </Field>
                     <Field
                         label="Reply target (minutes, in opening hours)"
                         htmlFor="reply-target"
-                        hint="The Needs reply timer turns red after this; Analytics shows the share answered within it."
+                        hint="The timer turns red after this; Analytics shows the share answered within it."
                     >
                         <Input
                             id="reply-target"

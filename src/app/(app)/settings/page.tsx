@@ -1,12 +1,15 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Field, FormError } from '@/components/app/field';
 import { Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
+import { FollowUpsCard } from '@/components/settings/followups-card';
 import { BusinessHoursCard, CannedResponsesCard } from '@/components/settings/inbox-cards';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -276,6 +279,91 @@ function WorkspaceForm({ tenant, canManage }: { tenant: Tenant; canManage: boole
     );
 }
 
+/**
+ * Auto reply with a chatbot: per WhatsApp number, any of its chatbot flows — the ready "After hours"
+ * template, or a custom flow built in Chatbots & Flows. The flow must be published and switched on.
+ */
+function AutoReplyBots({ value, disabled, onChange }: { value: AutoReplySettings; disabled: boolean; onChange: (flows: Record<string, string>) => void }) {
+    const router = useRouter();
+    const [creating, setCreating] = useState<string | null>(null);
+    const numbers = value.flow_options ?? [];
+
+    const create = async (numberId: string) => {
+        setCreating(numberId);
+        try {
+            const r = await api<{ data: { id: string } }>('chatbots', {
+                method: 'POST',
+                body: { name: 'After hours', phone_number_id: numberId, template: 'after_hours' },
+            });
+            onChange({ ...value.flows, [numberId]: r.data.id });
+            toast.success('After hours flow created. Publish and switch it on in the builder, then save here.');
+            router.push(`/chatbots/builder?id=${r.data.id}`);
+        } catch (e) {
+            toast.error(errorMessage(e));
+        } finally {
+            setCreating(null);
+        }
+    };
+
+    if (numbers.length === 0) return <p className="text-[13px] text-muted-foreground">Connect a WhatsApp number first.</p>;
+
+    return (
+        <div className="grid gap-2">
+            <p className="text-[13px] text-muted-foreground">
+                Choose the chatbot that answers on each number: the ready “After hours” flow, or any custom flow you build. Use{' '}
+                <code>{'{{business.next_open}}'}</code> in it to say when you are back.
+            </p>
+            {numbers.map((n) => {
+                const chosen = value.flows[n.phone_number_id] ?? '';
+                const flow = n.flows.find((f) => f.id === chosen);
+
+                return (
+                    <div key={n.phone_number_id} className="flex flex-wrap items-center gap-2 rounded-md border px-3 py-2">
+                        <span className="w-56 truncate text-[13px]">
+                            <span className="font-mono">{n.display_phone_number}</span>
+                            {n.display && n.display !== n.display_phone_number ? <span className="text-muted-foreground"> · {n.display}</span> : null}
+                        </span>
+                        <Select
+                            value={chosen || NONE}
+                            onValueChange={(v) => {
+                                const next = { ...value.flows };
+                                if (v === NONE) delete next[n.phone_number_id];
+                                else next[n.phone_number_id] = v;
+                                onChange(next);
+                            }}
+                            disabled={disabled}
+                        >
+                            <SelectTrigger size="sm" className="w-64" aria-label={`Chatbot for ${n.display_phone_number}`}>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value={NONE}>No auto reply on this number</SelectItem>
+                                {n.flows.map((f) => (
+                                    <SelectItem key={f.id} value={f.id}>
+                                        {f.name}
+                                        {f.live ? '' : ' (not live)'}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        {flow && (
+                            <Button variant="outline" size="sm" asChild>
+                                <Link href={`/chatbots/builder?id=${flow.id}`}>Configure</Link>
+                            </Button>
+                        )}
+                        {flow && !flow.live && <span className="text-[12px] text-warn">Publish and switch it on, or it won’t answer.</span>}
+                        {!flow && (
+                            <Button variant="ghost" size="sm" disabled={disabled || creating !== null} onClick={() => create(n.phone_number_id)}>
+                                {creating === n.phone_number_id ? 'Creating…' : 'Create from the After hours template'}
+                            </Button>
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+    );
+}
+
 /** The automatic reply customers get when they write in. Can be switched off for a single conversation in the inbox. */
 function AutoReplyCard({ canManage }: { canManage: boolean }) {
     const qc = useQueryClient();
@@ -289,7 +377,8 @@ function AutoReplyCard({ canManage }: { canManage: boolean }) {
     const save = async () => {
         setSaving(true);
         try {
-            qc.setQueryData(['auto-reply'], await updateAutoReply(value));
+            const { flow_options, ...body } = value;
+            qc.setQueryData(['auto-reply'], await updateAutoReply(body));
             setDraft(null);
             toast.success(value.enabled ? 'Auto reply is on' : 'Auto reply is off');
         } catch (e) {
@@ -305,23 +394,42 @@ function AutoReplyCard({ canManage }: { canManage: boolean }) {
                 <div>
                     <CardTitle>Auto reply</CardTitle>
                     <CardDescription>
-                        Send an automatic reply when a customer messages you. It is sent once per conversation in the chosen period, never in answer to STOP,
-                        and can be switched off for a single conversation from the inbox.
+                        Reply automatically when a customer messages you, with a message or with a chatbot. It answers once per conversation in the chosen
+                        period, never in answer to STOP, and can be switched off for a single conversation from the inbox.
                     </CardDescription>
                 </div>
                 <Switch checked={value.enabled} disabled={!canManage} aria-label="Auto reply" onCheckedChange={(enabled) => setDraft({ ...value, enabled })} />
             </CardHeader>
             <CardContent className="grid gap-4">
-                <Field label="Message" htmlFor="ar-message">
-                    <textarea
-                        id="ar-message"
-                        className="field-sizing-content min-h-20 w-full resize-y rounded-md border border-input bg-card px-3 py-2 text-sm leading-5 outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20 disabled:opacity-60"
-                        maxLength={1000}
+                <Field label="Reply with" htmlFor="ar-with" className="sm:max-w-xs">
+                    <Select
+                        value={value.reply_with}
+                        onValueChange={(v) => setDraft({ ...value, reply_with: v as AutoReplySettings['reply_with'] })}
                         disabled={!canManage || !value.enabled}
-                        value={value.message}
-                        onChange={(e) => setDraft({ ...value, message: e.target.value })}
-                    />
+                    >
+                        <SelectTrigger id="ar-with">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="message">A message</SelectItem>
+                            <SelectItem value="chatbot">A chatbot</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </Field>
+                {value.reply_with === 'chatbot' ? (
+                    <AutoReplyBots value={value} disabled={!canManage || !value.enabled} onChange={(flows) => setDraft({ ...value, flows })} />
+                ) : (
+                    <Field label="Message" htmlFor="ar-message">
+                        <textarea
+                            id="ar-message"
+                            className="field-sizing-content min-h-20 w-full resize-y rounded-md border border-input bg-card px-3 py-2 text-sm leading-5 outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20 disabled:opacity-60"
+                            maxLength={1000}
+                            disabled={!canManage || !value.enabled}
+                            value={value.message}
+                            onChange={(e) => setDraft({ ...value, message: e.target.value })}
+                        />
+                    </Field>
+                )}
                 <Field label="When" htmlFor="ar-when" className="sm:max-w-xs" hint="“Outside business hours” uses the hours set above.">
                     <Select
                         value={value.when}
@@ -357,7 +465,15 @@ function AutoReplyCard({ canManage }: { canManage: boolean }) {
                 </Field>
                 {canManage && (
                     <div className="flex justify-end">
-                        <Button onClick={save} disabled={saving || draft === null || (value.enabled && !value.message.trim())}>
+                        <Button
+                            onClick={save}
+                            disabled={
+                                saving ||
+                                draft === null ||
+                                (value.enabled && value.reply_with === 'message' && !value.message.trim()) ||
+                                (value.enabled && value.reply_with === 'chatbot' && Object.values(value.flows).filter(Boolean).length === 0)
+                            }
+                        >
                             {saving ? 'Saving…' : 'Save auto reply'}
                         </Button>
                     </div>
@@ -384,6 +500,7 @@ export default function SettingsPage() {
                     <WorkspaceForm key={tenant.data.id} tenant={tenant.data} canManage={can(P.SettingsManage)} />
                     <BusinessHoursCard canManage={can(P.SettingsManage)} />
                     <AutoReplyCard canManage={can(P.SettingsManage)} />
+                    <FollowUpsCard canManage={can(P.SettingsManage)} />
                     <CannedResponsesCard canManage={can(P.InboxReply)} limit={feature('canned_responses').limit} />
                 </div>
             ) : (

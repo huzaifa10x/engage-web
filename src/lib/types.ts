@@ -940,7 +940,50 @@ export type BillingPayments = {
     wallet: BillingWallet;
 };
 
-export type AutoReplySettings = { enabled: boolean; message: string; cooldown_hours: number; when: 'always' | 'outside_hours' };
+export type AutoReplySettings = {
+    enabled: boolean;
+    message: string;
+    cooldown_hours: number;
+    when: 'always' | 'outside_hours';
+    /** Reply with the fixed message, or with a chatbot flow chosen per WhatsApp number. */
+    reply_with: 'message' | 'chatbot';
+    /** phone number id → chatbot flow id */
+    flows: Record<string, string>;
+    /** The flows each number can use (live = published and switched on). Read only. */
+    flow_options?: {
+        phone_number_id: string;
+        display: string | null;
+        display_phone_number: string | null;
+        flows: { id: string; name: string; live: boolean }[];
+    }[];
+};
+
+/** Settings › Follow-up rules (Engagement Plan §IV). */
+export type FollowUpSettings = {
+    reply_alert: { enabled: boolean; minutes: number };
+    escalation: { enabled: boolean; minutes: number; action: 'notify' | 'reassign'; notify_ids: string[] };
+    window_alert: { enabled: boolean; minutes_before: number };
+    unassigned: { enabled: boolean; minutes: number };
+    nudge: { enabled: boolean; hours: number; message: string };
+    second_nudge: { enabled: boolean; hours: number; template: { name: string; language: string; body: string[] } | null };
+    weekly_cap: number;
+    free_service_messages: number;
+};
+
+export type FollowUps = {
+    settings: FollowUpSettings;
+    allowed: { team: boolean; escalation: boolean; nudges: boolean; round_robin: boolean };
+    /** Last 30 days per rule kind. */
+    stats: Record<string, { fired: number; replied: number; skipped: number }>;
+    estimate: {
+        nudges_per_month: number;
+        nudge_hours: number;
+        free_service_messages: number;
+        within_free: number;
+        beyond_free: number;
+        numbers: { id: string; display: string | null; service_messages_this_month: number; free_left: number }[];
+    };
+};
 
 // ── Inbox tools ──────────────────────────────────────────────────────────────────────────
 
@@ -962,6 +1005,8 @@ export type InboxSettings = {
     timezone: string;
     /** First-response target (business hours) for "answered within target". */
     reply_target_minutes: number;
+    /** The Needs reply timer is grey until this, amber until the target, red after it. */
+    reply_warn_minutes: number;
     /** "Reply before window closes" shows this long before the 24 h window ends. */
     window_warning_minutes: number;
     open_now: boolean;
