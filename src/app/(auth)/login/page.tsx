@@ -46,6 +46,8 @@ function LoginForm() {
 
     const enter = (me: Me) => {
         qc.setQueryData(keys.me, me);
+        // Signed in with a recovery code: probably a lost phone, offer to replace the authenticator first.
+        if (me.two_factor?.recovery_sign_in && me.active_tenant_id) return router.replace('/settings?security=replace');
         if (!me.user.email_verified && !next.startsWith('/invitations')) router.replace('/verify-email');
         else router.replace(me.active_tenant_id || next.startsWith('/invitations') ? next : '/select-workspace');
     };

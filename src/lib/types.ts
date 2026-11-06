@@ -78,7 +78,15 @@ export type Me = {
     two_factor?: TwoFactorStatus;
 };
 
-export type TwoFactorStatus = { enabled: boolean; required: boolean; confirmed_at: string | null; recovery_codes_left: number };
+export type TwoFactorStatus = {
+    enabled: boolean;
+    required: boolean;
+    confirmed_at: string | null;
+    last_used_at: string | null;
+    recovery_codes_left: number;
+    /** Signed in with a recovery code a moment ago: the authenticator can be replaced without another code. */
+    recovery_sign_in: boolean;
+};
 
 export type FeatureUsage = {
     label: string;
