@@ -214,31 +214,73 @@ function CurrentFactor({
     );
 }
 
-/** Sign-in step 2 when two-factor sign-in is on: the app code, or a recovery code. */
+type Method = 'app' | 'recovery' | 'email';
+
+const METHOD_TEXT: Record<Method, { intro: string; label: string; body: (v: string) => Record<string, string>; ready: (v: string) => boolean }> = {
+    app: {
+        intro: 'Enter the 6-digit code from your authenticator app.',
+        label: 'Code',
+        body: (v) => ({ code: v.replace(/\s/g, '') }),
+        ready: (v) => v.replace(/\s/g, '').length === 6,
+    },
+    recovery: {
+        intro: 'Enter one of the recovery codes you saved when you turned on two-factor sign-in. Each code works once.',
+        label: 'Recovery code',
+        body: (v) => ({ recovery_code: v.trim() }),
+        ready: (v) => v.trim().length >= 6,
+    },
+    email: {
+        intro: 'We emailed a 6-digit code to your sign-in address. It works for 10 minutes.',
+        label: 'Code from the email',
+        body: (v) => ({ email_code: v.replace(/\s/g, '') }),
+        ready: (v) => v.replace(/\s/g, '').length === 6,
+    },
+};
+
+/**
+ * Sign-in step 2 when two-factor sign-in is on: the app code. No access to the app? A recovery code,
+ * or a code emailed to the sign-in address. After either, Settings offers to replace the authenticator.
+ */
 export function TwoFactorChallenge({ onSignedIn, onCancel }: { onSignedIn: (me: Me) => void; onCancel: () => void }) {
-    const [recovery, setRecovery] = useState(false);
+    const [method, setMethod] = useState<Method>('app');
     const [value, setValue] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const [sentTo, setSentTo] = useState<string | null>(null);
+    const text = METHOD_TEXT[method];
+
+    const choose = (next: Method) => (setMethod(next), setValue(''), setError(null));
+    const sendEmail = async () => {
+        setBusy(true);
+        setError(null);
+        try {
+            const res = await api<{ data: { email: string } }>('auth/login/two-factor/email', { method: 'POST' });
+            setSentTo(res.data.email);
+            choose('email');
+        } catch (e) {
+            setError(firstError(e));
+        } finally {
+            setBusy(false);
+        }
+    };
     const submit = async () => {
         setBusy(true);
         setError(null);
         try {
-            const body = recovery ? { recovery_code: value.trim() } : { code: value.replace(/\s/g, '') };
-            onSignedIn((await api<{ data: Me }>('auth/login/two-factor', { method: 'POST', body })).data);
+            onSignedIn((await api<{ data: Me }>('auth/login/two-factor', { method: 'POST', body: text.body(value) })).data);
         } catch (e) {
             setError(firstError(e));
             setBusy(false);
         }
     };
 
+    const link = 'font-semibold text-foreground hover:underline disabled:opacity-50';
+
     return (
         <>
             <h1 className="text-2xl font-semibold tracking-tight">Two-factor sign-in</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-                {recovery
-                    ? 'Enter one of your recovery codes. Each code works once. Lost your phone? After signing in you can replace your authenticator straight away.'
-                    : 'Enter the 6-digit code from your authenticator app.'}
+                {method === 'email' && sentTo ? `We emailed a 6-digit code to ${sentTo}. It works for 10 minutes.` : text.intro}
             </p>
             <form
                 className="mt-8 grid gap-4"
@@ -248,43 +290,49 @@ export function TwoFactorChallenge({ onSignedIn, onCancel }: { onSignedIn: (me: 
                 }}
             >
                 <FormError message={error} />
-                <Field label={recovery ? 'Recovery code' : 'Code'} htmlFor="tf-login">
+                <Field label={text.label} htmlFor="tf-login">
                     <Input
                         id="tf-login"
-                        inputMode={recovery ? 'text' : 'numeric'}
+                        inputMode={method === 'recovery' ? 'text' : 'numeric'}
                         autoComplete="one-time-code"
                         className="font-mono tracking-widest"
                         value={value}
-                        onChange={(e) => setValue(recovery ? e.target.value.slice(0, 30) : e.target.value.replace(/[^\d ]/g, '').slice(0, 7))}
+                        onChange={(e) => setValue(method === 'recovery' ? e.target.value.slice(0, 30) : e.target.value.replace(/[^\d ]/g, '').slice(0, 7))}
                         autoFocus
                     />
                 </Field>
-                <Button type="submit" disabled={busy || (recovery ? value.trim().length < 6 : value.replace(/\s/g, '').length !== 6)}>
+                <Button type="submit" disabled={busy || !text.ready(value)}>
                     {busy ? 'Signing in…' : 'Verify and sign in'}
                 </Button>
             </form>
-            <p className="mt-6 flex flex-wrap gap-4 text-sm text-muted-foreground">
-                <button
-                    type="button"
-                    className="font-semibold text-foreground hover:underline"
-                    onClick={() => {
-                        setRecovery(!recovery);
-                        setValue('');
-                        setError(null);
-                    }}
-                >
-                    {recovery ? 'Use the app code' : 'Use a recovery code'}
-                </button>
-                <button type="button" className="font-semibold text-foreground hover:underline" onClick={onCancel}>
-                    Use a different account
-                </button>
-            </p>
-            {recovery && (
-                <p className="mt-3 text-[12.5px] text-muted-foreground">
-                    Lost your phone and your recovery codes? Contact 10X Engage support: after confirming who you are, they can reset two-factor sign-in for
-                    you.
-                </p>
-            )}
+
+            <div className="mt-6 grid gap-2 text-sm text-muted-foreground">
+                {method !== 'app' && (
+                    <button type="button" className={`w-fit ${link}`} onClick={() => choose('app')}>
+                        Use the authenticator app
+                    </button>
+                )}
+                {method === 'app' && <p className="font-medium text-foreground">Can’t use your authenticator app?</p>}
+                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                    {method !== 'recovery' && (
+                        <button type="button" className={link} onClick={() => choose('recovery')}>
+                            Use a recovery code
+                        </button>
+                    )}
+                    <button type="button" className={link} disabled={busy} onClick={() => void sendEmail()}>
+                        {method === 'email' ? 'Send a new code' : 'Email me a code'}
+                    </button>
+                    <button type="button" className={link} onClick={onCancel}>
+                        Use a different account
+                    </button>
+                </div>
+                {method !== 'app' && (
+                    <p className="text-[12.5px]">
+                        After signing in you can replace your authenticator straight away. No access to your email or recovery codes? Contact 10X Engage
+                        support: after confirming who you are, they can reset two-factor sign-in for you.
+                    </p>
+                )}
+            </div>
         </>
     );
 }
@@ -355,7 +403,9 @@ export function TwoFactorCard({ status }: { status: TwoFactorStatus }) {
                     </CardTitle>
                     <CardDescription>
                         A code from an authenticator app on your phone, asked at every sign-in.{' '}
-                        {status.required ? 'Required for workspace Owners.' : 'Recommended for everyone.'}
+                        {status.required
+                            ? 'Required for workspace Owners.'
+                            : 'Optional, and recommended. If you lose your phone, sign in with a recovery code or a code emailed to you.'}
                     </CardDescription>
                 </div>
             </CardHeader>
