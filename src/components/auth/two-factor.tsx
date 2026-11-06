@@ -339,7 +339,11 @@ export function TwoFactorCard({ status }: { status: TwoFactorStatus }) {
                 <div>
                     <CardTitle className="flex items-center gap-2">
                         Two-factor sign-in
-                        {status.enabled ? (
+                        {status.review_account ? (
+                            <Badge tone="warn" dot>
+                                Review account
+                            </Badge>
+                        ) : status.enabled ? (
                             <Badge tone="good" dot>
                                 On
                             </Badge>
@@ -356,7 +360,12 @@ export function TwoFactorCard({ status }: { status: TwoFactorStatus }) {
                 </div>
             </CardHeader>
             <CardContent className="grid gap-4">
-                {codes ? (
+                {status.review_account ? (
+                    <p className="text-[13px] text-muted-foreground">
+                        This is a review account: it signs in with email and password only, without an authenticator or emailed code. 10X Engage support set
+                        this up; ask them to turn it off when the review is finished.
+                    </p>
+                ) : codes ? (
                     <RecoveryCodes codes={codes} onDone={() => (reset(), refresh())} />
                 ) : !status.enabled ? (
                     mode === 'setup' ? (

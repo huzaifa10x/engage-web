@@ -84,6 +84,8 @@ export type TwoFactorStatus = {
     confirmed_at: string | null;
     last_used_at: string | null;
     recovery_codes_left: number;
+    /** Set by a Super Admin (Meta App Review): email + password only, no authenticator or emailed code. */
+    review_account?: boolean;
     /** Signed in with a recovery code a moment ago: the authenticator can be replaced without another code. */
     recovery_sign_in: boolean;
 };
