@@ -1141,8 +1141,16 @@ export type WebhookDelivery = {
 
 /** Progress of the one-off import of contacts and chat history from the WhatsApp Business app. */
 export type PhoneNumberSync = {
-    state: 'waiting' | 'importing' | 'complete' | 'failed';
+    /** paused: everything that arrived is imported and WhatsApp has sent nothing for 30 minutes. */
+    state: 'waiting' | 'importing' | 'paused' | 'complete' | 'failed';
     history_declined: boolean;
+    /** Closed after Meta's 24-hour window with less than all of the history (see shared_percent). */
+    partial?: boolean;
+    /** How much of the history WhatsApp actually sent (also after the import was closed). */
+    shared_percent?: number;
+    /** When WhatsApp last sent a chunk, and when Meta's sync window ends. */
+    last_received_at?: string | null;
+    window_ends_at?: string | null;
     /** How much of the history WhatsApp has sent us so far (0–100). */
     whatsapp_percent: number;
     whatsapp_finished: boolean;

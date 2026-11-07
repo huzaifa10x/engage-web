@@ -1,6 +1,8 @@
 'use client';
 
-import { CheckCircle2Icon, Loader2Icon, TriangleAlertIcon } from 'lucide-react';
+import { CheckCircle2Icon, Loader2Icon, PauseCircleIcon, TriangleAlertIcon } from 'lucide-react';
+
+import { dateTime } from '@/lib/format';
 
 import type { PhoneNumberSync } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -10,7 +12,11 @@ const n = (value: number) => value.toLocaleString();
 /** One sentence for tight spaces (the inbox banner, a table cell). */
 export function syncSummary(sync: PhoneNumberSync): string {
     if (sync.state === 'waiting') return 'Waiting for WhatsApp to start sending your data…';
-    if (sync.state === 'complete') return `Import complete: ${n(sync.imported)} records`;
+    if (sync.state === 'complete')
+        return sync.partial
+            ? `Finished: WhatsApp shared ${sync.shared_percent ?? 0}% of the history (${n(sync.imported)} records)`
+            : `Import complete: ${n(sync.imported)} records`;
+    if (sync.state === 'paused') return `Paused: WhatsApp stopped sending at ${sync.whatsapp_percent}% · ${n(sync.imported)} records imported`;
     if (sync.state === 'failed') return 'The import could not be started';
 
     return `${n(sync.imported)} of ${n(sync.received)}${sync.whatsapp_finished ? '' : '+'} records imported · ${n(sync.waiting)} waiting`;
@@ -31,6 +37,17 @@ export function SyncProgress({ sync }: { sync: PhoneNumberSync }) {
             </p>
         );
     }
+    if (sync.state === 'complete' && sync.partial) {
+        return (
+            <p className="flex items-start gap-2 text-[13px] text-ink-2">
+                <CheckCircle2Icon className="mt-0.5 size-4 shrink-0 text-good" />
+                <span>
+                    Finished: WhatsApp shared {sync.shared_percent ?? 0}% of the chat history before its 24-hour window closed. {n(sync.contacts.imported)}{' '}
+                    contacts and {n(sync.messages.imported)} messages are in the inbox. If WhatsApp sends more, it is imported automatically.
+                </span>
+            </p>
+        );
+    }
     if (sync.state === 'complete') {
         return (
             <p className="flex items-center gap-2 text-[13px] text-good">
@@ -38,6 +55,26 @@ export function SyncProgress({ sync }: { sync: PhoneNumberSync }) {
                 Import complete: {n(sync.contacts.imported)} contacts and {n(sync.messages.imported)} messages
                 {sync.history_declined && ' (chat history was not shared from the phone)'}.
             </p>
+        );
+    }
+    if (sync.state === 'paused') {
+        return (
+            <div className="grid gap-2.5">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <p className="flex items-center gap-2 text-[13.5px] font-semibold">
+                        <PauseCircleIcon className="size-4 shrink-0 text-warn" />
+                        Paused: WhatsApp stopped sending at {sync.whatsapp_percent}%
+                    </p>
+                    <p className="text-[13.5px] font-semibold tabular-nums">{n(sync.imported)} imported</p>
+                </div>
+                <p className="text-[12.5px] leading-relaxed text-muted-foreground">
+                    Everything WhatsApp sent is in the inbox ({n(sync.contacts.imported)} contacts, {n(sync.messages.imported)} messages); nothing is waiting on
+                    our side.
+                    {sync.last_received_at && ` The last batch arrived ${dateTime(sync.last_received_at)}.`} The history is sent from the phone: ask the
+                    business to open the WhatsApp Business app and keep it open, on Wi‑Fi and charging. The import continues by itself when WhatsApp sends more
+                    {sync.window_ends_at ? `; WhatsApp's sync window ends ${dateTime(sync.window_ends_at)}.` : '.'}
+                </p>
+            </div>
         );
     }
 
