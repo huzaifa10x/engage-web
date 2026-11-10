@@ -760,6 +760,7 @@ function Editor({ ctx, onWebhook }: { ctx: Ctx; onWebhook: (enabled: boolean) =>
                             ['date', 'A date'],
                             ['future_date', 'A date in the future'],
                             ['workday', 'A future working day'],
+                            ['time', 'A time'],
                             ['regex', 'Matches a pattern'],
                         ]}
                         hint={
@@ -767,9 +768,32 @@ function Editor({ ctx, onWebhook }: { ctx: Ctx; onWebhook: (enabled: boolean) =>
                                 ? 'Days follow your inbox business hours. Dates are read day-first (25/10/2026).'
                                 : c.validate?.includes('date')
                                   ? 'Dates are read day-first (25/10/2026), or like “tomorrow”.'
-                                  : undefined
+                                  : c.validate === 'time'
+                                    ? 'Read like 4:30 PM, 4pm or 16:30, and saved as 16:30.'
+                                    : undefined
                         }
                     />
+                    {c.validate === 'number' && (
+                        <Row label="Allowed range" hint="Leave a side empty for no limit. Decimals are fine.">
+                            <div className="flex items-center gap-2">
+                                <Input
+                                    type="number"
+                                    value={c.min ?? ''}
+                                    onChange={(e) => set({ min: e.target.value === '' ? null : Number(e.target.value) })}
+                                    placeholder="Lowest"
+                                    aria-label="Lowest allowed number"
+                                />
+                                <span className="text-muted-foreground">to</span>
+                                <Input
+                                    type="number"
+                                    value={c.max ?? ''}
+                                    onChange={(e) => set({ max: e.target.value === '' ? null : Number(e.target.value) })}
+                                    placeholder="Highest"
+                                    aria-label="Highest allowed number"
+                                />
+                            </div>
+                        </Row>
+                    )}
                     {c.validate === 'regex' && (
                         <LimitedInput
                             label="Pattern (regular expression)"
@@ -789,7 +813,7 @@ function Editor({ ctx, onWebhook }: { ctx: Ctx; onWebhook: (enabled: boolean) =>
                         max={300}
                         rows={2}
                         placeholder="That doesn’t look right — please try again, e.g. name@example.com"
-                        hint="Sent before asking again. Empty = the flow’s standard retry message."
+                        hint="Sent before asking again. Empty = a message for the expected answer (e.g. “please send a number between 1 and 12”), or the flow’s own retry message if you changed it."
                     />
                 </>
             );

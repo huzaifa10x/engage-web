@@ -909,11 +909,14 @@ export function nodeSummary(node: FlowNode, ctx?: { titles?: Map<string, string>
                         date: 'a date',
                         future_date: 'a future date',
                         workday: 'a working day',
+                        time: 'a time',
                         regex: 'a pattern',
                     } as Record<string, string>
                 )[c.validate] ?? 'any answer';
 
-            return `Expects ${v} → ${
+            const range = c.validate === 'number' && (c.min != null || c.max != null) ? ` (${c.min ?? '…'}–${c.max ?? '…'})` : '';
+
+            return `Expects ${v}${range} → ${
                 String(c.save_to ?? '')
                     .replace(/^var:/, '{{var.')
                     .replace(/^field:/, 'field ') + (String(c.save_to ?? '').startsWith('var:') ? '}}' : '')

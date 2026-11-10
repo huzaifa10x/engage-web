@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeftIcon, BotIcon, HandIcon, Loader2Icon, UploadCloudIcon } from 'lucide-react';
+import { ArrowLeftIcon, BotIcon, HandIcon, Loader2Icon, UploadCloudIcon, UserRoundIcon } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -46,6 +46,8 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
     const [replyTo, setReplyTo] = useState<Message | null>(null);
     const [templateOpen, setTemplateOpen] = useState(false);
     const [askingConsent, setAskingConsent] = useState(false);
+    // Narrow screens: the contact panel opens as a slide-over for this conversation.
+    const [panelFor, setPanelFor] = useState<string | null>(null);
     // Drag and drop: files dropped anywhere on the chat are handed to the message box.
     const composer = useRef<ComposerHandle>(null);
     const dragDepth = useRef(0);
@@ -302,6 +304,15 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                                 {askingConsent ? 'Sending…' : 'Ask for consent'}
                             </Button>
                         )}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            className="xl:hidden"
+                            onClick={() => setPanelFor(c.id)}
+                            title="Assignment, consent, stage, close the chat and the CRM record"
+                        >
+                            <UserRoundIcon /> Contact
+                        </Button>
                     </div>
                 </header>
 
@@ -395,6 +406,7 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                 )}
                 <Composer
                     ref={composer}
+                    conversationId={c.id}
                     canSendTemplate={!numberGone && !optedOut}
                     disabledReason={disabledReason}
                     replyTo={replyTo}
@@ -404,7 +416,7 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                 />
             </div>
 
-            <ContactPanel conversation={c} />
+            <ContactPanel conversation={c} open={panelFor === c.id} onClose={() => setPanelFor(null)} />
             <TemplateDialog open={templateOpen} onOpenChange={setTemplateOpen} wabaAccountId={wabaAccountId} onSend={sendTemplate} />
         </div>
     );

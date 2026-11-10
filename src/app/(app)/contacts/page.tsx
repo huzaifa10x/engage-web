@@ -58,10 +58,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api, errorMessage } from '@/lib/api';
-import { humanize, relative } from '@/lib/format';
+import { humanize, number, relative } from '@/lib/format';
 import { P } from '@/lib/permissions';
 import { useStored } from '@/hooks/use-stored';
-import { type ContactFilters, keys, useContactFields, useContacts, usePhoneNumbers, useSegments, useStages, useTags } from '@/lib/queries';
+import { type ContactFilters, keys, useContactCounts, useContactFields, useContacts, usePhoneNumbers, useSegments, useStages, useTags } from '@/lib/queries';
 import type { ConsentState, Contact, Segment } from '@/lib/types';
 
 const ALL = '__all__';
@@ -88,13 +88,24 @@ export default function ContactsPage() {
     const columnKeys = columnsRaw.split(',').filter((k) => k !== '');
     const columns = fields.filter((f) => columnKeys.includes(f.key));
     const toggleColumn = (key: string) => setColumnsRaw((columnKeys.includes(key) ? columnKeys.filter((k) => k !== key) : [...columnKeys, key]).join(','));
-    const filtered = Boolean(filters.q || filters.consent || filters.tag || filters.segment_id || filters.synced_from || filters.filter || filters.stage_id);
+    const filtered = Boolean(
+        filters.q || filters.consent || filters.tag || filters.segment_id || filters.synced_from || filters.source || filters.filter || filters.stage_id,
+    );
     // Numbers shared with the WhatsApp Business app: the only ones contacts can have been synced from.
     const syncNumbers = (usePhoneNumbers().data ?? []).filter((n) => n.onboarding_type === 'coexistence');
     const [exporting, setExporting] = useState(false);
 
     const contacts = useContacts(filters);
     const rows = contacts.data?.pages.flatMap((p) => p.data) ?? [];
+    const counts = useContactCounts(filters).data;
+    // One Source filter: how a contact was added (manual, import, inbound …), or the number it was synced from.
+    const sourceValue = filters.synced_from ? `synced:${filters.synced_from}` : filters.source ? `source:${filters.source}` : ALL;
+    const pickSource = (v: string) =>
+        setFilters((f) => ({
+            ...f,
+            source: v.startsWith('source:') ? v.slice(7) : undefined,
+            synced_from: v.startsWith('synced:') ? v.slice(7) : undefined,
+        }));
 
     const remove = useMutation({
         mutationFn: (id: string) => api(`contacts/${id}`, { method: 'DELETE' }),
@@ -167,15 +178,20 @@ export default function ContactsPage() {
                         <SelectItem value="opted_out">Opted out</SelectItem>
                     </SelectContent>
                 </Select>
-                {syncNumbers.length > 0 && (
-                    <Select value={filters.synced_from ?? ALL} onValueChange={(v) => setFilters((f) => ({ ...f, synced_from: v === ALL ? undefined : v }))}>
-                        <SelectTrigger className="w-56" aria-label="Synced from">
+                {((counts?.sources.length ?? 0) > 0 || syncNumbers.length > 0) && (
+                    <Select value={sourceValue} onValueChange={pickSource}>
+                        <SelectTrigger className="w-56" aria-label="Source">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value={ALL}>Any source</SelectItem>
+                            {(counts?.sources ?? []).map((src) => (
+                                <SelectItem key={src.value} value={`source:${src.value}`}>
+                                    {humanize(src.value)} · {number(src.count)}
+                                </SelectItem>
+                            ))}
                             {syncNumbers.map((n) => (
-                                <SelectItem key={n.id} value={n.id}>
+                                <SelectItem key={n.id} value={`synced:${n.id}`}>
                                     Synced from {n.verified_name ?? n.display_phone_number}
                                 </SelectItem>
                             ))}
@@ -280,6 +296,22 @@ export default function ContactsPage() {
                         Clear
                     </Button>
                 </div>
+            )}
+
+            {counts && (
+                <p className="mb-2 text-[13px] text-muted-foreground" aria-live="polite">
+                    {filtered ? (
+                        <>
+                            <span className="font-semibold text-foreground tabular-nums">{number(counts.matching)}</span> of {number(counts.total)} contacts
+                            match
+                        </>
+                    ) : (
+                        <>
+                            <span className="font-semibold text-foreground tabular-nums">{number(counts.total)}</span> contact{counts.total === 1 ? '' : 's'}
+                        </>
+                    )}
+                    {rows.length > 0 && rows.length < (filtered ? counts.matching : counts.total) ? ` · showing ${number(rows.length)}` : ''}
+                </p>
             )}
 
             <Card>

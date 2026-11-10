@@ -65,7 +65,8 @@ function buildUrl(path: string, query?: Options['query']): string {
     if (!query) return url;
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(query)) {
-        if (v !== undefined && v !== null && v !== '') params.set(k, String(v));
+        // Laravel's "boolean" rule accepts 1 and 0, not "true" and "false".
+        if (v !== undefined && v !== null && v !== '') params.set(k, typeof v === 'boolean' ? (v ? '1' : '0') : String(v));
     }
     const qs = params.toString();
 

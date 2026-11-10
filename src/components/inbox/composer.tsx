@@ -32,6 +32,36 @@ function voiceFormat() {
     return VOICE_FORMATS.find((f) => MediaRecorder.isTypeSupported(f.mime)) ?? null;
 }
 
+/** Unsent text is kept in this browser per conversation for a week, so a refresh or a switch does not lose it. */
+const DRAFT_DAYS = 7;
+const draftKey = (id: string) => `engage.inbox.draft.${id}`;
+
+function readDraft(id: string): string {
+    try {
+        const raw = window.localStorage.getItem(draftKey(id));
+        if (!raw) return '';
+        const draft = JSON.parse(raw) as { text?: string; at?: number };
+        if (typeof draft.text !== 'string' || !draft.at || Date.now() - draft.at > DRAFT_DAYS * 86_400_000) {
+            window.localStorage.removeItem(draftKey(id));
+
+            return '';
+        }
+
+        return draft.text;
+    } catch {
+        return '';
+    }
+}
+
+function writeDraft(id: string, text: string): void {
+    try {
+        if (text.trim() === '') window.localStorage.removeItem(draftKey(id));
+        else window.localStorage.setItem(draftKey(id), JSON.stringify({ text, at: Date.now() }));
+    } catch {
+        // Private mode or full storage: the draft just is not kept.
+    }
+}
+
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 
 export type ComposerHandle = { attach: (file: File) => void };
@@ -47,6 +77,7 @@ export function Composer({
     onSend,
     onTemplate,
     canSendTemplate = true,
+    conversationId,
     ref,
 }: {
     disabledReason: string | null;
@@ -56,10 +87,12 @@ export function Composer({
     onTemplate: () => void;
     /** False when not even a template can be sent (the number is disconnected). */
     canSendTemplate?: boolean;
+    /** Keeps the unsent text of this conversation as a draft in the browser. */
+    conversationId?: string;
     /** Lets the chat area hand over a file that was dropped onto it. */
     ref?: React.Ref<ComposerHandle>;
 }) {
-    const [text, setText] = useState('');
+    const [text, setText] = useState(() => (conversationId && typeof window !== 'undefined' ? readDraft(conversationId) : ''));
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const [attachment, setAttachment] = useState<UploadedMedia | null>(null);
     const [uploading, setUploading] = useState(false);
@@ -69,6 +102,12 @@ export function Composer({
     const fileRef = useRef<HTMLInputElement>(null);
     const recorder = useRef<MediaRecorder | null>(null);
     const discard = useRef(false);
+
+    // Drafts: saved as you type, restored when the chat opens again. (The composer only renders in the
+    // browser, once the conversation has loaded, so reading storage on the first render is safe.)
+    useEffect(() => {
+        if (conversationId) writeDraft(conversationId, text);
+    }, [conversationId, text]);
 
     useEffect(() => {
         if (recording === null) return;

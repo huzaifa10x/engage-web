@@ -282,9 +282,20 @@ export type ContactFilters = {
     tag?: string;
     segment_id?: string;
     synced_from?: string;
+    /** How the contact was added: manual, import, inbound, api … */
+    source?: string;
     filter?: string;
     stage_id?: string;
 };
+
+export type ContactCounts = { matching: number; total: number; sources: { value: string; count: number }[] };
+
+/** How many contacts match the filters, how many there are in all, and the sources they came from. */
+export const useContactCounts = (filters: ContactFilters) =>
+    useQuery({
+        queryKey: [...keys.contacts(filters), 'count'] as const,
+        queryFn: () => api<Data<ContactCounts>>('contacts/count', { query: { ...filters } }).then((r) => r.data),
+    });
 
 export const useContacts = (filters: ContactFilters) =>
     useInfiniteQuery({

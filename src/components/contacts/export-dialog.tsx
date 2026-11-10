@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api } from '@/lib/api';
+import { humanize } from '@/lib/format';
 import type { ContactFilters } from '@/lib/queries';
 import type { PhoneNumber, Segment, Tag } from '@/lib/types';
 
@@ -22,6 +23,8 @@ type ExportFilters = {
     tag?: string;
     consent?: string;
     synced_from?: string;
+    /** How the contact was added (manual, import, inbound …), from the Source filter on the page. */
+    source?: string;
     q?: string;
     added_from?: string;
     added_to?: string;
@@ -55,6 +58,7 @@ export function ExportContactsDialog({
         tag: current.tag,
         consent: current.consent,
         synced_from: current.synced_from,
+        source: current.source,
         q: current.q,
         filter: current.filter,
     });
@@ -138,7 +142,7 @@ export function ExportContactsDialog({
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value={ALL}>Any source</SelectItem>
+                                    <SelectItem value={ALL}>Any number</SelectItem>
                                     {syncNumbers.map((n) => (
                                         <SelectItem key={n.id} value={n.id}>
                                             {n.verified_name ?? n.display_phone_number}
@@ -186,6 +190,15 @@ export function ExportContactsDialog({
                         />
                         <Label htmlFor="ex-fields" className="text-[13px] leading-snug font-normal">
                             Only contacts that match the field conditions set on the contact list
+                        </Label>
+                    </div>
+                )}
+
+                {f.source && (
+                    <div className="flex items-center gap-2 text-[13px]">
+                        <Checkbox id="ex-source" checked onCheckedChange={() => set({ source: undefined })} />
+                        <Label htmlFor="ex-source" className="text-[13px] leading-snug font-normal">
+                            Only contacts added as “{humanize(f.source)}” (the Source filter on the contact list)
                         </Label>
                     </div>
                 )}

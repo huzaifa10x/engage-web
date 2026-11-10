@@ -84,6 +84,18 @@ export function NewConversationDialog({
 
     const matches = useContacts(search.length >= 2 && !recipient ? { q: search } : {});
     const suggestions = search.length >= 2 && !recipient ? (matches.data?.pages[0]?.data ?? []).slice(0, 6) : [];
+    // Said while typing, not only on Send: a number with letters in it, or a name nobody has.
+    const typed = to.trim();
+    const toProblem =
+        recipient || typed === '' || looksLikePhone(typed)
+            ? null
+            : /^[+(\d]/.test(typed)
+              ? /[^+\d\s()-]/.test(typed)
+                  ? 'A phone number can only contain digits, spaces and + ( ) -.'
+                  : null
+              : search === typed && typed.length >= 2 && !matches.isFetching && suggestions.length === 0
+                ? 'No contact has this name. Type their number with the country code instead.'
+                : null;
 
     const submit = async () => {
         setError(null);
@@ -298,7 +310,14 @@ export function NewConversationDialog({
                                     onChange={(e) => setTo(e.target.value)}
                                     placeholder="Name or +971 50 123 4567"
                                     autoComplete="off"
+                                    aria-invalid={toProblem ? true : undefined}
+                                    aria-describedby={toProblem ? 'nc-to-problem' : undefined}
                                 />
+                                {toProblem && (
+                                    <p id="nc-to-problem" className="mt-1 text-[12.5px] text-destructive">
+                                        {toProblem}
+                                    </p>
+                                )}
                                 {suggestions.length > 0 && (
                                     <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-md border bg-card py-1 shadow-md">
                                         {suggestions.map((c) => (

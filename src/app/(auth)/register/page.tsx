@@ -21,7 +21,13 @@ import type { Me } from '@/lib/types';
 // Mirrors RegisterRequest: min 10, mixed case, numbers.
 const schema = z
     .object({
-        name: z.string().trim().min(1, 'Enter your name.').max(120),
+        name: z
+            .string()
+            .trim()
+            .min(1, 'Enter your name.')
+            .max(120)
+            // Letters in any language, with spaces, dots, apostrophes and hyphens between them (same rule as the server).
+            .regex(/^\p{L}[\p{L}\p{M}]*(?:[ .'’-]+[\p{L}\p{M}]+)*\.?$/u, 'Use letters only for your name (spaces, dots, apostrophes and hyphens are fine).'),
         company_name: z.string().trim().min(1, 'Enter your company name.').max(120),
         country: z.string().length(2, 'Choose your country.'),
         email: z.string().trim().email('Enter a valid email address.').max(190),

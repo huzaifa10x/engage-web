@@ -219,7 +219,11 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
                         label="WhatsApp number"
                         htmlFor="c-phone"
                         error={formState.errors.phone?.message}
-                        hint={editing ? undefined : 'International format, e.g. +971501234567'}
+                        hint={
+                            editing
+                                ? undefined
+                                : 'With the country code, e.g. +971 50 123 4567. A number starting with 0 is read in your workspace country (Settings › Company).'
+                        }
                     >
                         <Input id="c-phone" inputMode="tel" disabled={editing} aria-invalid={!!formState.errors.phone} {...register('phone')} />
                     </Field>
