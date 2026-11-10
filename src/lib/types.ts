@@ -1278,6 +1278,8 @@ export type SalesAnalytics =
     | {
           locked: false;
           stores: number;
+          /** Filtered by the top-bar number: only orders matched to chats on it. */
+          number_filtered?: boolean;
           range: { days: number; from: string; timezone: string };
           currency: string;
           other_currencies: string[];

@@ -92,9 +92,31 @@ function WeekEditor({ week, onChange, disabled }: { week: WeekHours; onChange: (
 }
 
 /** When the team is at work, and how new conversations are handed out. */
-export function BusinessHoursCard({ canManage }: { canManage: boolean }) {
+/** Saves inbox settings: the card's own fields on top of the latest saved values (two cards share the endpoint). */
+function useSaveInboxSettings() {
     const qc = useQueryClient();
+
+    return async (own: Partial<InboxSettings>, label: string) => {
+        const base = { ...(qc.getQueryData<InboxSettings>(['inbox-settings']) ?? {}), ...own } as InboxSettings;
+        qc.setQueryData(
+            ['inbox-settings'],
+            await updateInboxSettings({
+                business_hours: base.business_hours,
+                routing: base.routing,
+                ...(base.can.business_hours ? { number_hours: base.number_hours, holidays: base.holidays } : {}),
+                reply_target_minutes: base.reply_target_minutes,
+                reply_warn_minutes: base.reply_warn_minutes,
+                window_warning_minutes: base.window_warning_minutes,
+            }),
+        );
+        toast.success(`${label} saved`);
+    };
+}
+
+/** Settings › Business hours: opening hours, per-number hours and holidays. */
+export function BusinessHoursCard({ canManage }: { canManage: boolean }) {
     const query = useInboxSettings();
+    const saveSettings = useSaveInboxSettings();
     const [draft, setDraft] = useState<InboxSettings | null>(null);
     const [saving, setSaving] = useState(false);
     const value = draft ?? query.data ?? null;
@@ -107,19 +129,8 @@ export function BusinessHoursCard({ canManage }: { canManage: boolean }) {
     const save = async () => {
         setSaving(true);
         try {
-            qc.setQueryData(
-                ['inbox-settings'],
-                await updateInboxSettings({
-                    business_hours: value.business_hours,
-                    routing: value.routing,
-                    ...(value.can.business_hours ? { number_hours: value.number_hours, holidays: value.holidays } : {}),
-                    reply_target_minutes: value.reply_target_minutes,
-                    reply_warn_minutes: value.reply_warn_minutes,
-                    window_warning_minutes: value.window_warning_minutes,
-                }),
-            );
+            await saveSettings({ business_hours: value.business_hours, number_hours: value.number_hours, holidays: value.holidays }, 'Business hours');
             setDraft(null);
-            toast.success('Inbox settings saved');
         } catch (e) {
             toast.error(firstError(e));
         } finally {
@@ -132,7 +143,7 @@ export function BusinessHoursCard({ canManage }: { canManage: boolean }) {
             <CardHeader>
                 <div>
                     <CardTitle className="flex items-center gap-2">
-                        Business hours and routing
+                        Business hours
                         {hours.enabled && <Badge tone={value.open_now ? 'good' : 'grey'}>{value.open_now ? 'Open now' : 'Closed now'}</Badge>}
                         {hours.enabled && !value.open_now && value.next_open && (
                             <span className="text-[12.5px] font-normal text-muted-foreground">back {value.next_open}</span>
@@ -157,6 +168,81 @@ export function BusinessHoursCard({ canManage }: { canManage: boolean }) {
                 </div>
                 {value.can.business_hours && <NumberHours value={value} disabled={off} onChange={(number_hours) => setDraft({ ...value, number_hours })} />}
                 {value.can.business_hours && <Holidays value={value} disabled={off} onChange={(holidays) => setDraft({ ...value, holidays })} />}
+                {canManage && (
+                    <div className="flex justify-end">
+                        <Button onClick={save} disabled={saving || draft === null}>
+                            {saving ? 'Saving…' : 'Save'}
+                        </Button>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+    );
+}
+
+/** Settings › Inbox: automatic assignment and the reply timers. */
+export function InboxRulesCard({ canManage }: { canManage: boolean }) {
+    const query = useInboxSettings();
+    const saveSettings = useSaveInboxSettings();
+    const [draft, setDraft] = useState<InboxSettings | null>(null);
+    const [saving, setSaving] = useState(false);
+    const value = draft ?? query.data ?? null;
+
+    if (!value) return <Skeleton className="h-64" />;
+
+    const save = async () => {
+        setSaving(true);
+        try {
+            await saveSettings(
+                {
+                    routing: value.routing,
+                    reply_target_minutes: value.reply_target_minutes,
+                    reply_warn_minutes: value.reply_warn_minutes,
+                    window_warning_minutes: value.window_warning_minutes,
+                },
+                'Inbox settings',
+            );
+            setDraft(null);
+        } catch (e) {
+            toast.error(firstError(e));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <Card>
+            <CardHeader>
+                <div>
+                    <CardTitle>Assignment and timers</CardTitle>
+                    <CardDescription>Who gets new conversations, and when the waiting timer on a chat turns amber and red.</CardDescription>
+                </div>
+            </CardHeader>
+            <CardContent className="grid gap-4">
+                <Field
+                    label="New conversations"
+                    htmlFor="routing"
+                    className="sm:max-w-md"
+                    hint={
+                        value.can.auto_routing
+                            ? 'Automatic assignment picks the teammate who can reply on that number and has the fewest open conversations.'
+                            : 'Automatic assignment is not included in your plan.'
+                    }
+                >
+                    <Select
+                        value={value.routing}
+                        onValueChange={(v) => setDraft({ ...value, routing: v as InboxSettings['routing'] })}
+                        disabled={!canManage || !value.can.auto_routing}
+                    >
+                        <SelectTrigger id="routing">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="manual">Stay unassigned until someone takes them</SelectItem>
+                            <SelectItem value="round_robin">Assign automatically to the team</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </Field>
                 <div className="grid gap-3 sm:grid-cols-3">
                     <Field label="Waiting timer turns amber after (minutes)" htmlFor="reply-warn" hint="The live “Waiting …” timer on chats that need a reply.">
                         <Input
@@ -172,7 +258,7 @@ export function BusinessHoursCard({ canManage }: { canManage: boolean }) {
                     <Field
                         label="Reply target (minutes, in opening hours)"
                         htmlFor="reply-target"
-                        hint="The timer turns red after this; Analytics shows the share answered within it."
+                        hint="The timer turns red after this; Insights › Messages & Team shows the share answered within it."
                     >
                         <Input
                             id="reply-target"
@@ -200,30 +286,6 @@ export function BusinessHoursCard({ canManage }: { canManage: boolean }) {
                         />
                     </Field>
                 </div>
-                <Field
-                    label="New conversations"
-                    htmlFor="routing"
-                    className="sm:max-w-md"
-                    hint={
-                        value.can.auto_routing
-                            ? 'Automatic assignment picks the teammate who can reply on that number and has the fewest open conversations.'
-                            : 'Automatic assignment is not included in your plan.'
-                    }
-                >
-                    <Select
-                        value={value.routing}
-                        onValueChange={(v) => setDraft({ ...value, routing: v as InboxSettings['routing'] })}
-                        disabled={!canManage || !value.can.auto_routing}
-                    >
-                        <SelectTrigger id="routing">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="manual">Stay unassigned until someone takes them</SelectItem>
-                            <SelectItem value="round_robin">Assign automatically to the team</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </Field>
                 {canManage && (
                     <div className="flex justify-end">
                         <Button onClick={save} disabled={saving || draft === null}>

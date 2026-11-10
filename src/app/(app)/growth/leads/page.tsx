@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
+import { useSelectedNumber } from '@/components/app/number-switcher';
 import { useSession } from '@/components/app/session';
 import { StageBadge } from '@/components/contacts/stage-badge';
 import { LeadDetails } from '@/components/growth/lead-details';
@@ -18,7 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { dateTime, relative } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { type LeadFilters, useLeads, useLeadSummary, useMembers, useMetaAds, usePhoneNumbers, useStages, useUnmatchedClicks } from '@/lib/queries';
+import { type LeadFilters, useLeads, useLeadSummary, useMembers, useMetaAds, useStages, useUnmatchedClicks } from '@/lib/queries';
 import type { Lead } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -159,7 +160,7 @@ function LeadsPage() {
     const [tab, setTab] = useState<Tab>('all');
     // Tracking Setup links here with ?ad=<id> to show one ad's leads.
     const params = useSearchParams();
-    // Analytics › Marketing links here with the clicked period, source, campaign and funnel step.
+    // Insights › Marketing links here with the clicked period, source, campaign and funnel step.
     const [filters, setFilters] = useState<LeadFilters>(() => {
         const v = (k: string) => params.get(k) ?? undefined;
         if (v('from') && v('to')) {
@@ -181,10 +182,12 @@ function LeadsPage() {
     const [search, setSearch] = useState('');
     const [openId, setOpenId] = useState<string | null>(null);
 
-    const query: LeadFilters = { ...filters, tab: tab === 'clicks' ? 'all' : tab };
+    // The number chosen in the top bar filters the leads and the counts (CN-02).
+    const [selectedNumber] = useSelectedNumber();
+    const numberId = filters.phone_number_id ?? selectedNumber ?? undefined;
+    const query: LeadFilters = { ...filters, phone_number_id: numberId, tab: tab === 'clicks' ? 'all' : tab };
     const leads = useLeads(query, allowed && tab !== 'clicks');
-    const summary = useLeadSummary(allowed);
-    const numbers = usePhoneNumbers();
+    const summary = useLeadSummary(allowed, numberId ?? null);
     const stages = (useStages(allowed).data ?? []).filter((s) => !s.archived);
     const members = useMembers(allowed && seesAll && can(P.TeamView));
     // Leads grouped by the Meta ad (ad ID) that started them.
@@ -240,11 +243,11 @@ function LeadsPage() {
             {drilled && (
                 <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-info/30 bg-info-bg/50 px-3 py-2 text-[13px]">
                     <span>
-                        From <b>Analytics › Marketing</b>: new leads with a first message from {filters.from} to {filters.to}
+                        From <b>Insights › Marketing</b>: new leads with a first message from {filters.from} to {filters.to}
                         {filters.bucket ? ' · one source' : ''}
                         {filters.campaign ? ' · one campaign' : ''}
                         {filters.step ? ` · ${filters.step} within 30 days` : ''}
-                        {filters.phone_number_id ? ' · one number' : ''}.
+                        {numberId ? ' · one number' : ''}.
                     </span>
                     <Button size="sm" variant="outline" className="ml-auto" onClick={() => setFilters({ days: 30 })}>
                         Show all leads
@@ -339,13 +342,6 @@ function LeadsPage() {
                                     all="All Meta ads"
                                 />
                             )}
-                            <FilterSelect
-                                label="Number"
-                                value={filters.phone_number_id}
-                                onChange={(v) => set({ phone_number_id: v })}
-                                options={(numbers.data ?? []).map((n) => [n.id, [n.display_phone_number, n.verified_name].filter(Boolean).join(' · ')])}
-                                all="All numbers"
-                            />
                             {seesAll && (
                                 <FilterSelect
                                     label="Agent"

@@ -186,7 +186,7 @@ export function ContactPanel({ conversation }: { conversation: Conversation }) {
                                     variant="outline"
                                     onClick={() => consent.mutate('opted_in')}
                                     disabled={consent.isPending}
-                                    title="Record that the customer agreed to receive messages. If they wrote in the last 24 hours, they also get your opt-in confirmation (Compliance settings)."
+                                    title="Record that the customer agreed to receive messages. If they wrote in the last 24 hours, they also get your opt-in confirmation (Consent & Privacy settings)."
                                 >
                                     Record opt-in
                                 </Button>

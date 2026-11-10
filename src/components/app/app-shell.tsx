@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button';
 
 import { ChannelDisconnectedBanner, ImpersonationBanner, TrialBanner } from './banners';
 import { NotificationBell } from './notification-bell';
-import { UNRELEASED_ROUTES } from './nav';
+import { numberScope, UNRELEASED_ROUTES } from './nav';
 import { NumberSwitcher } from './number-switcher';
 import { Sidebar } from './sidebar';
 import { UserMenu } from './user-menu';
@@ -90,9 +90,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                             </span>
                         )}
                         <WorkspaceSwitcher />
-                        <div className="hidden sm:block">
-                            <NumberSwitcher />
-                        </div>
+                        {/* Switches the inbox, filters Dashboard, Campaigns, Leads, Orders and Insights; hidden elsewhere (CN-02). */}
+                        {numberScope(pathname) && (
+                            <div className="hidden sm:block">
+                                <NumberSwitcher scope={numberScope(pathname)!} />
+                            </div>
+                        )}
                         <div className="ml-auto flex items-center gap-2">
                             <NotificationBell />
                             <UserMenu />

@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 type Step = 'contacted' | 'qualified';
 
 /**
- * Analytics › Marketing › Set up stages (Marketing Analytics Specification §3): which of the
+ * Insights › Marketing › Set up stages (Marketing Analytics Specification §3): which of the
  * workspace's CRM stages mean Contacted and which mean Qualified. "New" is every new lead. A stage
  * belongs to one step. Saving recalculates the whole history. Owner and Admin only.
  */

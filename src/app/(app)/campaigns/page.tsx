@@ -18,6 +18,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
+import { useSelectedNumber } from '@/components/app/number-switcher';
 import { useSession } from '@/components/app/session';
 import { CAMPAIGN_STATUS, CampaignDetailDialog } from '@/components/campaigns/campaign-detail';
 import { CampaignDialog } from '@/components/campaigns/campaign-dialog';
@@ -42,7 +43,9 @@ export default function CampaignsPage() {
     const { can } = useSession();
     const qc = useQueryClient();
     const allowed = can(P.CampaignsView);
-    const campaigns = useCampaigns(allowed);
+    // The number chosen in the top bar filters the list (CN-02).
+    const [numberId] = useSelectedNumber();
+    const campaigns = useCampaigns(allowed, numberId);
     const [editing, setEditing] = useState<Campaign | null | undefined>(undefined); // undefined = closed, null = new
     const [viewingId, setViewingId] = useState<string | null>(null);
 

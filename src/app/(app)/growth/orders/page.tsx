@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
+import { useSelectedNumber } from '@/components/app/number-switcher';
 import { useSession } from '@/components/app/session';
 import { MATCH, MatchChip, money, SaleDetails, SourceLine, STATUS_TONE } from '@/components/growth/sales';
 import { Badge } from '@/components/ui/badge';
@@ -17,19 +18,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ApiError } from '@/lib/api';
 import { dateTime, humanize } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { type SalesFilters, useSales, useSalesAnalytics } from '@/lib/queries';
+import { type SalesFilters, useSales } from '@/lib/queries';
 import type { SalesMatch } from '@/lib/types';
 import { cn } from '@/lib/utils';
-
-function Kpi({ label, value, hint, hero = false }: { label: string; value: string; hint: string; hero?: boolean }) {
-    return (
-        <Card className={cn('gap-1 p-4', hero && 'border-primary/40 bg-primary/5')}>
-            <p className="text-[12.5px] text-muted-foreground">{label}</p>
-            <p className="text-2xl font-semibold tabular-nums">{value}</p>
-            <p className="text-[12px] text-muted-foreground">{hint}</p>
-        </Card>
-    );
-}
 
 const TABS: ['all' | SalesMatch, string][] = [
     ['all', 'All orders'],
@@ -41,29 +32,28 @@ const TABS: ['all' | SalesMatch, string][] = [
 ];
 
 /**
- * Growth Hub › Sales (Engagement Plan v4 §V.3): the store's orders and the evidence for each match,
- * the way Leads works. Only "Order from a tracked chat link" counts as revenue from a chat; orders
- * matched by phone are on the contact's history and in their own column.
+ * Growth Hub › Orders (Engagement Plan v4 §V.3, renamed in CN-02): the store's orders and the
+ * evidence for each match, the way Leads works. Revenue figures live in Insights › Sales & Revenue.
  */
-export default function SalesPage() {
+export default function OrdersPage() {
     const { can } = useSession();
     const allowed = can(P.GrowthView);
     const [filters, setFilters] = useState<SalesFilters>({ match: 'all', days: 30 });
     const [q, setQ] = useState('');
     const [openId, setOpenId] = useState<string | null>(null);
-    const sales = useSales(filters, allowed);
-    const kpi = useSalesAnalytics(filters.days ?? 30, allowed);
+    // The number chosen in the top bar: orders matched to chats on that number (CN-02).
+    const [numberId] = useSelectedNumber();
+    const sales = useSales(numberId ? { ...filters, phone_number_id: numberId } : filters, allowed);
 
     if (!allowed) return <Forbidden />;
     const first = sales.data?.pages[0];
     const rows = sales.data?.pages.flatMap((p) => p.data) ?? [];
-    const k = kpi.data && !kpi.data.locked ? kpi.data : null;
-    const locked = (sales.error instanceof ApiError && sales.error.status === 403) || kpi.data?.locked;
+    const locked = sales.error instanceof ApiError && sales.error.status === 403;
 
     if (locked)
         return (
             <>
-                <PageHeader title="Sales" description="Which WhatsApp chats became orders." />
+                <PageHeader title="Orders" description="Which WhatsApp chats became orders." />
                 <EmptyState
                     icon={<ShoppingCartIcon />}
                     title="Sales from chats is part of the Pro plan"
@@ -80,8 +70,22 @@ export default function SalesPage() {
     return (
         <>
             <PageHeader
-                title="Sales"
-                description="Store orders matched to WhatsApp chats, with the evidence for each. Only orders from a tracked chat link count as revenue from a chat."
+                title="Orders"
+                description={
+                    <>
+                        Store orders matched to WhatsApp chats, with the evidence for each{numberId ? ' (chats on the selected number)' : ''}.
+                        {can(P.AnalyticsView) && (
+                            <>
+                                {' '}
+                                Revenue is in{' '}
+                                <Link href="/insights/sales" className="font-medium underline-offset-2 hover:underline">
+                                    Insights › Sales &amp; Revenue
+                                </Link>
+                                .
+                            </>
+                        )}
+                    </>
+                }
                 actions={
                     <Select value={String(filters.days ?? 30)} onValueChange={(v) => setFilters((f) => ({ ...f, days: Number(v) }))}>
                         <SelectTrigger className="w-36" aria-label="Period">
@@ -98,29 +102,7 @@ export default function SalesPage() {
                 }
             />
 
-            <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {!k ? (
-                    Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-[104px]" />)
-                ) : (
-                    <>
-                        <Kpi
-                            hero
-                            label="Revenue from tracked chat links"
-                            value={money(k.chat_link.revenue, k.currency)}
-                            hint={`${k.chat_link.paid_orders} paid order${k.chat_link.paid_orders === 1 ? '' : 's'} · after refunds`}
-                        />
-                        <Kpi
-                            label="Orders from WhatsApp contacts"
-                            value={money(k.phone.revenue, k.currency)}
-                            hint={`${k.phone.orders} matched by phone · not chat revenue`}
-                        />
-                        <Kpi label="Needs review" value={String(k.review.orders)} hint="chat link, but the phone differs" />
-                        <Kpi label="Attribution unavailable" value={String(k.unavailable.orders)} hint="a link was sent, the order came without it" />
-                    </>
-                )}
-            </div>
-
-            {k && k.stores === 0 && (
+            {first && first.meta.stores.length === 0 && (
                 <div className="mb-4 rounded-md border border-warn/40 bg-warn-bg px-4 py-3 text-sm">
                     No store is connected yet.{' '}
                     <Link href="/integrations" className="font-medium underline">

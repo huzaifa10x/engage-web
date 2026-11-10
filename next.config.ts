@@ -16,6 +16,21 @@ const nextConfig: NextConfig = {
         .split(',')
         .map((h) => h.trim())
         .filter(Boolean),
+    /**
+     * CN-02 menu: old addresses (bookmarks, email links, notifications) open the new pages. The query
+     * string is kept, so e.g. /analytics/marketing?from=… still lands on the same report.
+     */
+    async redirects() {
+        return [
+            { source: '/analytics', destination: '/insights', permanent: false },
+            { source: '/analytics/marketing', destination: '/insights/marketing', permanent: false },
+            { source: '/analytics/sales', destination: '/insights/sales', permanent: false },
+            { source: '/growth/sales', destination: '/growth/orders', permanent: false },
+            { source: '/growth/sales/:path*', destination: '/growth/orders/:path*', permanent: false },
+            { source: '/compliance', destination: '/consent', permanent: false },
+            { source: '/compliance/:path*', destination: '/consent/:path*', permanent: false },
+        ];
+    },
     async rewrites() {
         return [
             { source: '/api/:path*', destination: `${backend}/api/:path*` },

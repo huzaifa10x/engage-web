@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
+import { useSelectedNumber } from '@/components/app/number-switcher';
 import { useSession } from '@/components/app/session';
 import { MatchChip, money } from '@/components/growth/sales';
 import { Button } from '@/components/ui/button';
@@ -116,7 +117,7 @@ function SourceTable({ title, hint, rows, currency }: { title: string; hint: str
 }
 
 /**
- * Analytics › Sales & Revenue (Engagement Plan v4 §V.3), next to Marketing: revenue from tracked chat
+ * Insights › Sales & Revenue (Engagement Plan v4 §V.3), next to Marketing: revenue from tracked chat
  * links, phone-matched orders shown separately, net after refunds, average order value, sales by
  * original source and by the chat's source, products sold by source, and time from first chat to order.
  */
@@ -124,7 +125,9 @@ export default function SalesRevenuePage() {
     const { can } = useSession();
     const allowed = can(P.AnalyticsView);
     const [days, setDays] = useState(30);
-    const q = useSalesAnalytics(days, allowed);
+    // The number chosen in the top bar (CN-02): only orders matched to chats on it.
+    const [numberId] = useSelectedNumber();
+    const q = useSalesAnalytics(days, allowed, numberId);
 
     if (!allowed) return <Forbidden />;
     const d = q.data;
@@ -133,7 +136,16 @@ export default function SalesRevenuePage() {
         <>
             <PageHeader
                 title="Sales & Revenue"
-                description="Which WhatsApp chats became orders. Only orders from a tracked chat link count as revenue from a chat; orders matched by phone are shown on their own."
+                description={
+                    <>
+                        Which WhatsApp chats became orders. Only orders from a tracked chat link count as revenue from a chat; orders matched by phone are shown
+                        on their own. Each order and its evidence:{' '}
+                        <Link href="/growth/orders" className="font-medium underline-offset-2 hover:underline">
+                            Growth Hub › Orders
+                        </Link>
+                        .
+                    </>
+                }
                 actions={
                     <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
                         <SelectTrigger className="w-36" aria-label="Period">
@@ -165,6 +177,11 @@ export default function SalesRevenuePage() {
                 />
             ) : (
                 <div className="grid gap-4">
+                    {d.number_filtered && (
+                        <div className="rounded-md border bg-muted/50 px-4 py-3 text-[13px]">
+                            Showing orders matched to chats on the selected number. Store orders that no chat led to are counted only with “All numbers”.
+                        </div>
+                    )}
                     {d.stores === 0 && (
                         <div className="rounded-md border border-warn/40 bg-warn-bg px-4 py-3 text-sm">
                             No store is connected yet.{' '}

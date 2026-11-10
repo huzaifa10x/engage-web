@@ -92,7 +92,7 @@ function Minutes({
 }
 
 /**
- * Settings › Follow-up rules (Engagement Plan §IV). Team-side rules notify or reassign, never message
+ * Automate › Follow-ups & Alerts › Follow-up rules (Engagement Plan §IV). Team-side rules notify or reassign, never message
  * the customer; customer-side nudges send one message within strict limits. Every rule respects
  * business hours, consent, the weekly cap and stops when the customer replies.
  */

@@ -15,6 +15,7 @@ import { usePhoneNumbers } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 import { qualityTone } from '@/lib/whatsapp';
 
+import type { NumberScope } from './nav';
 import { useSession } from './session';
 
 const TONE_DOT: Record<string, string> = { good: 'bg-good', warn: 'bg-warn', bad: 'bg-bad', grey: 'bg-faint' };
@@ -61,7 +62,11 @@ export function useSelectedNumber() {
     return [selected, update] as const;
 }
 
-export function NumberSwitcher() {
+/**
+ * The top-bar number selector. On Conversations it switches the inbox to one number; on
+ * Dashboard, Campaigns, Leads, Orders and Insights it filters the figures (CN-02).
+ */
+export function NumberSwitcher({ scope = 'switch' }: { scope?: NumberScope }) {
     const numbers = usePhoneNumbers();
     const [selected, setSelected] = useSelectedNumber();
     // Disconnected numbers stay in the list (marked as such): their conversations are kept, and hiding
@@ -78,10 +83,11 @@ export function NumberSwitcher() {
             <DropdownMenuTrigger className="flex items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 text-[13px] font-medium shadow-xs hover:bg-muted">
                 <PhoneIcon className="size-3.5 text-muted-foreground" />
                 <span className="max-w-[160px] truncate">{current ? (current.verified_name ?? current.display_phone_number) : 'All numbers'}</span>
+                {scope === 'filter' && current && <span className="rounded bg-primary/15 px-1 text-[10.5px] font-semibold text-primary">Filter</span>}
                 <ChevronDownIcon className="size-3.5 text-muted-foreground" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-72">
-                <DropdownMenuLabel>Show activity for</DropdownMenuLabel>
+                <DropdownMenuLabel>{scope === 'filter' ? 'Show figures for' : 'Show conversations for'}</DropdownMenuLabel>
                 <DropdownMenuCheckItem checked={!current} onSelect={() => setSelected(null)}>
                     All numbers
                 </DropdownMenuCheckItem>

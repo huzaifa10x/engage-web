@@ -999,7 +999,7 @@ function Editor({ ctx, onWebhook }: { ctx: Ctx; onWebhook: (enabled: boolean) =>
                     <Hint>
                         Records that the customer agreed to receive messages, marketing included. Put it after their “yes” — for example on a “Yes, send me
                         offers” button of a Buttons block. (A reply of just “Subscribe” or “Start” is already recorded by the opt-in keywords.) It is saved in
-                        Compliance › Consent ledger like any other opt-in.
+                        Consent & Privacy › Consent ledger like any other opt-in.
                     </Hint>
                     {text('Confirmation', LIMITS.body, undefined, 'Thank you! You’re subscribed to our updates.', 2)}
                 </>
@@ -1015,7 +1015,7 @@ function Editor({ ctx, onWebhook }: { ctx: Ctx; onWebhook: (enabled: boolean) =>
                             ['marketing', 'Marketing messages (campaigns)'],
                             ['all', 'All messages (full unsubscribe)'],
                         ]}
-                        hint="Recorded in Compliance like any other opt-out. The customer can reply START to subscribe again."
+                        hint="Recorded in Consent & Privacy like any other opt-out. The customer can reply START to subscribe again."
                     />
                     {text('Confirmation', LIMITS.body, undefined, 'Done — you won’t receive offers from us anymore.', 2)}
                     {c.scope === 'all' && <Hint tone="warn">After a full opt-out nothing more can be sent, so the flow ends here.</Hint>}
@@ -2080,7 +2080,7 @@ function HoursEditor({ ctx }: { ctx: Ctx }) {
                     <Hint>Times are in your workspace time zone ({options?.timezone ?? 'UTC'}). “To” before “From” spans midnight.</Hint>
                 </>
             ) : (
-                <Hint>Uses the business hours in Settings → Inbox. If they are not switched on, it is always “Open”.</Hint>
+                <Hint>Uses the business hours in Settings → Business hours. If they are not switched on, it is always “Open”.</Hint>
             )}
         </>
     );

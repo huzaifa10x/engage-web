@@ -31,7 +31,7 @@ import { errorMessage } from '@/lib/api';
 import { humanize, relative } from '@/lib/format';
 import { P } from '@/lib/permissions';
 import { useTemplatesRealtime } from '@/hooks/use-templates-realtime';
-import { deleteTemplate, keys, useTemplates, useWabaAccounts } from '@/lib/queries';
+import { deleteTemplate, keys, usePhoneNumbers, useTemplates, useWabaAccounts } from '@/lib/queries';
 import type { MessageTemplate } from '@/lib/types';
 
 const ALL = '__all__';
@@ -41,6 +41,7 @@ export default function TemplatesPage() {
     const { can, me } = useSession();
     const qc = useQueryClient();
     const allowed = can(P.TemplatesView);
+    const numbers = usePhoneNumbers();
     const accounts = (useWabaAccounts(allowed && can(P.ChannelsView)).data ?? []).filter((a) => a.status === 'connected');
     const [accountId, setAccountId] = useState<string | null>(null);
     const [status, setStatus] = useState<string | null>(null);
@@ -59,6 +60,19 @@ export default function TemplatesPage() {
     if (inReview !== reviewing) setReviewing(inReview);
 
     const rows = all.filter((t) => (!status || t.status === status) && (!search.trim() || t.name.includes(search.trim().toLowerCase())));
+    // Grouped by WhatsApp Business Account (CN-02): a template belongs to one account and is sendable
+    // from that account's numbers only. One account: a plain list.
+    const groups = Object.entries(rows.reduce<Record<string, MessageTemplate[]>>((acc, t) => ((acc[t.waba_account_id] ??= []).push(t), acc), {})).map(
+        ([id, list]) => {
+            const a = accounts.find((x) => x.id === id);
+            // Without access to Channels the account is named after its numbers.
+            const viaNumbers = (numbers.data ?? []).filter((n) => n.waba_account_id === id).map((n) => n.verified_name ?? n.display_phone_number);
+            const name = a ? (a.name ?? a.business_name ?? a.waba_id) : viaNumbers.length ? viaNumbers.join(', ') : 'WhatsApp account';
+
+            return { id, name, waba: a?.waba_id ?? null, list };
+        },
+    );
+    const grouped = groups.length > 1;
     const remove = useMutation({
         mutationFn: (id: string) => deleteTemplate(id),
         onSuccess: () => {
@@ -163,45 +177,60 @@ export default function TemplatesPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {rows.map((t) => (
-                                <TableRow key={t.id} className="cursor-pointer" onClick={() => setViewing(t)}>
-                                    <TableCell>
-                                        <p className="font-medium">{t.name}</p>
-                                        <p className="max-w-md truncate text-[12.5px] text-muted-foreground">
-                                            {t.components.find((c) => c.type?.toUpperCase() === 'BODY')?.text}
-                                        </p>
-                                    </TableCell>
-                                    <TableCell>{humanize(t.category?.toLowerCase())}</TableCell>
-                                    <TableCell>{t.language}</TableCell>
-                                    <TableCell>
-                                        <div className="flex flex-wrap items-center gap-1.5">
-                                            <TemplateStatusBadge template={t} />
-                                            {t.quality_score && ['RED', 'YELLOW'].includes(t.quality_score) && (
-                                                <Badge tone={t.quality_score === 'RED' ? 'bad' : 'warn'}>Quality {t.quality_score.toLowerCase()}</Badge>
+                            {groups.flatMap((g) => [
+                                ...(grouped
+                                    ? [
+                                          <TableRow key={`g-${g.id}`} className="bg-muted/50 hover:bg-muted/50">
+                                              <TableCell colSpan={6} className="py-2 text-[12.5px] font-semibold">
+                                                  {g.name}
+                                                  {g.waba && <span className="ml-2 font-mono font-normal text-muted-foreground">WABA {g.waba}</span>}
+                                                  <span className="ml-2 font-normal text-muted-foreground">
+                                                      · {g.list.length} template{g.list.length === 1 ? '' : 's'}
+                                                  </span>
+                                              </TableCell>
+                                          </TableRow>,
+                                      ]
+                                    : []),
+                                ...g.list.map((t) => (
+                                    <TableRow key={t.id} className="cursor-pointer" onClick={() => setViewing(t)}>
+                                        <TableCell>
+                                            <p className="font-medium">{t.name}</p>
+                                            <p className="max-w-md truncate text-[12.5px] text-muted-foreground">
+                                                {t.components.find((c) => c.type?.toUpperCase() === 'BODY')?.text}
+                                            </p>
+                                        </TableCell>
+                                        <TableCell>{humanize(t.category?.toLowerCase())}</TableCell>
+                                        <TableCell>{t.language}</TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                <TemplateStatusBadge template={t} />
+                                                {t.quality_score && ['RED', 'YELLOW'].includes(t.quality_score) && (
+                                                    <Badge tone={t.quality_score === 'RED' ? 'bad' : 'warn'}>Quality {t.quality_score.toLowerCase()}</Badge>
+                                                )}
+                                            </div>
+                                            {t.status === 'REJECTED' && t.rejected_reason && (
+                                                <p className="mt-1 max-w-xs text-[12px] text-bad">{rejectionReason(t.rejected_reason)}</p>
                                             )}
-                                        </div>
-                                        {t.status === 'REJECTED' && t.rejected_reason && (
-                                            <p className="mt-1 max-w-xs text-[12px] text-bad">{rejectionReason(t.rejected_reason)}</p>
-                                        )}
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground">{relative(t.updated_at)}</TableCell>
-                                    <TableCell>
-                                        {can(P.TemplatesCreate) && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon-sm"
-                                                aria-label={`Delete ${t.name}`}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setDeleting(t);
-                                                }}
-                                            >
-                                                <Trash2Icon />
-                                            </Button>
-                                        )}
-                                    </TableCell>
-                                </TableRow>
-                            ))}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">{relative(t.updated_at)}</TableCell>
+                                        <TableCell>
+                                            {can(P.TemplatesCreate) && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon-sm"
+                                                    aria-label={`Delete ${t.name}`}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setDeleting(t);
+                                                    }}
+                                                >
+                                                    <Trash2Icon />
+                                                </Button>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                )),
+                            ])}
                         </TableBody>
                     </Table>
                 )}

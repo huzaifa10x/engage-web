@@ -8,7 +8,7 @@ import { Logo } from '@/components/brand/logo';
 import { useStored } from '@/hooks/use-stored';
 import { cn } from '@/lib/utils';
 
-import { isVisible, NAV, type NavItem } from './nav';
+import { isVisible, NAV, type NavItem, roleAllows } from './nav';
 import { useSession } from './session';
 
 /** "Growth Hub:1,Analytics:0" — groups the person opened or closed; the rest follow the current page. */
@@ -26,8 +26,14 @@ function parseGroups(raw: string): Record<string, boolean> {
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     const pathname = usePathname();
-    const { can, me } = useSession();
-    // Groups with sub-items (Growth Hub, Analytics) fold: open when the current page is inside them,
+    const { can, me, membership } = useSession();
+    const roleKey = membership.role?.key;
+    // "Pro" marks what the Pro plan adds (store orders and revenue need integrations at Pro level).
+    // Workspaces that already have it, on any plan, do not see the badge.
+    const integrations = me.entitlements?.features?.integrations;
+    const level = integrations && !Array.isArray(integrations.config) ? integrations.config.level : null;
+    const showPro = !(integrations?.enabled && (level === 'all' || level === 'custom'));
+    // Groups with sub-items (Growth Hub) fold: open when the current page is inside them,
     // or as the person last left them (remembered in this browser).
     const [storedGroups, setStoredGroups] = useStored<string>('engage:nav:groups', '');
     const groups = parseGroups(storedGroups);
@@ -51,9 +57,20 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 {NAV.map((section) => {
                     const growth = me.growth?.tier === 'full';
                     const growthAny = growth || me.growth?.tier === 'chip';
-                    const items = section.items.filter(
+                    const allowed = section.items.filter(
                         (i) => isVisible(i) && (!i.permission || can(i.permission)) && (!i.growth || growth) && (!i.growthAny || growthAny),
                     );
+                    // The role's menu (CN-02): a group stays when any of its sub-items does.
+                    const items = allowed.filter((i, idx) => {
+                        if (!i.heading) return roleAllows(i, roleKey);
+                        const subs: NavItem[] = [];
+                        for (const next of allowed.slice(idx + 1)) {
+                            if (!next.sub) break;
+                            subs.push(next);
+                        }
+
+                        return roleAllows(i, roleKey, subs);
+                    });
                     if (items.length === 0) return null;
 
                     // Each sub-item belongs to the nearest item above it that is not a sub-item.
@@ -99,7 +116,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                                             <ChevronDownIcon className={cn('size-4 transition-transform', !open && '-rotate-90')} />
                                         </button>
                                     ) : null;
-                                    // The most specific link wins: /analytics/marketing highlights Marketing, not Analytics.
+                                    // The most specific link wins: /insights/marketing highlights Marketing, not Messages & Team.
                                     const deeper = items.some(
                                         (o) =>
                                             o !== item &&
@@ -168,6 +185,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                                             >
                                                 <Icon className="size-4" />
                                                 {item.label}
+                                                {item.pro && showPro && (
+                                                    <span
+                                                        className="ml-auto rounded bg-primary/20 px-1.5 py-0.5 text-[10px] font-semibold text-primary"
+                                                        title="Included in the Pro plan"
+                                                    >
+                                                        Pro
+                                                    </span>
+                                                )}
                                                 {item.preview && (
                                                     <span
                                                         className="ml-auto rounded bg-sidebar-2 px-1.5 py-0.5 text-[10px] font-semibold"

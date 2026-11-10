@@ -581,7 +581,7 @@ export function CampaignDialog({
                                 {a.quiet_until && when === 'now'
                                     ? ` It is quiet time now, so sending starts at ${new Date(a.quiet_until).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}.`
                                     : ''}{' '}
-                                Change this in Compliance.
+                                Change this in Consent & Privacy.
                             </p>
                         )}
                     </Section>

@@ -73,7 +73,7 @@ export function CannedPicker({ onPick, disabled }: { onPick: (body: string) => v
                                 {responses.isLoading
                                     ? 'Loading…'
                                     : (responses.data ?? []).length === 0
-                                      ? 'No saved replies yet. Add them in Settings → Canned responses.'
+                                      ? 'No saved replies yet. Add them in Settings → Inbox.'
                                       : 'Nothing matches.'}
                             </p>
                         )}

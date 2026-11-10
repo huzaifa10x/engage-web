@@ -73,7 +73,7 @@ export function ConversationList({
     const [afterHours, setAfterHours] = useState(false);
     const now = useNow();
     const counts = useConversationCounts(phoneNumberId, polling ? 15_000 : false).data;
-    // The live waiting timer, coloured by your own thresholds (Settings › Business hours): grey, then
+    // The live waiting timer, coloured by your own thresholds (Settings › Inbox): grey, then
     // amber from the warning time, red from the reply target.
     const inbox = useInboxSettings().data;
     const targetMs = (inbox?.reply_target_minutes ?? 10) * 60_000;

@@ -397,10 +397,11 @@ export const importContacts = (file: File, tags: string[], optedIn: boolean) => 
 // ── Campaigns ────────────────────────────────────────────────────────────────────────────
 
 /** Polls while anything is sending or scheduled, so delivery numbers move without a refresh. */
-export const useCampaigns = (enabled = true) =>
+/** Campaigns, for one WhatsApp number when the top-bar number selector has one chosen (CN-02). */
+export const useCampaigns = (enabled = true, phoneNumberId: string | null = null) =>
     useQuery({
-        queryKey: keys.campaigns,
-        queryFn: () => api<Data<Campaign[]>>('campaigns').then((r) => r.data),
+        queryKey: [...keys.campaigns, phoneNumberId],
+        queryFn: () => api<Data<Campaign[]>>('campaigns', { query: phoneNumberId ? { phone_number_id: phoneNumberId } : {} }).then((r) => r.data),
         enabled,
         refetchInterval: (query) => (query.state.data?.some((c) => ['sending', 'scheduled', 'paused'].includes(c.status)) ? 5_000 : 30_000),
     });
@@ -622,10 +623,10 @@ export const useNotifications = (enabled = true) =>
 export const readNotifications = (id?: string) =>
     api<Data<NotificationFeed>>('notifications/read', { method: 'POST', body: { id: id ?? null } }).then((r) => r.data);
 
-export const useDashboardSummary = (enabled = true) =>
+export const useDashboardSummary = (enabled = true, phoneNumberId: string | null = null) =>
     useQuery({
-        queryKey: ['dashboard', 'summary'],
-        queryFn: () => api<Data<DashboardSummary>>('dashboard/summary').then((r) => r.data),
+        queryKey: ['dashboard', 'summary', phoneNumberId],
+        queryFn: () => api<Data<DashboardSummary>>('dashboard/summary', { query: phoneNumberId ? { phone_number_id: phoneNumberId } : {} }).then((r) => r.data),
         enabled,
         refetchInterval: 60_000,
     });
@@ -715,7 +716,7 @@ export const PLUGIN_ZIP_URL = '/api/integrations/woocommerce/plugin.zip';
 
 // ── Sales (Engagement Plan step D): store orders matched to chats ────────────────────────
 
-export type SalesFilters = { match?: 'all' | SalesMatch; q?: string; days?: number; store?: string };
+export type SalesFilters = { match?: 'all' | SalesMatch; q?: string; days?: number; store?: string; phone_number_id?: string };
 
 export const useSales = (filters: SalesFilters, enabled = true) =>
     useInfiniteQuery({
@@ -732,10 +733,11 @@ export const useSale = (id: string | null) =>
 export const reviewSale = (id: string, action: 'attach' | 'keep_apart') =>
     api<Data<SalesOrderDetails>>(`growth/sales/${id}/review`, { method: 'POST', body: { action } }).then((r) => r.data);
 
-export const useSalesAnalytics = (days: number, enabled = true) =>
+export const useSalesAnalytics = (days: number, enabled = true, phoneNumberId: string | null = null) =>
     useQuery({
-        queryKey: ['analytics', 'sales', days],
-        queryFn: () => api<Data<SalesAnalytics>>('analytics/sales', { query: { days } }).then((r) => r.data),
+        queryKey: ['analytics', 'sales', days, phoneNumberId],
+        queryFn: () =>
+            api<Data<SalesAnalytics>>('analytics/sales', { query: phoneNumberId ? { days, phone_number_id: phoneNumberId } : { days } }).then((r) => r.data),
         enabled,
     });
 
@@ -808,8 +810,12 @@ export const useLeads = (filters: LeadFilters, enabled = true) =>
         enabled,
     });
 
-export const useLeadSummary = (enabled = true) =>
-    useQuery({ queryKey: keys.leadSummary, queryFn: () => api<Data<LeadSummary>>('growth/leads/summary').then((r) => r.data), enabled });
+export const useLeadSummary = (enabled = true, phoneNumberId: string | null = null) =>
+    useQuery({
+        queryKey: [...keys.leadSummary, phoneNumberId],
+        queryFn: () => api<Data<LeadSummary>>('growth/leads/summary', { query: phoneNumberId ? { phone_number_id: phoneNumberId } : {} }).then((r) => r.data),
+        enabled,
+    });
 
 export const useMetaAds = (enabled = true) =>
     useQuery({ queryKey: ['growth', 'meta-ads'], queryFn: () => api<Data<MetaAd[]>>('growth/meta-ads').then((r) => r.data), enabled });

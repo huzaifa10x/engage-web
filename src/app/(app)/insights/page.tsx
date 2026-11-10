@@ -3,7 +3,9 @@
 import { useState } from 'react';
 
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
+import { useSelectedNumber } from '@/components/app/number-switcher';
 import { useSession } from '@/components/app/session';
+import { FollowUpResultsCard } from '@/components/analytics/follow-up-results';
 import { ResponseTimesCard } from '@/components/analytics/response-times';
 import { Funnel } from '@/components/campaigns/campaign-detail';
 import { Badge } from '@/components/ui/badge';
@@ -13,10 +15,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { errorMessage } from '@/lib/api';
 import { P } from '@/lib/permissions';
-import { useAnalytics, usePhoneNumbers } from '@/lib/queries';
+import { useAnalytics } from '@/lib/queries';
 import type { AnalyticsOverview } from '@/lib/types';
 
-const ALL = '__all__';
 const rate = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : '—');
 
 function Kpi({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -71,12 +72,12 @@ function DailyChart({ daily }: { daily: AnalyticsOverview['daily'] }) {
     );
 }
 
-export default function AnalyticsPage() {
+export default function InsightsPage() {
     const { can } = useSession();
     const allowed = can(P.AnalyticsView);
     const [days, setDays] = useState(30);
-    const [numberId, setNumberId] = useState<string | null>(null);
-    const numbers = usePhoneNumbers();
+    // The number chosen in the top bar (CN-02).
+    const [numberId] = useSelectedNumber();
     const analytics = useAnalytics({ days, phone_number_id: numberId }, allowed);
     const d = analytics.data;
 
@@ -85,25 +86,10 @@ export default function AnalyticsPage() {
     return (
         <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
             <PageHeader
-                title="Analytics"
-                description="What was sent, delivered and read across your WhatsApp numbers, and how fast the team answers."
+                title="Messages & Team"
+                description="What was sent, delivered and read across your WhatsApp numbers, how fast the team answers, and what the follow-up rules did."
                 actions={
                     <>
-                        {(numbers.data ?? []).length > 1 && (
-                            <Select value={numberId ?? ALL} onValueChange={(v) => setNumberId(v === ALL ? null : v)}>
-                                <SelectTrigger className="w-52" aria-label="Number">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={ALL}>All numbers</SelectItem>
-                                    {(numbers.data ?? []).map((n) => (
-                                        <SelectItem key={n.id} value={n.id}>
-                                            {n.verified_name ?? n.display_phone_number}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        )}
                         <Select value={String(days)} onValueChange={(v) => setDays(Number(v))}>
                             <SelectTrigger className="w-40" aria-label="Period">
                                 <SelectValue />
@@ -125,7 +111,7 @@ export default function AnalyticsPage() {
                 </div>
             ) : analytics.isError || !d ? (
                 <Card>
-                    <EmptyState title="Analytics could not be loaded" description={errorMessage(analytics.error)} />
+                    <EmptyState title="Insights could not be loaded" description={errorMessage(analytics.error)} />
                 </Card>
             ) : (
                 <div className="grid gap-4">
@@ -216,6 +202,8 @@ export default function AnalyticsPage() {
                     </Card>
 
                     <ResponseTimesCard days={days} numberId={numberId} />
+
+                    {can(P.SettingsView) && <FollowUpResultsCard />}
 
                     <Card className="overflow-hidden p-0">
                         <p className="px-5 pt-4 pb-2 text-sm font-semibold">Top templates</p>

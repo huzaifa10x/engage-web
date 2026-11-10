@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { LogOutIcon, SettingsIcon } from 'lucide-react';
+import { LogOutIcon, SettingsIcon, ShieldCheckIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { Avatar } from '@/components/ui/avatar';
@@ -48,6 +48,10 @@ export function UserMenu() {
                         <SettingsIcon /> Workspace settings
                     </DropdownMenuItem>
                 )}
+                {/* Everyone can reach their own sign-in security (two-factor). */}
+                <DropdownMenuItem onSelect={() => router.push('/settings?tab=security')}>
+                    <ShieldCheckIcon /> Sign-in & security
+                </DropdownMenuItem>
                 <DropdownMenuItem destructive onSelect={logout}>
                     <LogOutIcon className="!text-destructive" /> {me.impersonation ? 'End support session' : 'Sign out'}
                 </DropdownMenuItem>

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
+import { useSelectedNumber } from '@/components/app/number-switcher';
 import { useSession } from '@/components/app/session';
 import { StageMappingDialog } from '@/components/growth/stage-mapping-dialog';
 import { Badge } from '@/components/ui/badge';
@@ -19,19 +20,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ApiError } from '@/lib/api';
 import { relative } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import {
-    type MarketingFilters,
-    useMarketingCampaigns,
-    useMarketingFunnel,
-    useMarketingOverview,
-    useMarketingSources,
-    useMarketingTrend,
-    usePhoneNumbers,
-} from '@/lib/queries';
+import { type MarketingFilters, useMarketingCampaigns, useMarketingFunnel, useMarketingOverview, useMarketingSources, useMarketingTrend } from '@/lib/queries';
 import type { MarketingMetric, MarketingTrendPoint } from '@/lib/types';
 import { cn } from '@/lib/utils';
-
-const ALL = '__all__';
 
 /** Today in the workspace's time zone (day boundaries are the workspace's, Spec §2). */
 function localToday(tz: string): string {
@@ -160,7 +151,7 @@ function TrendChart({ points, compare }: { points: MarketingTrendPoint[]; compar
 }
 
 /**
- * Analytics › Marketing (Marketing Analytics Specification, prototype): which sources and campaigns
+ * Insights › Marketing (Marketing Analytics Specification, prototype): which sources and campaigns
  * bring WhatsApp leads, and how many become qualified. Every number opens Growth Hub › Leads with
  * the same filters. No ad spend, cost or revenue.
  */
@@ -172,9 +163,9 @@ export default function MarketingPage() {
     const [preset, setPreset] = useState<'7' | '30' | '90' | 'custom'>('30');
     const [custom, setCustom] = useState({ from: addDays(today, -29), to: today });
     const [compare, setCompare] = useState(true);
-    const [numberId, setNumberId] = useState<string | null>(null);
+    // The number chosen in the top bar (CN-02).
+    const [numberId] = useSelectedNumber();
     const [mappingOpen, setMappingOpen] = useState(false);
-    const numbers = usePhoneNumbers();
 
     const period = preset === 'custom' ? custom : { from: addDays(today, -(Number(preset) - 1)), to: today };
     const f: MarketingFilters = { ...period, compare: compare ? 'previous' : 'none', ...(numberId ? { number_id: numberId } : {}) };
@@ -279,19 +270,6 @@ export default function MarketingPage() {
                         />
                     </>
                 )}
-                <Select value={numberId ?? ALL} onValueChange={(v) => setNumberId(v === ALL ? null : v)}>
-                    <SelectTrigger className="w-auto min-w-40" aria-label="Number">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value={ALL}>All numbers</SelectItem>
-                        {(numbers.data ?? []).map((n) => (
-                            <SelectItem key={n.id} value={n.id}>
-                                {[n.display_phone_number, n.verified_name].filter(Boolean).join(' · ')}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
                 <div className="flex items-center gap-2 px-1">
                     <Checkbox id="mk-compare" checked={compare} onCheckedChange={(v) => setCompare(v === true)} />
                     <Label htmlFor="mk-compare" className="text-[13px] font-normal">

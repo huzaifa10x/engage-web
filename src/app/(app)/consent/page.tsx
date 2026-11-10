@@ -153,7 +153,7 @@ function SettingsForm({ initial, canManage }: { initial: ComplianceSettings; can
             });
             setS(saved);
             void qc.invalidateQueries({ queryKey: ['compliance'] });
-            toast.success('Compliance settings saved');
+            toast.success('Consent & Privacy settings saved');
         } catch (e) {
             toast.error(errorMessage(e));
         } finally {
@@ -441,7 +441,7 @@ function Ledger() {
     );
 }
 
-export default function CompliancePage() {
+export default function ConsentPrivacyPage() {
     const { can } = useSession();
     const allowed = can(P.ComplianceView);
     const overview = useComplianceOverview(allowed);
@@ -459,7 +459,7 @@ export default function CompliancePage() {
 
     return (
         <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
-            <PageHeader title="Compliance" description="Consent, opt-outs and data retention for your WhatsApp messaging." />
+            <PageHeader title="Consent & Privacy" description="Consent, opt-outs and data retention for your WhatsApp messaging." />
             <Tabs defaultValue="overview">
                 <TabsList>
                     <TabsTrigger value="overview">Overview</TabsTrigger>
