@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { usePhoneNumbers } from '@/lib/queries';
 import { cn } from '@/lib/utils';
-import { qualityTone } from '@/lib/whatsapp';
+import { phoneDisplay, qualityTone } from '@/lib/whatsapp';
 
 import type { NumberScope } from './nav';
 import { useSession } from './session';
@@ -82,7 +82,9 @@ export function NumberSwitcher({ scope = 'switch' }: { scope?: NumberScope }) {
         <DropdownMenu>
             <DropdownMenuTrigger className="flex items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 text-[13px] font-medium shadow-xs hover:bg-muted">
                 <PhoneIcon className="size-3.5 text-muted-foreground" />
-                <span className="max-w-[160px] truncate">{current ? (current.verified_name ?? current.display_phone_number) : 'All numbers'}</span>
+                <span className="max-w-[160px] truncate">
+                    {current ? (current.verified_name ?? phoneDisplay(current.display_phone_number)) : 'All numbers'}
+                </span>
                 {scope === 'filter' && current && <span className="rounded bg-primary/15 px-1 text-[10.5px] font-semibold text-primary">Filter</span>}
                 <ChevronDownIcon className="size-3.5 text-muted-foreground" />
             </DropdownMenuTrigger>
@@ -100,7 +102,7 @@ export function NumberSwitcher({ scope = 'switch' }: { scope?: NumberScope }) {
                                 {n.verified_name ?? 'Unnamed number'}
                                 {n.status === 'disconnected' && <span className="ml-1.5 text-[11px] font-semibold text-bad">Disconnected</span>}
                             </span>
-                            <span className="block font-mono text-[11.5px] text-muted-foreground">{n.display_phone_number}</span>
+                            <span className="block font-mono text-[11.5px] text-muted-foreground">{phoneDisplay(n.display_phone_number)}</span>
                         </span>
                     </DropdownMenuCheckItem>
                 ))}

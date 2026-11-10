@@ -56,3 +56,29 @@ export function disconnectExplanation(reason: string | null | undefined): string
             return null;
     }
 }
+
+/** A number as people write it, always with its "+" (some come back from Meta as "-971 …" or "971 …"). */
+export function phoneDisplay(value: string | null | undefined): string {
+    const v = (value ?? '').trim().replace(/^[\s\-–—+]+/u, '');
+    if (!v) return '';
+
+    return /^\d/.test(v) ? `+${v}` : v;
+}
+
+/**
+ * Meta's display-name review state, only when there is something to know. Approved names, names
+ * usable without review, and numbers without a separate name (NONE / NON_EXISTS: common for numbers
+ * shared with the WhatsApp Business app, where the app's profile name is used) show nothing.
+ */
+export function nameStatusLabel(status: string | null | undefined): string | null {
+    switch (status) {
+        case 'PENDING_REVIEW':
+            return 'display name in review';
+        case 'DECLINED':
+            return 'display name declined';
+        case 'EXPIRED':
+            return 'display name expired';
+        default:
+            return null;
+    }
+}

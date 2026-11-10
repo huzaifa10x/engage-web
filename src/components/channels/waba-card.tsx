@@ -28,7 +28,18 @@ import { api, errorMessage } from '@/lib/api';
 import { humanize, relative } from '@/lib/format';
 import { keys } from '@/lib/queries';
 import type { WabaAccount } from '@/lib/types';
-import { coexistenceLabel, disconnectExplanation, onboardingLabel, qualityLabel, qualityTone, statusLabel, statusTone, tierLabel } from '@/lib/whatsapp';
+import {
+    coexistenceLabel,
+    disconnectExplanation,
+    nameStatusLabel,
+    onboardingLabel,
+    phoneDisplay,
+    qualityLabel,
+    qualityTone,
+    statusLabel,
+    statusTone,
+    tierLabel,
+} from '@/lib/whatsapp';
 
 export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: boolean }) {
     const qc = useQueryClient();
@@ -136,10 +147,10 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                             {numbers.map((n) => (
                                 <TableRow key={n.id}>
                                     <TableCell>
-                                        <div className="font-mono text-[13px] font-semibold">{n.display_phone_number ?? n.phone_number_id}</div>
+                                        <div className="font-mono text-[13px] font-semibold">{phoneDisplay(n.display_phone_number) || n.phone_number_id}</div>
                                         <div className="text-[12.5px] text-muted-foreground">
                                             {n.verified_name ?? 'Display name pending'}
-                                            {n.name_status && n.name_status !== 'APPROVED' ? ` · name ${humanize(n.name_status).toLowerCase()}` : ''}
+                                            {nameStatusLabel(n.name_status) ? ` · ${nameStatusLabel(n.name_status)}` : ''}
                                         </div>
                                     </TableCell>
                                     <TableCell>

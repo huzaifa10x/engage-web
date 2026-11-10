@@ -1,6 +1,7 @@
 'use client';
 
 import { BotIcon, ClockIcon, InboxIcon, MoonIcon, SearchIcon, TimerIcon } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 import { SourceChip } from '@/components/growth/source-chip';
@@ -68,9 +69,17 @@ export function ConversationList({
     onSelect: (c: Conversation) => void;
     polling: boolean;
 }) {
-    const [tab, setTab] = useState<Tab>('any');
-    const assigned = tab === 'needs_reply' ? 'any' : tab;
-    const [afterHours, setAfterHours] = useState(false);
+    // Links from the Dashboard open a tab directly: /inbox?tab=needs_reply&assigned=unassigned, &after_hours=1.
+    const params = useSearchParams();
+    const [tab, setTab] = useState<Tab>(() => (TABS.some((t) => t.id === params.get('tab')) ? (params.get('tab') as Tab) : 'any'));
+    // Needs reply narrowed to unassigned chats or mine (from the Dashboard); cleared with its chip.
+    const [only, setOnly] = useState<'me' | 'unassigned' | null>(() => {
+        const a = params.get('assigned');
+
+        return params.get('tab') === 'needs_reply' && (a === 'me' || a === 'unassigned') ? a : null;
+    });
+    const assigned = tab === 'needs_reply' ? (only ?? 'any') : tab;
+    const [afterHours, setAfterHours] = useState(() => params.get('after_hours') === '1');
     const now = useNow();
     const counts = useConversationCounts(phoneNumberId, polling ? 15_000 : false).data;
     // The live waiting timer, coloured by your own thresholds (Settings › Inbox): grey, then
@@ -126,7 +135,7 @@ export function ConversationList({
                     {TABS.map((t) => (
                         <button
                             key={t.id}
-                            onClick={() => setTab(t.id)}
+                            onClick={() => (setTab(t.id), setOnly(null))}
                             title={t.title}
                             className={cn(
                                 'inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[12.5px] font-semibold',
@@ -141,6 +150,15 @@ export function ConversationList({
                             )}
                         </button>
                     ))}
+                    {tab === 'needs_reply' && only && (
+                        <button
+                            onClick={() => setOnly(null)}
+                            className="inline-flex items-center gap-1 rounded-md bg-brand-50 px-2.5 py-1 text-[12.5px] font-semibold text-brand-600"
+                            title="Show every chat that needs a reply"
+                        >
+                            {only === 'me' ? 'Mine only' : 'Unassigned only'} ×
+                        </button>
+                    )}
                     <button
                         onClick={() => setAfterHours((v) => !v)}
                         className={cn(
@@ -283,7 +301,15 @@ export function ConversationList({
                                             <MoonIcon className="size-3" /> Arrived after hours
                                         </span>
                                     )}
-                                    {c.contact?.acquisition && <SourceChip acquisition={c.contact.acquisition} compact className="mt-1 mr-1" />}
+                                    {c.contact?.acquisition && (
+                                        <SourceChip
+                                            acquisition={c.contact.acquisition}
+                                            // Returning contacts: "Before tracking · Latest: Google Ads".
+                                            label={c.contact.acquisition.returning_label}
+                                            compact
+                                            className="mt-1 mr-1"
+                                        />
+                                    )}
                                     {c.handler === 'bot' ? (
                                         <span
                                             className="mt-1 inline-flex w-fit items-center gap-1 rounded-full bg-info-bg px-1.5 py-px text-[10.5px] font-semibold text-info"

@@ -1,6 +1,17 @@
 'use client';
 
-import { ArrowRightIcon, CheckCircle2Icon, CircleIcon, InboxIcon, MegaphoneIcon, PhoneIcon, UsersIcon } from 'lucide-react';
+import {
+    ArrowRightIcon,
+    CheckCircle2Icon,
+    CircleIcon,
+    InboxIcon,
+    MegaphoneIcon,
+    MessageSquareIcon,
+    MoonIcon,
+    UserCheckIcon,
+    UserXIcon,
+    UsersIcon,
+} from 'lucide-react';
 import Link from 'next/link';
 
 import { PageHeader } from '@/components/app/page-header';
@@ -13,8 +24,8 @@ import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
 import { number } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { useDashboardSummary, useEntitlements, useInvitations, useMembers, usePhoneNumbers } from '@/lib/queries';
-import { qualityLabel, qualityTone, statusLabel, statusTone, tierLabel } from '@/lib/whatsapp';
+import { useDashboardSummary, useInvitations, useMembers, usePhoneNumbers } from '@/lib/queries';
+import { phoneDisplay, qualityLabel, qualityTone, statusLabel, statusTone, tierLabel } from '@/lib/whatsapp';
 import { cn } from '@/lib/utils';
 
 function greeting(): string {
@@ -49,21 +60,51 @@ function Kpi({
     );
 }
 
+/** A Today's work count that opens the matching Inbox view. */
+function WorkCard({
+    label,
+    value,
+    hint,
+    icon,
+    href,
+    urgent = false,
+}: {
+    label: string;
+    value: number;
+    hint: string;
+    icon: React.ReactNode;
+    href: string;
+    urgent?: boolean;
+}) {
+    return (
+        <Link href={href} className="group rounded-xl focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+            <Card className={cn('p-5 transition-colors group-hover:border-primary/50', urgent && 'border-warn/40 bg-warn-bg/40')}>
+                <div className="flex items-center justify-between">
+                    <p className="text-[13px] font-medium text-muted-foreground">{label}</p>
+                    <span className="text-muted-foreground">{icon}</span>
+                </div>
+                <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums">{number(value)}</p>
+                <p className="mt-2 flex items-center gap-1 text-[12.5px] text-muted-foreground">
+                    {hint}
+                    <ArrowRightIcon className="ml-auto size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+                </p>
+            </Card>
+        </Link>
+    );
+}
+
 export default function DashboardPage() {
     const { me, membership, can } = useSession();
     const numbers = usePhoneNumbers();
-    const entitlements = useEntitlements();
     // The number chosen in the top bar filters the figures and the number list (CN-02).
     const [numberId] = useSelectedNumber();
     const summary = useDashboardSummary(can(P.InboxView), numberId);
+    const s = summary.data;
     const members = useMembers(can(P.TeamView));
     const invitations = useInvitations(can(P.TeamView));
 
     const list = numbers.data ?? [];
     const connected = list.filter((n) => n.status === 'connected');
-    const f = entitlements.data?.features;
-    const numberSlots = f?.whatsapp_numbers;
-    const seats = f?.team_seats;
     const teamSize = (members.data?.data.length ?? 0) + (invitations.data?.length ?? 0);
 
     const checklist = [
@@ -130,60 +171,92 @@ export default function DashboardPage() {
                 </Card>
             )}
 
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                {numbers.isLoading || entitlements.isLoading ? (
-                    [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-32" />)
-                ) : (
-                    <>
-                        <Kpi
-                            label="WhatsApp numbers"
-                            icon={<PhoneIcon className="size-4" />}
-                            value={
-                                <>
-                                    {connected.length}
-                                    {numberSlots && !numberSlots.unlimited && (
-                                        <span className="text-base font-normal text-muted-foreground"> / {numberSlots.limit}</span>
-                                    )}
-                                </>
-                            }
-                            progress={numberSlots && !numberSlots.unlimited && numberSlots.limit ? ((numberSlots.used ?? 0) / numberSlots.limit) * 100 : null}
-                            hint={list.length > connected.length ? `${list.length - connected.length} setting up or disconnected` : 'Connected and ready'}
-                        />
-                        <Kpi
-                            label="Team seats"
-                            icon={<UsersIcon className="size-4" />}
-                            value={
-                                <>
-                                    {number(seats?.used ?? null)}
-                                    {seats && !seats.unlimited && <span className="text-base font-normal text-muted-foreground"> / {seats.limit}</span>}
-                                </>
-                            }
-                            progress={seats && !seats.unlimited && seats.limit ? ((seats.used ?? 0) / seats.limit) * 100 : null}
-                            hint="Members plus pending invitations"
-                        />
-                        <Kpi
-                            label="Conversations today"
-                            icon={<InboxIcon className="size-4" />}
-                            value={summary.data ? number(summary.data.conversations_today) : '—'}
-                            hint={
-                                summary.data
-                                    ? `${number(summary.data.waiting_for_reply)} waiting for a reply · ${number(summary.data.unassigned)} unassigned`
-                                    : 'Customers who wrote today'
-                            }
-                        />
-                        <Kpi
-                            label="Campaign messages this month"
-                            icon={<MegaphoneIcon className="size-4" />}
-                            value={summary.data ? number(summary.data.campaign_messages_this_month) : '—'}
-                            hint={
-                                summary.data
-                                    ? `${number(summary.data.messages_sent_today)} sent and ${number(summary.data.messages_received_today)} received today`
-                                    : 'Sent through Campaigns'
-                            }
-                        />
-                    </>
-                )}
-            </div>
+            {/* Today's work: the Inbox's own counts, each opening that view of the Inbox (CN feedback). */}
+            {can(P.InboxView) && (
+                <>
+                    <h2 className="mb-2 text-[13px] font-semibold tracking-wider text-muted-foreground uppercase">Today’s work</h2>
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                        {!s ? (
+                            [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-32" />)
+                        ) : (
+                            <>
+                                <WorkCard
+                                    label="Needs reply"
+                                    icon={<InboxIcon className="size-4" />}
+                                    value={s.needs_reply}
+                                    hint="Customers waiting for the team"
+                                    href="/inbox?tab=needs_reply"
+                                    urgent={s.needs_reply > 0}
+                                />
+                                <WorkCard
+                                    label="Unassigned"
+                                    icon={<UserXIcon className="size-4" />}
+                                    value={s.needs_reply_unassigned}
+                                    hint="Need a reply, nobody assigned"
+                                    href="/inbox?tab=needs_reply&assigned=unassigned"
+                                />
+                                <WorkCard
+                                    label="Mine"
+                                    icon={<UserCheckIcon className="size-4" />}
+                                    value={s.needs_reply_mine}
+                                    hint="Need a reply, assigned to you"
+                                    href="/inbox?tab=needs_reply&assigned=me"
+                                />
+                                <WorkCard
+                                    label="Arrived after hours"
+                                    icon={<MoonIcon className="size-4" />}
+                                    value={s.after_hours}
+                                    hint="Came in while you were closed"
+                                    href="/inbox?tab=needs_reply&after_hours=1"
+                                />
+                            </>
+                        )}
+                    </div>
+                    {s && s.older_no_reply > 0 && (
+                        <p className="mt-2 text-[13px] text-muted-foreground">
+                            Also {number(s.older_no_reply)} older chat{s.older_no_reply === 1 ? '' : 's'} with no reply (imported history or from before reply
+                            tracking); they are not counted in Needs reply.{' '}
+                            <Link href="/inbox?tab=any" className="font-medium text-foreground underline-offset-2 hover:underline">
+                                Open the inbox
+                            </Link>
+                        </p>
+                    )}
+
+                    <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                        {!s ? (
+                            [0, 1, 2].map((i) => <Skeleton key={i} className="h-32" />)
+                        ) : (
+                            <>
+                                <Kpi
+                                    label="Messages today"
+                                    icon={<MessageSquareIcon className="size-4" />}
+                                    value={
+                                        <>
+                                            {number(s.messages_received_today)}
+                                            <span className="text-base font-normal text-muted-foreground"> in · </span>
+                                            {number(s.messages_sent_today)}
+                                            <span className="text-base font-normal text-muted-foreground"> out</span>
+                                        </>
+                                    }
+                                    hint="Conversation messages, without campaigns"
+                                />
+                                <Kpi
+                                    label="Conversations today"
+                                    icon={<UsersIcon className="size-4" />}
+                                    value={number(s.conversations_today)}
+                                    hint="Customers who wrote today"
+                                />
+                                <Kpi
+                                    label="Campaign messages this month"
+                                    icon={<MegaphoneIcon className="size-4" />}
+                                    value={number(s.campaign_messages_this_month)}
+                                    hint={`${number(s.campaign_messages_today)} sent today`}
+                                />
+                            </>
+                        )}
+                    </div>
+                </>
+            )}
 
             {connected.length > 0 && (
                 <Card className="mt-6">
@@ -205,7 +278,7 @@ export default function DashboardPage() {
                                     <li key={n.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3">
                                         <div className="min-w-0 flex-1">
                                             <p className="truncate text-sm font-semibold">{n.verified_name ?? 'Unnamed number'}</p>
-                                            <p className="font-mono text-[12px] text-muted-foreground">{n.display_phone_number}</p>
+                                            <p className="font-mono text-[12px] text-muted-foreground">{phoneDisplay(n.display_phone_number)}</p>
                                         </div>
                                         <span className="text-[13px] text-muted-foreground">{tierLabel(n.messaging_limit_tier)}</span>
                                         <Badge tone={qualityTone(n.quality_rating)} dot>

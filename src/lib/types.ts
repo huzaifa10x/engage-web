@@ -307,6 +307,8 @@ export type Acquisition = {
      * the paid touch that brought it back. Never "Before tracking".
      */
     returning?: boolean;
+    /** Inbox chip text for a returning contact: "Before tracking · Latest: Google Ads". */
+    returning_label?: string;
     /** Source panel line (full tier, every role that sees the chat): no codes, click IDs or costs. */
     source?: {
         name: string;
@@ -1068,7 +1070,14 @@ export type MemberNotification = {
     created_at: string | null;
 };
 
+/** Dashboard › Today's work uses the Inbox's own counts (Needs reply is the Needs reply tab). */
 export type DashboardSummary = {
+    needs_reply: number;
+    needs_reply_unassigned: number;
+    needs_reply_mine: number;
+    after_hours: number;
+    /** Open chats whose last message is the customer's but that are not in Needs reply (imported history, older chats). */
+    older_no_reply: number;
     conversations_today: number;
     open: number;
     unassigned: number;
@@ -1076,6 +1085,7 @@ export type DashboardSummary = {
     mine: number;
     messages_sent_today: number;
     messages_received_today: number;
+    campaign_messages_today: number;
     campaign_messages_this_month: number;
 };
 

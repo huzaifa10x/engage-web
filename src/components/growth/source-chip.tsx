@@ -26,17 +26,29 @@ export const CONFIDENCE_TEXT: Record<AcquisitionStatus, string> = {
 };
 
 /** The coloured source chip. Renders nothing when Growth Hub is off for the workspace. */
-export function SourceChip({ acquisition, compact = false, className }: { acquisition?: Acquisition | null; compact?: boolean; className?: string }) {
+export function SourceChip({
+    acquisition,
+    label,
+    compact = false,
+    className,
+}: {
+    acquisition?: Acquisition | null;
+    /** Overrides the chip text (the inbox shows returning contacts as "Before tracking · Latest: …"). */
+    label?: string | null;
+    compact?: boolean;
+    className?: string;
+}) {
     if (!acquisition) return null;
+    const text = label || acquisition.label;
 
     return (
         <Badge
             tone={SOURCE_TONE[acquisition.status] ?? 'grey'}
             dot
             className={cn(compact && 'px-1.5 py-px text-[10.5px]', 'max-w-full truncate', className)}
-            title={`Lead source: ${acquisition.label}`}
+            title={`Lead source: ${text}`}
         >
-            <span className="truncate">{acquisition.label}</span>
+            <span className="truncate">{text}</span>
         </Badge>
     );
 }
