@@ -15,6 +15,7 @@ import { api } from '@/lib/api';
 import { COUNTRIES, guessCountry } from '@/lib/countries';
 import { applyServerErrors } from '@/lib/form';
 import { safeNext } from '@/lib/navigation';
+import { PRIVACY_PATH, TERMS_PATH, websiteUrl } from '@/lib/site';
 import { keys } from '@/lib/queries';
 import type { Me } from '@/lib/types';
 
@@ -132,7 +133,17 @@ function RegisterForm() {
                 <Button type="submit" disabled={formState.isSubmitting} className="mt-2">
                     {formState.isSubmitting ? 'Creating workspace…' : 'Create workspace'}
                 </Button>
-                <p className="text-[12px] text-muted-foreground">By continuing you agree to the Terms of Service and Privacy Policy.</p>
+                <p className="text-[12px] text-muted-foreground">
+                    By continuing you agree to the{' '}
+                    <a href={websiteUrl(TERMS_PATH)} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
+                        Terms of Service
+                    </a>{' '}
+                    and{' '}
+                    <a href={websiteUrl(PRIVACY_PATH)} target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
+                        Privacy Policy
+                    </a>
+                    .
+                </p>
             </form>
 
             <p className="mt-6 text-sm text-muted-foreground">

@@ -7,6 +7,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { CenteredCard } from '@/components/app/centered-card';
+import { InviteSignupForm } from '@/components/auth/invite-signup-form';
 import { FormError } from '@/components/app/field';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -24,6 +25,8 @@ type InvitationPreview = {
     expires_at: string;
     /** Signed in: whether this account is the invited one. null when signed out. */
     for_you: boolean | null;
+    /** Signed out: whether the invited address already has an account (sign in) or not (short sign-up). */
+    has_account?: boolean | null;
 };
 
 const CLOSED: Record<Exclude<InvitationPreview['status'], 'pending'>, string> = {
@@ -116,15 +119,26 @@ export default function AcceptInvitationPage() {
                 {inv.role ?? 'a member'}.
             </p>
 
-            {signedOut ? (
+            {signedOut && inv.has_account === false ? (
                 <>
-                    <p className="mt-3 text-sm text-muted-foreground">Sign in with the email address the invitation was sent to, then accept it.</p>
+                    {/* No account yet: name, password and the terms — no workspace to create, no separate email check. */}
+                    <p className="mt-3 text-sm text-muted-foreground">Create your account to join. You’ll sign in with the invited email address.</p>
+                    <InviteSignupForm token={token} workspace={inv.workspace} onAccountExists={() => void invitation.refetch()} />
+                    <p className="mt-6 text-sm text-muted-foreground">
+                        Already have an account?{' '}
+                        <Link href={`/login?next=${next}`} className="font-semibold text-brand-600 hover:underline">
+                            Sign in
+                        </Link>
+                    </p>
+                </>
+            ) : signedOut ? (
+                <>
+                    <p className="mt-3 text-sm text-muted-foreground">
+                        You already have an account with this email address. Sign in, then accept the invitation.
+                    </p>
                     <div className="mt-6 grid gap-2">
                         <Button asChild>
                             <Link href={`/login?next=${next}`}>Sign in to accept</Link>
-                        </Button>
-                        <Button asChild variant="outline">
-                            <Link href={`/register?next=${next}`}>Create an account</Link>
                         </Button>
                     </div>
                 </>
