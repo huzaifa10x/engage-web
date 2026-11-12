@@ -21,8 +21,13 @@ What they cover (Chatbots & Flows):
     ./dev start
     ```
 
-    or by hand: `.env` with `APP_ENV=local`, `META_FAKE=true`, `LOGIN_OTP_ENABLED=false`, a queue worker
-    running, `php artisan migrate:fresh --seed`, and the demo owner's email marked as verified.
+    or by hand: `.env` with `APP_ENV=local`, `META_FAKE=true`, `LOGIN_OTP_ENABLED=false`, `MAIL_MAILER=log`,
+    a queue worker on every queue (`php artisan queue:work --queue=critical,webhooks,messaging,default,notifications,maintenance`),
+    `php artisan migrate:fresh --seed`, and the demo owner's email marked as verified.
+
+    `account-settings.spec.ts` (remember this device, email notifications) switches sign-in codes on in that
+    `.env` while it runs and reads the codes and emails from `storage/logs/laravel.log`; it needs `php artisan serve`
+    (which reads `.env` on every request) rather than a cached config.
 
 2. Web app on http://localhost:3000 (`npm run dev`, or `npm run build && npm start`).
 

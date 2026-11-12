@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { LogOutIcon, SettingsIcon, ShieldCheckIcon } from 'lucide-react';
+import { LogOutIcon, MailIcon, SettingsIcon, ShieldCheckIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 import { Avatar } from '@/components/ui/avatar';
@@ -48,7 +48,10 @@ export function UserMenu() {
                         <SettingsIcon /> Workspace settings
                     </DropdownMenuItem>
                 )}
-                {/* Everyone can reach their own sign-in security (two-factor). */}
+                {/* Everyone can reach their own emails and sign-in security (two-factor, remembered devices). */}
+                <DropdownMenuItem onSelect={() => router.push('/settings?tab=notifications')}>
+                    <MailIcon /> Email notifications
+                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => router.push('/settings?tab=security')}>
                     <ShieldCheckIcon /> Sign-in & security
                 </DropdownMenuItem>

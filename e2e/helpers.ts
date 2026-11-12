@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
 
 import { type APIRequestContext, expect, type Page } from '@playwright/test';
 
@@ -9,12 +10,56 @@ const PHP = process.env.E2E_PHP ?? 'php';
 
 export const OWNER = { email: 'owner@engage.test', password: 'Password123!' };
 
-export async function signIn(page: Page, who = OWNER) {
+/**
+ * Signs in through the login page. When the backend asks for the emailed code (LOGIN_OTP_ENABLED),
+ * the code is read from the backend's mail log (MAIL_MAILER=log) and typed in.
+ */
+export async function signIn(page: Page, who = OWNER, options: { rememberDevice?: boolean } = {}) {
     await page.goto('/login');
     await page.fill('#email', who.email);
     await page.fill('#password', who.password);
+    if (options.rememberDevice) await page.getByLabel('Remember this device for 30 days').check();
     await page.click('button:has-text("Sign in")');
+    const codeStep = page.getByText('Enter your sign-in code');
+    await Promise.race([page.waitForURL(/\/(dashboard|select-workspace)/), codeStep.waitFor()]);
+    if (await codeStep.isVisible()) await enterLoginCode(page, who.email);
     await page.waitForURL(/\/(dashboard|select-workspace)/);
+}
+
+/** The latest sign-in code emailed to this address (the backend's mail log). */
+export function lastLoginCode(email: string): string {
+    const log = readFileSync(`${BACKEND}/storage/logs/laravel.log`, 'utf8');
+    const codes = [...log.matchAll(/^To: (.+)\r?\nSubject: (\d{6}) is your 10X Engage sign-in code/gm)].filter((m) => m[1].trim() === email);
+    if (codes.length === 0) throw new Error(`No sign-in code was emailed to ${email}`);
+
+    return codes[codes.length - 1][2];
+}
+
+export async function enterLoginCode(page: Page, email: string) {
+    const latest = () => {
+        try {
+            return lastLoginCode(email);
+        } catch {
+            return null;
+        }
+    };
+    await expect.poll(latest).not.toBeNull();
+    await page.getByLabel('Digit 1').click();
+    await page.keyboard.type(lastLoginCode(email)); // the sixth digit submits the code
+}
+
+/** Emails written to the backend's mail log so far (subjects, with the address they went to). */
+export function mailLog(): { to: string; subject: string }[] {
+    const log = readFileSync(`${BACKEND}/storage/logs/laravel.log`, 'utf8');
+
+    return [...log.matchAll(/^To: (.+)\r?\nSubject: (.+)$/gm)].map((m) => ({ to: m[1].trim(), subject: m[2].trim() }));
+}
+
+/** Changes one setting in the backend's .env (php artisan serve reads it on every request). Local harness only. */
+export function setBackendEnv(key: string, value: string) {
+    const file = `${BACKEND}/.env`;
+    const env = readFileSync(file, 'utf8');
+    writeFileSync(file, env.match(new RegExp(`^${key}=`, 'm')) ? env.replace(new RegExp(`^${key}=.*$`, 'm'), `${key}=${value}`) : `${env}\n${key}=${value}\n`);
 }
 
 /** Calls the API as the signed-in browser (same session cookie, Sanctum's XSRF header). */

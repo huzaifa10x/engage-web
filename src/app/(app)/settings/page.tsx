@@ -7,9 +7,10 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Field, FormError } from '@/components/app/field';
-import { Forbidden, PageHeader } from '@/components/app/page-header';
+import { PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
 import { TwoFactorCard } from '@/components/auth/two-factor';
+import { EmailNotificationsCard, RememberedDevicesCard } from '@/components/settings/account-cards';
 import { BusinessHoursCard, CannedResponsesCard, InboxRulesCard } from '@/components/settings/inbox-cards';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -286,19 +287,23 @@ function WorkspaceForm({ tenant, canManage, section }: { tenant: Tenant; canMana
     );
 }
 
-type Tab = 'workspace' | 'company' | 'hours' | 'inbox' | 'security';
+type Tab = 'workspace' | 'company' | 'hours' | 'inbox' | 'notifications' | 'security';
 
 const TABS: [Tab, string][] = [
     ['workspace', 'Workspace'],
     ['company', 'Company'],
     ['hours', 'Business hours'],
     ['inbox', 'Inbox'],
+    ['notifications', 'Email notifications'],
     ['security', 'Security'],
 ];
 
+/** Tabs about the person rather than the workspace: open to everyone. */
+const PERSONAL: Tab[] = ['notifications', 'security'];
+
 /**
  * Settings in tabs (CN-02): Workspace, Company, Business hours, Inbox (assignment, timers, canned
- * responses) and Security (two-factor sign-in). Auto reply and follow-up rules are in Automate ›
+ * responses), Email notifications (the person's own) and Security (two-factor sign-in, remembered devices). Auto reply and follow-up rules are in Automate ›
  * Follow-ups & Alerts. The tab is in the address (?tab=hours), so links can open it directly.
  */
 export default function SettingsPage() {
@@ -307,8 +312,8 @@ export default function SettingsPage() {
     const router = useRouter();
     const params = useSearchParams();
     const full = can(P.SettingsView);
-    // Everyone may protect their own sign-in, even without access to the workspace settings.
-    const tabs = full ? TABS : TABS.filter(([t]) => t === 'security');
+    // Everyone may choose their own emails and protect their own sign-in, even without access to the workspace settings.
+    const tabs = full ? TABS : TABS.filter(([t]) => PERSONAL.includes(t));
     const asked = params.get('tab') as Tab | null;
     const tab: Tab = asked && tabs.some(([t]) => t === asked) ? asked : (tabs[0]?.[0] ?? 'security');
     const open = (t: Tab) => {
@@ -318,13 +323,11 @@ export default function SettingsPage() {
         router.replace(`/settings?${q.toString()}`, { scroll: false });
     };
 
-    if (!full && !me.two_factor) return <Forbidden />;
-
     return (
         <>
             <PageHeader
                 title="Settings"
-                description="Your workspace, company, opening hours, inbox and sign-in. Plans, cards and invoices are on the Billing page."
+                description="Your workspace, company, opening hours, inbox, email notifications and sign-in. Plans, cards and invoices are on the Billing page."
             />
             <Tabs value={tab} onValueChange={(v) => open(v as Tab)}>
                 <TabsList className="mb-4 flex-wrap">
@@ -336,9 +339,12 @@ export default function SettingsPage() {
                 </TabsList>
             </Tabs>
             {tab === 'security' ? (
-                me.two_factor ? (
-                    <TwoFactorCard status={me.two_factor} />
-                ) : null
+                <div className="grid gap-4">
+                    {me.two_factor ? <TwoFactorCard status={me.two_factor} /> : null}
+                    <RememberedDevicesCard />
+                </div>
+            ) : tab === 'notifications' ? (
+                <EmailNotificationsCard />
             ) : !tenant.data ? (
                 <Skeleton className="h-96" />
             ) : tab === 'workspace' || tab === 'company' ? (
