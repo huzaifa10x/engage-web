@@ -18,10 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     return (
         <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
             <head>
-                <Script
-                    src="https://www.googletagmanager.com/gtm.js?id=GTM-5KZQPF5D"
-                    strategy="beforeInteractive"
-                />
+                <Script src="https://www.googletagmanager.com/gtm.js?id=GTM-5KZQPF5D" strategy="beforeInteractive" />
                 <Script id="google-tag-init" strategy="beforeInteractive">
                     {`
                         window.dataLayer = window.dataLayer || [];
