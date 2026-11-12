@@ -6,14 +6,23 @@ import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { type ChatbotFlow, formatDuration, useChatbotAnalytics } from '@/lib/chatbots';
 import { cn } from '@/lib/utils';
 
+/** Why the bot handed a chat over by itself (recorded instead of an outcome label). */
+export const OUTCOME_LABEL: Record<string, string> = {
+    window_closed: 'Handed over: 24-hour window closed',
+    template_unavailable: 'Handed over: template not available',
+    send_failed: 'Handed over: a message could not be sent',
+};
+
 /** The flow dashboard: completion, time to complete, handoffs, drop-off by block, A/B results. */
 export function FlowDashboard({ flow, onOpenChange }: { flow: ChatbotFlow | null; onOpenChange: (o: boolean) => void }) {
     const [days, setDays] = useState(30);
-    const analytics = useChatbotAnalytics(flow?.id ?? 'none', days, flow !== null);
+    const [version, setVersion] = useState('current');
+    const analytics = useChatbotAnalytics(flow?.id ?? 'none', days, flow !== null, version);
     const a = analytics.data;
     const max = Math.max(1, ...(a?.daily ?? []).map((d) => d.started));
 
@@ -37,6 +46,34 @@ export function FlowDashboard({ flow, onOpenChange }: { flow: ChatbotFlow | null
                         </button>
                     ))}
                 </div>
+                {a && a.versions.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
+                        <span className="font-semibold text-muted-foreground">Version</span>
+                        <Select value={version} onValueChange={setVersion}>
+                            <SelectTrigger size="sm" className="w-auto min-w-56" aria-label="Version">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="current">
+                                    Live version{flow?.published_version ? ` (v${flow.published_version})` : ''}, unchanged steps since earlier versions
+                                </SelectItem>
+                                {[...a.versions].reverse().map((v) => (
+                                    <SelectItem key={v.version} value={String(v.version)}>
+                                        Version {v.version} only · {v.sessions} run{v.sessions === 1 ? '' : 's'}
+                                    </SelectItem>
+                                ))}
+                                <SelectItem value="all">All versions together (by step)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <span className="text-[11.5px] text-muted-foreground" data-testid="insights-scope">
+                            {a.scope === 'current'
+                                ? 'A step changed in a later version counts only from that version; steps left as they were keep their earlier numbers.'
+                                : a.scope === 'version'
+                                  ? `Only runs that started on version ${a.version}.`
+                                  : 'Steps are added up by their id across all versions, even where a step was changed.'}
+                        </span>
+                    </div>
+                )}
                 {!a ? (
                     <Skeleton className="h-64 w-full" />
                 ) : (
@@ -115,6 +152,20 @@ export function FlowDashboard({ flow, onOpenChange }: { flow: ChatbotFlow | null
                             )}
                         </section>
 
+                        {a.outcomes.length > 0 && (
+                            <section>
+                                <p className="mb-2 text-[11px] font-bold tracking-wider text-muted-foreground uppercase">How chats ended</p>
+                                <ul className="grid gap-1 text-[12.5px] sm:grid-cols-2" data-testid="outcomes">
+                                    {a.outcomes.map((o) => (
+                                        <li key={o.label} className="flex justify-between rounded-lg border px-3 py-1.5">
+                                            <span>{OUTCOME_LABEL[o.label] ?? o.label}</span>
+                                            <span className="font-semibold tabular-nums">{o.count}</span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </section>
+                        )}
+
                         {a.ab.length > 0 && (
                             <section>
                                 <p className="mb-2 flex items-center gap-1.5 text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
@@ -161,6 +212,11 @@ export function FlowDashboard({ flow, onOpenChange }: { flow: ChatbotFlow | null
                             </section>
                         )}
 
+                        {flow && (
+                            <Button asChild variant="outline" size="sm">
+                                <Link href={`/chatbots/runs?flow=${flow.id}`}>Runs & Activity for this flow</Link>
+                            </Button>
+                        )}
                         {flow && (
                             <Button asChild variant="outline" size="sm">
                                 <Link href={`/chatbots/builder?id=${flow.id}`}>

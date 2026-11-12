@@ -71,6 +71,34 @@ export function FlowSettingsDialog({
                         </button>
                     ))}
                 </div>
+                {form.engine_level === 1 && (
+                    <div
+                        className="flex items-start justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12.5px]"
+                        data-testid="engine-level-1"
+                    >
+                        <div>
+                            <p className="font-semibold">This flow runs with the earlier engine behaviour</p>
+                            <p className="text-muted-foreground">
+                                It was created before November 2026, so it keeps working exactly as published. The current behaviour reads dates day first and
+                                refuses impossible ones (31/04), accepts 120k and 1.2m, shows dates as “Wed 18 Nov 2026”, and hands the chat to your team when
+                                the bot can’t message the customer. Upgrading changes the draft only; customers get it when you publish.
+                            </p>
+                        </div>
+                        {!readOnly && (
+                            <Button size="sm" variant="outline" onClick={() => set({ engine_level: 2 })}>
+                                Upgrade
+                            </Button>
+                        )}
+                    </div>
+                )}
+                {form.engine_level === 2 && settings.engine_level === 1 && (
+                    <p className="rounded-lg border border-input px-3 py-2 text-[12.5px]" data-testid="engine-level-upgraded">
+                        Upgraded to the current behaviour. Save, test it in the test chat, then publish.{' '}
+                        <button className="font-semibold underline" onClick={() => set({ engine_level: 1 })}>
+                            Undo
+                        </button>
+                    </p>
+                )}
                 <fieldset disabled={readOnly} className="grid gap-5">
                     {tab === 'timing' && (
                         <section className="grid gap-4">
@@ -368,7 +396,11 @@ export function FlowSettingsDialog({
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="__none__">None — stop the bot when the window has closed</SelectItem>
+                                        <SelectItem value="__none__">
+                                            {form.engine_level === 1
+                                                ? 'None — stop the bot when the window has closed'
+                                                : 'None — hand the chat to the team when the window has closed'}
+                                        </SelectItem>
                                         {templates.map((t) => (
                                             <SelectItem key={`${t.name}|${t.language}|${t.waba_account_id}`} value={`${t.name}|${t.language}`}>
                                                 {t.name} · {t.language}

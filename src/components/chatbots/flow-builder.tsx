@@ -70,6 +70,10 @@ import {
     type NodeType,
     openPorts as findOpenPorts,
     publishChatbot,
+    isDraftConflict,
+    type DraftConflict,
+    getChatbotRevision,
+    useChatbotRevisions,
     restoreChatbotVersion,
     reviewChatbot,
     RTL,
@@ -84,6 +88,7 @@ import {
     useChatbotOptions,
     withOutputs,
 } from '@/lib/chatbots';
+import { mergeDrafts } from '@/lib/flow-merge';
 import { cn } from '@/lib/utils';
 
 import { BlockList } from './block-picker';
@@ -156,6 +161,9 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
     const analytics = useChatbotAnalytics(flowId, 30, showStats);
 
     const data = flow.data;
+    /** The draft this editor last loaded or saved (and its revision): the base of a merge when a teammate saved first. */
+    const [base, setBase] = useState<{ graph: FlowGraph; settings: FlowSettings; name: string; revision: number } | null>(null);
+    const [conflict, setConflict] = useState<(DraftConflict & { mine: { graph: FlowGraph; settings: FlowSettings; name: string } }) | null>(null);
     // Load the flow once into local editing state (adjusting state while rendering, not in an effect).
     if (data && loaded !== data.id) {
         setLoaded(data.id);
@@ -163,6 +171,7 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
         setSettings(data.settings);
         setName(data.name);
         setIssues(data.issues);
+        setBase({ graph: data.draft, settings: data.settings, name: data.name, revision: data.draft_revision });
         setPast([]);
         setFuture([]);
     }
@@ -361,11 +370,14 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
     // ── Autosave ────────────────────────────────────────────────────────────────────────────
     const save = async (): Promise<boolean> => {
         if (!graph || !settings || readOnly) return true;
+        if (conflict) return false; // waiting for the merge decision
         setSaving('saving');
         setDirty(false);
+        const sent = { graph, settings, name: name.trim() || 'Untitled bot' };
         try {
-            const detail = await saveChatbot(flowId, { draft: graph, settings, name: name.trim() || 'Untitled bot' });
+            const detail = await saveChatbot(flowId, { draft: sent.graph, settings: sent.settings, name: sent.name, base_revision: base?.revision });
             setIssues(detail.issues);
+            setBase({ ...sent, revision: detail.draft_revision });
             updateCache({ ...detail, draft: graph }); // keep local edits made while saving
             setSaving('idle');
 
@@ -373,18 +385,39 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
         } catch (e) {
             setDirty(true);
             setSaving('error');
+            if (isDraftConflict(e)) {
+                setConflict({ ...e.details, mine: sent });
+
+                return false;
+            }
             toast.error(`Not saved: ${errorMessage(e)}`);
 
             return false;
         }
     };
+    /** Resolves a refused save: merge both drafts (conflicting steps from `prefer`), or take the teammate's draft. */
+    const resolveConflict = (how: 'mine' | 'theirs' | 'discard') => {
+        if (!conflict || !base) return;
+        const theirs = { graph: conflict.draft, settings: conflict.settings, name: conflict.name };
+        const next = how === 'discard' ? { ...theirs, conflicts: [] } : mergeDrafts(base, conflict.mine, theirs, how);
+        setPast((p) => (graph ? [...p.slice(-79), graph] : p));
+        setFuture([]);
+        setGraph(next.graph);
+        setSettings(next.settings);
+        setName(next.name);
+        setBase({ ...theirs, revision: conflict.revision });
+        setConflict(null);
+        setSaving('idle');
+        setDirty(how !== 'discard');
+        toast.success(how === 'discard' ? 'You now have your teammate’s version.' : 'Merged. Saving…', { duration: 1800 });
+    };
     const autosave = useEffectEvent(() => void save());
     useEffect(() => {
-        if (!dirty || saving === 'saving') return;
+        if (!dirty || saving === 'saving' || conflict) return;
         const t = setTimeout(autosave, 800);
 
         return () => clearTimeout(t);
-    }, [dirty, graph, settings, name, saving]);
+    }, [dirty, graph, settings, name, saving, conflict]);
 
     // ── Keyboard ────────────────────────────────────────────────────────────────────────────
     const onKey = useEffectEvent((e: KeyboardEvent) => {
@@ -473,7 +506,7 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
         setPublishing(true);
         try {
             if (dirty && !(await save())) return;
-            const detail = await publishChatbot(flowId);
+            const detail = await publishChatbot(flowId, base?.revision);
             updateCache({ ...detail, draft: graph ?? detail.draft });
             setIssues(detail.issues);
             if (thenLive && !detail.is_active) {
@@ -482,7 +515,9 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
                 toast.success(`Version ${detail.published_version} published${detail.is_active ? ' — it is live now' : '. Switch it on to go live.'}`);
             }
         } catch (e) {
-            if (e instanceof ApiError && Array.isArray(e.details?.issues)) {
+            if (isDraftConflict(e) && graph && settings) {
+                setConflict({ ...e.details, mine: { graph, settings, name } });
+            } else if (e instanceof ApiError && Array.isArray(e.details?.issues)) {
                 setIssues(e.details?.issues as FlowIssue[]);
                 setShowIssues(true);
                 const first = (e.details?.issues as FlowIssue[]).find((i) => i.level === 'error' && i.node_id);
@@ -881,6 +916,8 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
                             flowId={flowId}
                             botName={name}
                             languages={settings.languages}
+                            numberId={data.phone_number_id}
+                            options={options.data}
                             onClose={() => {
                                 setTesting(false);
                                 setTestNode(null);
@@ -943,6 +980,7 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
 
             <RunPeriodDialog flow={runPeriod ? data : null} onClose={() => setRunPeriod(false)} onSaved={(d) => updateCache({ ...d, draft: graph })} />
 
+            <DraftConflictDialog conflict={conflict} base={base} onResolve={resolveConflict} />
             <Dialog open={leaving !== null} onOpenChange={(o) => !o && !leaveBusy && setLeaving(null)}>
                 <DialogContent className="sm:max-w-md">
                     {unsaved ? (
@@ -1006,7 +1044,7 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
                                             onClick={async () => {
                                                 setLeaveBusy(true);
                                                 try {
-                                                    const detail = await publishChatbot(flowId);
+                                                    const detail = await publishChatbot(flowId, base?.revision);
                                                     updateCache({ ...detail, draft: graph });
                                                     toast.success(`Version ${detail.published_version} published`);
                                                     if (leaving) go(leaving);
@@ -1050,7 +1088,29 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
                 beforeRequest={save}
             />
 
-            <HistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} detail={data} canRestore={data.can.publish} onRestore={setRestore} />
+            <HistoryDialog
+                open={historyOpen}
+                onOpenChange={setHistoryOpen}
+                detail={data}
+                canRestore={data.can.publish}
+                onRestore={setRestore}
+                canEdit={!readOnly}
+                onLoadDraft={async (revision) => {
+                    try {
+                        const r = await getChatbotRevision(flowId, revision);
+                        if (graph) setPast((p) => [...p.slice(-79), graph]);
+                        setFuture([]);
+                        setGraph(r.draft);
+                        setSettings(r.settings);
+                        setName(r.name);
+                        setDirty(true); // saved as the newest draft, on top of the current revision
+                        setHistoryOpen(false);
+                        toast.success(`Draft ${revision} loaded. It is saved as the newest draft; Undo brings back what you had.`);
+                    } catch (e) {
+                        toast.error(errorMessage(e));
+                    }
+                }}
+            />
 
             <AlertDialog open={replace !== null} onOpenChange={(o) => !o && setReplace(null)}>
                 <AlertDialogContent>
@@ -1461,14 +1521,19 @@ function HistoryDialog({
     detail,
     canRestore,
     onRestore,
+    canEdit,
+    onLoadDraft,
 }: {
     open: boolean;
     onOpenChange: (o: boolean) => void;
     detail: ChatbotFlowDetail;
     canRestore: boolean;
     onRestore: (v: number) => void;
+    canEdit: boolean;
+    onLoadDraft: (revision: number) => void;
 }) {
     const history = useChatbotHistory(detail.id, open);
+    const drafts = useChatbotRevisions(detail.id, open);
     const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '');
 
     return (
@@ -1513,6 +1578,32 @@ function HistoryDialog({
                             </ul>
                         )}
                     </section>
+                    <section className="sm:col-span-2">
+                        <p className="mb-2 text-[11px] font-bold tracking-wider text-muted-foreground uppercase">Saved drafts (last 50)</p>
+                        <ul className="max-h-48 divide-y overflow-y-auto rounded-lg border text-[12.5px]" data-testid="saved-drafts">
+                            {(drafts.data ?? []).map((d) => (
+                                <li key={d.revision} className="flex items-center justify-between gap-2 px-3 py-1.5">
+                                    <span>
+                                        Draft {d.revision}
+                                        {d.revision === detail.draft_revision && (
+                                            <Badge tone="brand" className="ml-1.5">
+                                                current
+                                            </Badge>
+                                        )}
+                                        <span className="block text-[11px] text-muted-foreground">
+                                            {d.by ?? 'Someone'} · {d.steps} steps · {when(d.created_at)}
+                                        </span>
+                                    </span>
+                                    {canEdit && d.revision !== detail.draft_revision && (
+                                        <Button variant="ghost" size="sm" onClick={() => onLoadDraft(d.revision)}>
+                                            Load
+                                        </Button>
+                                    )}
+                                </li>
+                            ))}
+                            {drafts.data?.length === 0 && <li className="px-3 py-1.5 text-muted-foreground">No saved drafts yet.</li>}
+                        </ul>
+                    </section>
                     <section>
                         <p className="mb-2 text-[11px] font-bold tracking-wider text-muted-foreground uppercase">Activity</p>
                         <ul className="space-y-2 text-[12.5px]">
@@ -1527,6 +1618,67 @@ function HistoryDialog({
                         </ul>
                     </section>
                 </div>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/** A teammate saved this flow first: merge, keep mine for clashing steps, or take theirs. Nothing is overwritten silently. */
+function DraftConflictDialog({
+    conflict,
+    base,
+    onResolve,
+}: {
+    conflict: (DraftConflict & { mine: { graph: FlowGraph; settings: FlowSettings; name: string } }) | null;
+    base: { graph: FlowGraph; settings: FlowSettings; name: string } | null;
+    onResolve: (how: 'mine' | 'theirs' | 'discard') => void;
+}) {
+    const preview = useMemo(
+        () => (conflict && base ? mergeDrafts(base, conflict.mine, { graph: conflict.draft, settings: conflict.settings, name: conflict.name }) : null),
+        [conflict, base],
+    );
+    if (!conflict || !preview) return null;
+    const who = conflict.edited_by ?? 'A teammate';
+    const at = conflict.edited_at ? new Date(conflict.edited_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : null;
+
+    return (
+        <Dialog open onOpenChange={() => undefined}>
+            <DialogContent className="sm:max-w-lg" onInteractOutside={(e) => e.preventDefault()}>
+                <DialogHeader>
+                    <DialogTitle>{who} saved this flow while you were editing</DialogTitle>
+                    <DialogDescription>
+                        {at ? `Saved at ${at}. ` : ''}Your changes are not lost and nothing was overwritten. Choose how to combine the two drafts.
+                    </DialogDescription>
+                </DialogHeader>
+                {preview.conflicts.length === 0 ? (
+                    <p className="text-sm">
+                        You changed different steps, so both sets of changes fit together
+                        {preview.fromTheirs > 0 ? ` (${preview.fromTheirs} step${preview.fromTheirs === 1 ? '' : 's'} from ${who})` : ''}.
+                    </p>
+                ) : (
+                    <div className="space-y-2 text-sm">
+                        <p>You both changed:</p>
+                        <ul className="list-disc space-y-0.5 pl-5" data-testid="conflict-list">
+                            {preview.conflicts.map((c) => (
+                                <li key={c.id}>{c.title}</li>
+                            ))}
+                        </ul>
+                        <p className="text-muted-foreground">Everything else is merged. For these, keep your version or theirs.</p>
+                    </div>
+                )}
+                <DialogFooter className="gap-2 sm:justify-between">
+                    <Button variant="ghost" onClick={() => onResolve('discard')}>
+                        Discard my changes
+                    </Button>
+                    <div className="flex gap-2">
+                        {preview.conflicts.length > 0 && (
+                            <Button variant="outline" onClick={() => onResolve('theirs')}>
+                                Merge, theirs for these
+                            </Button>
+                        )}
+                        <Button onClick={() => onResolve('mine')}>{preview.conflicts.length > 0 ? 'Merge, mine for these' : 'Merge and save'}</Button>
+                    </div>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     );

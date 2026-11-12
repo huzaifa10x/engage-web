@@ -31,6 +31,7 @@ import { toast } from 'sonner';
 
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
+import { ChatbotsTabs } from '@/components/chatbots/chatbots-tabs';
 import { FlowDashboard } from '@/components/chatbots/flow-dashboard';
 import { RunPeriodDialog, runPeriodLabel } from '@/components/chatbots/run-period-dialog';
 import { TemplateGallery } from '@/components/chatbots/template-gallery';
@@ -164,6 +165,7 @@ function ChatbotsList() {
 
     return (
         <>
+            <ChatbotsTabs />
             <PageHeader
                 title="Chatbots & Flows"
                 description="Bots that answer on your WhatsApp numbers alongside the Team Inbox. Every message lands in the inbox at once, and your team can take over at any moment."

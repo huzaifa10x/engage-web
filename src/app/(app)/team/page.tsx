@@ -27,6 +27,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { InboxTeams } from '@/components/team/inbox-teams';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { api, errorMessage } from '@/lib/api';
 import { date, relative } from '@/lib/format';
@@ -113,6 +114,7 @@ export default function TeamPage() {
                     <TabsTrigger value="members">Members {members.data && <Badge tone="grey">{members.data.data.length}</Badge>}</TabsTrigger>
                     <TabsTrigger value="invitations">Invitations {pending.length > 0 && <Badge tone="brand">{pending.length}</Badge>}</TabsTrigger>
                     <TabsTrigger value="roles">Roles</TabsTrigger>
+                    <TabsTrigger value="teams">Inbox teams</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="members">
@@ -271,6 +273,13 @@ export default function TeamPage() {
                             </Card>
                         ))}
                     </div>
+                </TabsContent>
+
+                <TabsContent value="teams">
+                    <InboxTeams
+                        canManage={canManage}
+                        members={(members.data?.data ?? []).filter((m) => m.status === 'active').map((m) => ({ id: m.id, name: m.user?.name ?? 'Teammate' }))}
+                    />
                 </TabsContent>
             </Tabs>
 

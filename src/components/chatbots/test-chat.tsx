@@ -8,7 +8,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { errorMessage } from '@/lib/api';
-import { LANGUAGES, RTL, testChatbot, type TestTurn, type TranscriptItem } from '@/lib/chatbots';
+import { useSession } from '@/components/app/session';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { type ChatbotOptions, LANGUAGES, RTL, testChatbot, type TestOptions, type TestTurn, type TranscriptItem } from '@/lib/chatbots';
+import { P } from '@/lib/permissions';
 import { useContacts } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 
@@ -21,22 +24,36 @@ const NOBODY = '__test__';
 
 /**
  * The test simulator: the real engine runs the current draft, as a sample customer or a real
- * contact (their name, fields and tags). Nothing is sent on WhatsApp and nothing is saved; API
- * blocks do call out. The block the customer is at lights up on the canvas.
+ * contact (their name, fields and tags). Nothing is sent on WhatsApp and nothing is saved. API and
+ * Sheets steps are dry runs (their sample answer, or the failure chosen in Test conditions) unless a
+ * person allowed to manage integrations confirms live calls to the workspace's test endpoints.
+ * The block the customer is at lights up on the canvas.
  */
 export function TestChat({
     flowId,
     botName,
     languages,
+    numberId,
+    options,
     onClose,
     onNode,
 }: {
     flowId: string;
     botName: string;
     languages: string[];
+    numberId: string | null;
+    options: ChatbotOptions | undefined;
     onClose: () => void;
     onNode: (id: string | null) => void;
 }) {
+    const { can } = useSession();
+    const mayGoLive = can(P.ChatbotsPublish) && can(P.IntegrationsManage);
+    /** What the test runs under: whose number, the 24-hour window, how API/Sheets steps answer, a paid lead source. */
+    const [cfg, setCfg] = useState<TestOptions>({ number_id: numberId, window: 'open', api_mode: 'success', source: null, integrations: 'mock' });
+    const [showCfg, setShowCfg] = useState(false);
+    const [askLive, setAskLive] = useState(false);
+    const [reason, setReason] = useState('');
+    const live = cfg.integrations === 'live';
     const [items, setItems] = useState<Item[]>([]);
     const [testId, setTestId] = useState<string | null>(null);
     const [state, setState] = useState<TestTurn['state'] | null>(null);
@@ -58,7 +75,7 @@ export function TestChat({
         push(r.transcript);
     };
 
-    const turn = async (input: Input_, shown?: string, fresh = false, contact = contactId, language = lang) => {
+    const turn = async (input: Input_, shown?: string, fresh = false, contact = contactId, language = lang, conditions = cfg) => {
         if (shown) push([{ kind: 'customer', text: shown }]);
         setBusy(true);
         setError(null);
@@ -68,6 +85,8 @@ export function TestChat({
                     test_id: fresh ? null : testId,
                     contact_id: contact === NOBODY ? null : contact,
                     language: fresh ? language : undefined,
+                    ...conditions,
+                    source: fresh ? (conditions.source ?? undefined) : undefined,
                     ...input,
                 }),
             );
@@ -78,17 +97,22 @@ export function TestChat({
         }
     };
 
-    const restart = (contact = contactId, language = lang) => {
+    const restart = (contact = contactId, language = lang, conditions = cfg) => {
         setItems([]);
         setTestId(null);
         setState(null);
-        void turn({}, undefined, true, contact, language);
+        void turn({}, undefined, true, contact, language, conditions);
+    };
+    const changeCfg = (patch: Partial<TestOptions>) => {
+        const next = { ...cfg, ...patch };
+        setCfg(next);
+        restart(contactId, lang, next);
     };
 
     // The conversation starts as soon as the simulator opens.
     useEffect(() => {
         let alive = true;
-        testChatbot(flowId, { language: languages[0] ?? null })
+        testChatbot(flowId, { language: languages[0] ?? null, ...cfg, source: undefined })
             .then((r) => alive && apply(r))
             .catch((e) => alive && setError(errorMessage(e)))
             .finally(() => alive && setBusy(false));
@@ -178,7 +202,102 @@ export function TestChat({
                         <RotateCcwIcon />
                     </Button>
                 </div>
+                <button className="text-[11.5px] font-semibold text-muted-foreground underline" onClick={() => setShowCfg((v) => !v)} aria-expanded={showCfg}>
+                    {showCfg ? 'Hide test conditions' : 'Test conditions'}
+                    {live ? ' · live integrations' : cfg.window === 'closed' || cfg.api_mode !== 'success' || cfg.source ? ' · changed' : ''}
+                </button>
+                {showCfg && (
+                    <div className="grid grid-cols-2 gap-2 text-[12px]" data-testid="test-conditions">
+                        <CfgSelect
+                            label="Number"
+                            value={cfg.number_id ?? '__flow__'}
+                            onChange={(v) => changeCfg({ number_id: v === '__flow__' ? numberId : v })}
+                            options={[
+                                ['__flow__', 'The flow’s number'],
+                                ...(options?.numbers ?? []).map((n) => [n.id, n.display_phone_number ?? n.verified_name ?? n.id] as [string, string]),
+                            ]}
+                        />
+                        <CfgSelect
+                            label="24-hour window"
+                            value={cfg.window ?? 'open'}
+                            onChange={(v) => changeCfg({ window: v as 'open' | 'closed' })}
+                            options={[
+                                ['open', 'Open'],
+                                ['closed', 'Closed (templates only)'],
+                            ]}
+                        />
+                        <CfgSelect
+                            label="API and Sheets steps"
+                            value={live ? 'live' : (cfg.api_mode ?? 'success')}
+                            onChange={(v) => {
+                                if (v === 'live') setAskLive(true);
+                                else
+                                    changeCfg({
+                                        api_mode: v as 'success' | 'error' | 'timeout',
+                                        integrations: 'mock',
+                                        confirm_live: undefined,
+                                        live_reason: undefined,
+                                    });
+                            }}
+                            options={[
+                                ['success', 'Sample answer (not sent)'],
+                                ['error', 'Fail with an error'],
+                                ['timeout', 'Time out'],
+                                ...(mayGoLive ? [['live', 'Call test endpoints for real…'] as [string, string]] : []),
+                            ]}
+                        />
+                        <CfgSelect
+                            label="Lead source"
+                            value={cfg.source ?? '__none__'}
+                            onChange={(v) => changeCfg({ source: v === '__none__' ? null : (v as TestOptions['source']) })}
+                            options={[
+                                ['__none__', 'None (organic)'],
+                                ['meta_ad', 'Meta ad'],
+                                ['google_ads', 'Google Ads'],
+                                ['paid_other', 'Other paid source'],
+                            ]}
+                        />
+                    </div>
+                )}
+                {live && (
+                    <p className="rounded-md bg-amber-50 px-2 py-1.5 text-[11.5px] text-amber-900" data-testid="live-banner">
+                        Live integrations: API and Sheets steps call your workspace’s test endpoints for real, and each call is recorded in the audit log.
+                        Anything else stays a dry run. WhatsApp messages are never sent from a test.
+                    </p>
+                )}
             </div>
+            <Dialog open={askLive} onOpenChange={setAskLive}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Call test endpoints for real?</DialogTitle>
+                        <DialogDescription>
+                            API and Google Sheets steps will really call the test endpoints set in Workspace settings (only those). The calls can change data in
+                            those systems. Each one is recorded in the audit log with your name and this reason.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <Input
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        placeholder="Why, e.g. check the sandbox CRM mapping"
+                        maxLength={200}
+                        aria-label="Reason"
+                    />
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setAskLive(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            disabled={reason.trim().length < 5}
+                            onClick={() => {
+                                setAskLive(false);
+                                changeCfg({ integrations: 'live', confirm_live: true, live_reason: reason.trim() });
+                            }}
+                        >
+                            Call for real
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <div className="flex items-center gap-2.5 bg-[#008069] px-3 py-2 text-white">
                 <span className="flex size-8 items-center justify-center rounded-full bg-white/15 text-sm" aria-hidden>
@@ -431,5 +550,25 @@ function BotMessage({
                 </p>
             )}
         </div>
+    );
+}
+
+function CfgSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: [string, string][] }) {
+    return (
+        <label className="grid gap-1">
+            <span className="font-semibold text-muted-foreground">{label}</span>
+            <Select value={value} onValueChange={onChange}>
+                <SelectTrigger size="sm" aria-label={label}>
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                    {options.map(([v, l]) => (
+                        <SelectItem key={v} value={v}>
+                            {l}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+        </label>
     );
 }

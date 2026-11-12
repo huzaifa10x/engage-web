@@ -533,6 +533,8 @@ export type Conversation = {
     phone_number_id: string;
     status: 'open' | 'closed';
     assigned_membership_id: string | null;
+    /** The inbox team it was given to (a chatbot handover or a teammate). */
+    assigned_team_id?: string | null;
     /** Who answers now: "bot" (a chatbot is running), "human" (a person took over), or null. */
     handler?: 'bot' | 'human' | null;
     /** A chatbot is live on this conversation's number, so it can be handed (back) to the bot. */

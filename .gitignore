@@ -7,3 +7,6 @@ next-env.d.ts
 *.tsbuildinfo
 .DS_Store
 npm-debug.log*
+
+# Playwright end-to-end runs
+/e2e-results/

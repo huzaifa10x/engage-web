@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import {
     BracesIcon,
     CalculatorIcon,
@@ -77,6 +77,8 @@ export type FlowGraph = { nodes: FlowNode[] };
 export type FlowIssue = { level: 'error' | 'warning'; code?: string; node_id: string | null; output_id?: string | null; message: string; fix?: string };
 
 export type FlowSettings = {
+    /** Engine behaviour: 1 = as before November 2026 (existing flows), 2 = current. Changed only by “Upgrade” in Bot settings. */
+    engine_level: 1 | 2;
     reminder_minutes: number | null;
     reminder_text: string;
     abandon_minutes: number;
@@ -112,6 +114,12 @@ export type ChatbotFlow = {
     published_at: string | null;
     has_unpublished_changes: boolean;
     draft_updated_at: string | null;
+    /** Bumped by every saved draft; sent back with saves and publishes so nobody overwrites a teammate. */
+    draft_revision: number;
+    draft_updated_by: string | null;
+    engine_level: 1 | 2;
+    published_engine_level: 1 | 2 | null;
+    start_priority: number;
     archived_at: string | null;
     activate_at: string | null;
     deactivate_at: string | null;
@@ -151,6 +159,7 @@ export type ChatbotOptions = {
     tags: string[];
     segments: { id: string; name: string }[];
     members: { id: string; name: string }[];
+    teams: { id: string; name: string }[];
     templates: {
         name: string;
         language: string;
@@ -225,6 +234,11 @@ export type NodeStats = {
 
 export type ChatbotAnalytics = {
     days: number;
+    /** current: the published version, each step counted over the versions where it was identical · version: one version · all: by step id */
+    scope: 'current' | 'version' | 'all';
+    version: number | null;
+    versions: { version: number; published_at: string | null; sessions: number; changed_steps: number | null }[];
+    outcomes: { label: string; count: number }[];
     sessions: {
         started: number;
         running: number;
@@ -262,7 +276,7 @@ export type NodeComment = {
 
 export type HistoryEntry = { action: string; actor: string; meta: Record<string, unknown> | null; created_at: string };
 
-export type ChatbotWorkspace = { variables: Record<string, string>; suggestions: Record<string, string>; approvals: boolean };
+export type ChatbotWorkspace = { variables: Record<string, string>; suggestions: Record<string, string>; approvals: boolean; test_endpoints: string[] };
 
 type Data<T> = { data: T };
 
@@ -277,7 +291,9 @@ export const chatbotKeys = {
     snippets: ['chatbots', 'snippets'] as const,
     comments: (id: string) => ['chatbots', 'comments', id] as const,
     history: (id: string) => ['chatbots', 'history', id] as const,
-    analytics: (id: string, days: number) => ['chatbots', 'analytics', id, days] as const,
+    analytics: (id: string, days: number, version = 'current') => ['chatbots', 'analytics', id, days, version] as const,
+    runs: (filters: Record<string, string>) => ['chatbots', 'runs', filters] as const,
+    run: (id: string) => ['chatbots', 'run', id] as const,
 };
 
 export const useChatbots = (filters: Record<string, string> = {}, enabled = true) =>
@@ -329,11 +345,125 @@ export const useChatbotComments = (id: string, enabled = true) =>
 export const useChatbotHistory = (id: string, enabled = true) =>
     useQuery({ queryKey: chatbotKeys.history(id), queryFn: () => api<Data<HistoryEntry[]>>(`chatbots/${id}/history`).then((r) => r.data), enabled });
 
-export const useChatbotAnalytics = (id: string, days: number, enabled = true) =>
+export const useChatbotAnalytics = (id: string, days: number, enabled = true, version = 'current') =>
     useQuery({
-        queryKey: chatbotKeys.analytics(id, days),
-        queryFn: () => api<Data<ChatbotAnalytics>>(`chatbots/${id}/analytics`, { query: { days } }).then((r) => r.data),
+        queryKey: chatbotKeys.analytics(id, days, version),
+        queryFn: () => api<Data<ChatbotAnalytics>>(`chatbots/${id}/analytics`, { query: { days, version } }).then((r) => r.data),
         enabled,
+    });
+
+// ── Start rules ────────────────────────────────────────────────────────────────────────────
+
+export type StartRuleKind = 'campaign' | 'qr' | 'ad' | 'keyword' | 'greeting' | 'default' | 'after_hours';
+
+export type StartRule = {
+    flow_id: string;
+    name: string;
+    position: number;
+    priority: number;
+    status: 'live' | 'paused' | 'draft';
+    kinds: StartRuleKind[];
+    keywords: string[];
+    keyword_match: 'exact' | 'starts' | 'contains' | null;
+    pattern: string | null;
+    qr_code: string | null;
+    campaign_buttons: string[];
+    after_hours: boolean;
+    reentry: 'always' | 'once' | 'cooldown';
+    cooldown_hours: number | null;
+    published: boolean;
+};
+
+export type StartRuleOverlap = {
+    flows: { id: string; name: string }[];
+    example: string;
+    winner: { id: string; name: string };
+    same_kind: boolean;
+    text: string;
+};
+
+export type StartRulesNumber = {
+    phone_number_id: string;
+    display_phone_number: string | null;
+    verified_name: string | null;
+    rules: StartRule[];
+    overlaps: StartRuleOverlap[];
+};
+
+export const useStartRules = (enabled = true) =>
+    useQuery({
+        queryKey: ['chatbots', 'start-rules'],
+        queryFn: () => api<Data<StartRulesNumber[]>>('chatbots/start-rules').then((r) => r.data),
+        enabled,
+    });
+
+export const orderStartRules = (phoneNumberId: string, flowIds: string[]) =>
+    api<Data<StartRulesNumber[]>>('chatbots/start-rules/order', { method: 'PUT', body: { phone_number_id: phoneNumberId, flow_ids: flowIds } }).then(
+        (r) => r.data,
+    );
+
+export const testStartRules = (body: { phone_number_id: string; text: string; button?: boolean; from_ad?: boolean; first_message?: boolean }) =>
+    api<Data<{ flow: { id: string; name: string } | null; reason: string | null; text: string }>>('chatbots/start-rules/test', { method: 'POST', body }).then(
+        (r) => r.data,
+    );
+
+// ── Runs & Activity ────────────────────────────────────────────────────────────────────────
+
+export type ChatbotRun = {
+    id: string;
+    flow: { id: string; name: string };
+    version: number;
+    status: 'active' | 'waiting' | 'handed_off' | 'completed' | 'abandoned' | 'stopped';
+    ended_reason: string | null;
+    outcome: string | null;
+    steps: number;
+    contact: { id: string; name: string; phone: string | null } | null;
+    conversation_id: string;
+    current_node: string | null;
+    started_at: string | null;
+    ended_at: string | null;
+};
+
+export type RunEvent = {
+    seq: number;
+    at: string | null;
+    node_id: string;
+    node: string;
+    kind: 'customer' | 'bot' | 'note' | 'path' | 'enter' | 'abandon' | 'complete' | 'handoff' | 'error';
+    text?: string | null;
+    type?: string;
+    status?: string;
+    error?: string | null;
+    output?: string | null;
+    label?: string | null;
+    detail?: string | null;
+};
+
+export type ChatbotRunDetail = Omit<ChatbotRun, 'current_node' | 'outcome' | 'steps'> & {
+    ended_node: { id: string; title: string } | null;
+    current_node: { id: string; title: string } | null;
+    answers: Record<string, unknown>;
+    complete_log: boolean;
+    timeline: RunEvent[];
+};
+
+export const useChatbotRuns = (filters: Record<string, string>, enabled = true) =>
+    useInfiniteQuery({
+        queryKey: chatbotKeys.runs(filters),
+        queryFn: ({ pageParam }) =>
+            api<{ data: ChatbotRun[]; meta: { more: boolean; next_before: string | null } }>('chatbots/runs', {
+                query: { ...filters, ...(pageParam ? { before: pageParam } : {}) },
+            }),
+        initialPageParam: '' as string,
+        getNextPageParam: (last) => last.meta.next_before ?? undefined,
+        enabled,
+    });
+
+export const useChatbotRun = (id: string | null) =>
+    useQuery({
+        queryKey: chatbotKeys.run(id ?? 'none'),
+        queryFn: () => api<Data<ChatbotRunDetail>>(`chatbots/runs/${id}`).then((r) => r.data),
+        enabled: id !== null,
     });
 
 export const createChatbot = (body: {
@@ -356,10 +486,32 @@ export const saveChatbot = (
         editors: string[] | null;
         activate_at: string | null;
         deactivate_at: string | null;
+        base_revision: number;
     }>,
 ) => api<Data<ChatbotFlowDetail>>(`chatbots/${id}`, { method: 'PATCH', body }).then((r) => r.data);
 
-export const publishChatbot = (id: string) => api<Data<ChatbotFlowDetail>>(`chatbots/${id}/publish`, { method: 'POST' }).then((r) => r.data);
+/** The 409 a save or publish gets when a teammate saved a newer draft first. */
+export type DraftConflict = { revision: number; name: string; draft: FlowGraph; settings: FlowSettings; edited_by: string | null; edited_at: string | null };
+
+export const isDraftConflict = (e: unknown): e is { status: 409; code: 'draft_conflict'; details: DraftConflict } =>
+    typeof e === 'object' && e !== null && (e as { status?: number }).status === 409 && (e as { code?: string }).code === 'draft_conflict';
+
+export type DraftRevision = { revision: number; name: string; steps: number; by: string | null; created_at: string | null };
+
+export const useChatbotRevisions = (id: string, enabled: boolean) =>
+    useQuery({
+        queryKey: [...chatbotKeys.flow(id), 'revisions'],
+        queryFn: () => api<Data<DraftRevision[]>>(`chatbots/${id}/revisions`).then((r) => r.data),
+        enabled,
+    });
+
+export const getChatbotRevision = (id: string, revision: number) =>
+    api<Data<{ revision: number; name: string; draft: FlowGraph; settings: FlowSettings; created_at: string | null }>>(
+        `chatbots/${id}/revisions/${revision}`,
+    ).then((r) => r.data);
+
+export const publishChatbot = (id: string, revision?: number) =>
+    api<Data<ChatbotFlowDetail>>(`chatbots/${id}/publish`, { method: 'POST', body: revision !== undefined ? { revision } : undefined }).then((r) => r.data);
 
 export const activateChatbot = (id: string, active: boolean, replace = false) =>
     api<Data<ChatbotFlowDetail>>(`chatbots/${id}/activate`, { method: 'POST', body: { active, replace } }).then((r) => r.data);
@@ -385,9 +537,28 @@ export const restoreChatbotVersion = (id: string, version: number) =>
 export const setChatbotWebhook = (id: string, enabled: boolean) =>
     api<Data<ChatbotFlowDetail>>(`chatbots/${id}/webhook`, { method: 'POST', body: { enabled } }).then((r) => r.data);
 
+/** Test chat conditions. Integrations are dry runs unless `integrations: 'live'` with confirmation and a reason (and test endpoints set). */
+export type TestOptions = {
+    number_id?: string | null;
+    window?: 'open' | 'closed';
+    api_mode?: 'success' | 'error' | 'timeout';
+    source?: 'meta_ad' | 'google_ads' | 'paid_other' | null;
+    integrations?: 'mock' | 'live';
+    confirm_live?: boolean;
+    live_reason?: string;
+};
+
 export const testChatbot = (
     id: string,
-    body: { test_id?: string | null; contact_id?: string | null; text?: string; payload?: string; type?: string; action?: 'timeout'; language?: string | null },
+    body: {
+        test_id?: string | null;
+        contact_id?: string | null;
+        text?: string;
+        payload?: string;
+        type?: string;
+        action?: 'timeout';
+        language?: string | null;
+    } & TestOptions,
 ) => api<Data<TestTurn>>(`chatbots/${id}/test`, { method: 'POST', body }).then((r) => r.data);
 
 export const addChatbotComment = (id: string, nodeId: string, body: string) =>
@@ -399,7 +570,7 @@ export const resolveChatbotComment = (id: string, commentId: string, resolved: b
 export const deleteChatbotComment = (id: string, commentId: string) =>
     api<Data<NodeComment[]>>(`chatbots/${id}/comments/${commentId}`, { method: 'DELETE' }).then((r) => r.data);
 
-export const saveChatbotWorkspace = (body: Partial<{ variables: Record<string, string>; approvals: boolean }>) =>
+export const saveChatbotWorkspace = (body: Partial<{ variables: Record<string, string>; approvals: boolean; test_endpoints: string[] }>) =>
     api<Data<ChatbotWorkspace>>('chatbots/workspace', { method: 'PUT', body }).then((r) => r.data);
 
 export const saveChatbotSnippet = (body: { id?: string; name: string; body: string }) =>

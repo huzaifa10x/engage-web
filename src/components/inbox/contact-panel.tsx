@@ -20,10 +20,11 @@ import { useStored } from '@/hooks/use-stored';
 import { api, errorMessage } from '@/lib/api';
 import { dateTime, humanize, timeLeft } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { keys, useAssignees } from '@/lib/queries';
+import { keys, useAssignees, useInboxTeams } from '@/lib/queries';
 import type { Contact, Conversation } from '@/lib/types';
 
 const UNASSIGNED = '__none__';
+const NO_TEAM = '__no_team__';
 
 /**
  * Contact details, assignment, consent, stage and status for the open chat. On screens narrower than
@@ -33,6 +34,7 @@ export function ContactPanel({ conversation, open = false, onClose }: { conversa
     const { can, membership } = useSession();
     const qc = useQueryClient();
     const assignees = useAssignees(conversation.id, can(P.InboxAssign));
+    const teams = useInboxTeams();
     const contact = conversation.contact;
     const [width, setWidth] = useStored<number>('engage.inbox.panel-width', 320);
     const [crmOpen, setCrmOpen] = useState(false);
@@ -43,7 +45,7 @@ export function ContactPanel({ conversation, open = false, onClose }: { conversa
     };
 
     const update = useMutation({
-        mutationFn: (body: { status?: 'open' | 'closed'; assigned_membership_id?: string | null }) =>
+        mutationFn: (body: { status?: 'open' | 'closed'; assigned_membership_id?: string | null; assigned_team_id?: string | null }) =>
             api(`conversations/${conversation.id}`, { method: 'PATCH', body }),
         onSuccess: refresh,
         onError: (e) => toast.error(errorMessage(e)),
@@ -167,6 +169,31 @@ export function ContactPanel({ conversation, open = false, onClose }: { conversa
                         </span>
                     )}
                 </div>
+                {((teams.data ?? []).length > 0 || conversation.assigned_team_id) && (
+                    <div className="grid gap-1.5">
+                        <span className="text-muted-foreground">Team</span>
+                        {can(P.InboxAssign) ? (
+                            <Select
+                                value={conversation.assigned_team_id ?? NO_TEAM}
+                                onValueChange={(v) => update.mutate({ assigned_team_id: v === NO_TEAM ? null : v })}
+                            >
+                                <SelectTrigger size="sm" aria-label="Team">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value={NO_TEAM}>No team</SelectItem>
+                                    {(teams.data ?? []).map((t) => (
+                                        <SelectItem key={t.id} value={t.id}>
+                                            {t.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        ) : (
+                            <span className="font-medium">{(teams.data ?? []).find((t) => t.id === conversation.assigned_team_id)?.name ?? 'No team'}</span>
+                        )}
+                    </div>
+                )}
             </section>
 
             <section className="grid gap-3 px-5 py-4 text-[13px]">

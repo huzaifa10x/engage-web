@@ -2,3 +2,5 @@ node_modules
 .next
 package-lock.json
 *.md
+
+e2e-results

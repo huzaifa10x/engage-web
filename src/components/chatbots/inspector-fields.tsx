@@ -530,7 +530,7 @@ export function TargetPicker({
             }
         >
             <Select value={isVar ? VAR_PREFIX : (value ?? undefined)} onValueChange={(v) => onChange(v === VAR_PREFIX ? 'var:answer' : v)}>
-                <SelectTrigger>
+                <SelectTrigger aria-label={label}>
                     <SelectValue placeholder="Choose where to save…" />
                 </SelectTrigger>
                 <SelectContent>
@@ -560,18 +560,38 @@ export function TargetPicker({
 export function AssignPicker({ c, set, options, noneLabel }: { c: NodeConfig; set: Patch; options: ChatbotOptions | undefined; noneLabel: string }) {
     return (
         <>
-            <Row label="Assign the conversation" hint="Teams follow your inbox routing; pick a teammate to send it to one person.">
+            <Row
+                label="Assign the conversation"
+                hint="An inbox team gives it to that team’s least busy member who can reply on this number (Team & Roles → Inbox teams)."
+            >
                 <Select value={c.assign ?? 'none'} onValueChange={(assign) => set({ assign })}>
-                    <SelectTrigger>
+                    <SelectTrigger aria-label="Assign the conversation">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="none">{noneLabel}</SelectItem>
                         <SelectItem value="auto">The least busy teammate on this number</SelectItem>
                         <SelectItem value="member">A specific teammate</SelectItem>
+                        <SelectItem value="team">An inbox team</SelectItem>
                     </SelectContent>
                 </Select>
             </Row>
+            {c.assign === 'team' && (
+                <Row label="Team" hint={(options?.teams ?? []).length === 0 ? 'No inbox teams yet: create them in Team & Roles → Inbox teams.' : undefined}>
+                    <Select value={c.team_id ?? undefined} onValueChange={(team_id) => set({ team_id })}>
+                        <SelectTrigger aria-label="Inbox team">
+                            <SelectValue placeholder="Choose a team…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {(options?.teams ?? []).map((t) => (
+                                <SelectItem key={t.id} value={t.id}>
+                                    {t.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </Row>
+            )}
             {c.assign === 'member' && (
                 <Row label="Teammate">
                     <Select value={c.member_id ?? undefined} onValueChange={(member_id) => set({ member_id })}>

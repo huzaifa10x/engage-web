@@ -219,6 +219,8 @@ export type ConversationFilters = {
     phone_number_id?: string | null;
     status?: 'open' | 'closed';
     assigned?: 'me' | 'unassigned' | 'others' | 'any';
+    /** Only conversations given to this inbox team. */
+    team?: string;
     /** Chatbot views: handled by the bot now, waiting for the customer, or how the bot ended. */
     view?: 'bot' | 'waiting' | 'abandoned' | 'completed' | 'handed_off';
     unread?: boolean;
@@ -229,6 +231,20 @@ export type ConversationFilters = {
     /** "Arrived after hours" (still needing a reply). */
     after_hours?: boolean;
 };
+
+/** Inbox teams: named groups of teammates a conversation or a chatbot handover can go to. */
+export type InboxTeam = { id: string; name: string; member_ids: string[]; open_conversations: number };
+
+export const useInboxTeams = (enabled = true) =>
+    useQuery({ queryKey: ['inbox', 'teams'], queryFn: () => api<{ data: InboxTeam[] }>('inbox/teams').then((r) => r.data), enabled, staleTime: 60_000 });
+
+export const saveInboxTeam = (team: { id?: string; name: string; member_ids: string[] }) =>
+    api<{ data: InboxTeam[] }>(team.id ? `inbox/teams/${team.id}` : 'inbox/teams', {
+        method: team.id ? 'PUT' : 'POST',
+        body: { name: team.name, member_ids: team.member_ids },
+    }).then((r) => r.data);
+
+export const deleteInboxTeam = (id: string) => api<void>(`inbox/teams/${id}`, { method: 'DELETE' });
 
 export const useConversations = (filters: ConversationFilters, refetchInterval: number | false = false) =>
     useInfiniteQuery({

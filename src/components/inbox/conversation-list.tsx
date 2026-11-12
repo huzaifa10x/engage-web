@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { shortTime } from '@/lib/format';
-import { type ConversationFilters, useConversationCounts, useConversations, useInboxSettings } from '@/lib/queries';
+import { type ConversationFilters, useConversationCounts, useConversations, useInboxSettings, useInboxTeams } from '@/lib/queries';
 import type { Conversation } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -92,6 +92,8 @@ export function ConversationList({
     const [unread, setUnread] = useState(false);
     const [snoozed, setSnoozed] = useState(false);
     const [view, setView] = useState<View>('all');
+    const [team, setTeam] = useState('all');
+    const teams = useInboxTeams();
     const [search, setSearch] = useState('');
     const [q, setQ] = useState('');
 
@@ -100,6 +102,7 @@ export function ConversationList({
         {
             phone_number_id: phoneNumberId,
             assigned,
+            team: team === 'all' ? undefined : team,
             status: status === 'all' ? undefined : status,
             unread,
             snoozed: snoozed || undefined,
@@ -203,6 +206,21 @@ export function ConversationList({
                             ))}
                         </SelectContent>
                     </Select>
+                    {(teams.data ?? []).length > 0 && (
+                        <Select value={team} onValueChange={setTeam}>
+                            <SelectTrigger size="sm" className="w-28 shrink-0" aria-label="Team">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All teams</SelectItem>
+                                {(teams.data ?? []).map((t) => (
+                                    <SelectItem key={t.id} value={t.id}>
+                                        {t.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
                     <Select value={status} onValueChange={(v) => setStatus(v as 'all' | 'open' | 'closed')}>
                         <SelectTrigger size="sm" className="ml-auto w-24 shrink-0" aria-label="Status">
                             <SelectValue />

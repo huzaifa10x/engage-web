@@ -56,6 +56,7 @@ import {
 import type { UploadedMedia } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
+import { BookingWindow, FALLBACK_TYPES, FallbackTemplatePicker, MenuAnswerFields, OutcomeInput, SampleResponse } from './inspector-extras';
 import {
     AssignPicker,
     Choices,
@@ -233,6 +234,10 @@ export function NodeInspector({
                     )}
 
                     {translating ? <TranslationEditor ctx={ctx} lang={lang} /> : <Editor ctx={ctx} onWebhook={onWebhook} />}
+
+                    {!translating && FALLBACK_TYPES.has(node.type) && (
+                        <FallbackTemplatePicker c={node.config} set={set} options={options} settings={settings} />
+                    )}
 
                     {isInput(node) && !translating && <NoMatch ctx={ctx} />}
 
@@ -712,10 +717,16 @@ function Editor({ ctx, onWebhook }: { ctx: Ctx; onWebhook: (enabled: boolean) =>
                         onChange={(buttons) => set({ buttons })}
                     />
                     {(c.buttons ?? []).length >= 3 && <Hint>Need more than 3 options? Use a List menu block (up to 10 rows).</Hint>}
+                    <MenuAnswerFields c={c} set={set} options={options} vars={vars} />
                 </>
             );
         case 'list':
-            return <ListEditor ctx={ctx} text={text('Message', LIMITS.body, undefined, 'Pick a category 👇')} headerFooter={headerFooter} />;
+            return (
+                <>
+                    <ListEditor ctx={ctx} text={text('Message', LIMITS.body, undefined, 'Pick a category 👇')} headerFooter={headerFooter} />
+                    <MenuAnswerFields c={c} set={set} options={options} vars={vars} />
+                </>
+            );
         case 'product':
             return <ProductEditor ctx={ctx} />;
         case 'template':
@@ -804,6 +815,7 @@ function Editor({ ctx, onWebhook }: { ctx: Ctx; onWebhook: (enabled: boolean) =>
                             placeholder="^[A-Z]{2}\d{4}$"
                         />
                     )}
+                    {['date', 'future_date', 'workday'].includes(c.validate) && <BookingWindow c={c} set={set} />}
                     <TargetPicker label="Save the answer to" value={c.save_to} options={options} onChange={(save_to) => set({ save_to })} />
                     <VarText
                         label="When the answer does not fit"
@@ -1188,6 +1200,7 @@ function Editor({ ctx, onWebhook }: { ctx: Ctx; onWebhook: (enabled: boolean) =>
                         hint="Optional. Used when your inbox business hours say you are closed."
                     />
                     <AssignPicker c={c} set={set} options={options} noneLabel="Use the inbox routing rule" />
+                    <OutcomeInput c={c} set={set} />
                     <Toggle
                         label="Leave a summary note"
                         hint="Agents get a note with this bot’s name and the answers collected so far."
@@ -1224,6 +1237,7 @@ function Editor({ ctx, onWebhook }: { ctx: Ctx; onWebhook: (enabled: boolean) =>
                         ]}
                     />
                     {c.action === 'assign' && <AssignPicker c={c} set={set} options={options} noneLabel="Least busy teammate" />}
+                    <OutcomeInput c={c} set={set} />
                 </>
             );
     }
@@ -1887,10 +1901,19 @@ const SUBJECTS: [string, string][] = [
     ['consent', 'Marketing consent'],
     ['language', 'Language'],
     ['last_input', 'Last answer'],
+    ['lead_source', 'Lead source (verified)'],
+    ['campaign', 'Ad / campaign'],
+];
+/** Verified paid sources only: a Meta Click-to-WhatsApp referral, or a paid touch proven by the Growth Hub. */
+const LEAD_SOURCES: [string, string][] = [
+    ['meta_ad', 'Meta ad'],
+    ['google_ads', 'Google Ads'],
+    ['paid_other', 'Other paid source'],
 ];
 const OPS: [string, string][] = [
     ['equals', 'is'],
     ['not_equals', 'is not'],
+    ['in', 'is one of (comma-separated)'],
     ['contains', 'contains'],
     ['not_contains', 'does not contain'],
     ['gt', 'is more than'],
@@ -2009,6 +2032,8 @@ function ConditionEditor({ ctx }: { ctx: Ctx }) {
                                     choices={(options?.segments ?? []).map((s) => [s.id, s.name])}
                                     placeholder="Segment"
                                 />
+                            ) : r.field === 'lead_source' && r.op !== 'in' ? (
+                                <PickOrType value={r.value} onChange={(value) => update(i, { value })} choices={LEAD_SOURCES} placeholder="Source" />
                             ) : r.field === 'consent' ? (
                                 <PickOrType
                                     value={r.value}
@@ -2219,6 +2244,7 @@ function HttpEditor({ ctx }: { ctx: Ctx }) {
                     />
                 </Row>
             </div>
+            <SampleResponse c={c} set={set} />
             <div className="grid gap-1.5">
                 <div className="flex items-center justify-between">
                     <Label className="text-[12px] font-semibold">Save from the response</Label>

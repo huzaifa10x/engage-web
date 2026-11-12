@@ -5,6 +5,7 @@ import { KeyRoundIcon, Loader2Icon, PlusIcon, Trash2Icon, XIcon } from 'lucide-r
 import { useState } from 'react';
 import { toast } from 'sonner';
 
+import { useSession } from '@/components/app/session';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -22,6 +23,7 @@ import {
     useChatbotSnippets,
     useChatbotWorkspace,
 } from '@/lib/chatbots';
+import { P } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
 
 const TABS = [
@@ -29,6 +31,7 @@ const TABS = [
     ['snippets', 'Snippets'],
     ['keys', 'API keys'],
     ['agency', 'Review & approvals'],
+    ['testing', 'Test endpoints'],
 ] as const;
 
 /** Settings shared by every flow of the workspace. */
@@ -70,6 +73,7 @@ export function WorkspaceDialog({
                 {open && tab === 'snippets' && <Snippets canManage={canManage} />}
                 {open && tab === 'keys' && <Keys canManage={canManage} />}
                 {open && tab === 'agency' && <Agency canPublish={canPublish} />}
+                {open && tab === 'testing' && <TestEndpoints />}
             </DialogContent>
         </Dialog>
     );
@@ -377,6 +381,74 @@ function Agency({ canPublish }: { canPublish: boolean }) {
                     Settings → Team; a flow can also be limited to some editors.
                 </p>
             </div>
+        </div>
+    );
+}
+
+/**
+ * The only addresses a Test chat with live integrations may call (a sandbox CRM, a test Google
+ * Sheet). Set by people who manage integrations; anything not listed stays a dry run.
+ */
+function TestEndpoints() {
+    const { can } = useSession();
+    const allowed = can(P.IntegrationsManage);
+    const qc = useQueryClient();
+    const ws = useChatbotWorkspace();
+    const [rows, setRows] = useState<string[] | null>(null);
+    const [busy, setBusy] = useState(false);
+    const list = rows ?? ws.data?.test_endpoints ?? [];
+
+    return (
+        <div className="space-y-3">
+            <p className="text-[12.5px] text-muted-foreground">
+                Tests use each API and Sheets step’s sample answer and never call out. Someone who manages integrations can allow real calls in a test, with a
+                reason; even then only these addresses are called, and every call is recorded in the audit log. Use https addresses of sandbox systems, for
+                example https://sandbox.crm.example.com/ or one Google Apps Script link.
+            </p>
+            {list.map((v, i) => (
+                <div key={i} className="flex gap-2">
+                    <Input
+                        value={v}
+                        disabled={!allowed}
+                        onChange={(e) => setRows(list.map((x, j) => (j === i ? e.target.value : x)))}
+                        placeholder="https://sandbox.example.com/"
+                        aria-label={`Test endpoint ${i + 1}`}
+                        className="font-mono text-[12.5px]"
+                    />
+                    {allowed && (
+                        <Button variant="ghost" size="icon" onClick={() => setRows(list.filter((_, j) => j !== i))} aria-label="Remove">
+                            <XIcon />
+                        </Button>
+                    )}
+                </div>
+            ))}
+            {!allowed && list.length === 0 && <p className="text-[12.5px]">No test endpoints. Only people who manage integrations can add them.</p>}
+            {allowed && (
+                <div className="flex justify-between">
+                    <Button variant="outline" size="sm" disabled={list.length >= 20} onClick={() => setRows([...list, ''])}>
+                        <PlusIcon /> Add an address
+                    </Button>
+                    <Button
+                        size="sm"
+                        disabled={busy || rows === null}
+                        onClick={async () => {
+                            setBusy(true);
+                            try {
+                                const saved = await saveChatbotWorkspace({ test_endpoints: list.map((x) => x.trim()).filter(Boolean) });
+                                qc.setQueryData(chatbotKeys.workspace, saved);
+                                setRows(null);
+                                toast.success('Test endpoints saved');
+                            } catch (e) {
+                                toast.error(e instanceof ApiError ? (e.firstFieldError('test_endpoints') ?? errorMessage(e)) : errorMessage(e));
+                            } finally {
+                                setBusy(false);
+                            }
+                        }}
+                    >
+                        {busy && <Loader2Icon className="animate-spin" />} Save
+                    </Button>
+                </div>
+            )}
         </div>
     );
 }
