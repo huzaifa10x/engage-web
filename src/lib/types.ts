@@ -761,8 +761,9 @@ export type Campaign = {
     failure_reason: string | null;
     stats: CampaignStats;
     created_at: string | null;
-    /** Marketing also goes to contacts with no recorded opt-in (never to opted-out ones). */
+    /** Also goes to contacts with no recorded opt-in (never to opted-out ones), with where they agreed. */
     include_non_opted_in?: boolean;
+    consent_basis?: string | null;
 };
 
 export type CampaignForm = {
@@ -776,13 +777,15 @@ export type CampaignForm = {
     notes: string | null;
     objective: CampaignObjective | null;
     include_non_opted_in?: boolean;
+    /** Required with include_non_opted_in: where those contacts agreed to receive WhatsApp messages (10–190 characters). */
+    consent_basis?: string | null;
     variables: { header: string[]; body: string[]; buttons: Record<string, string> };
 };
 
 export type CampaignAudience = {
     matched: number;
     eligible: number;
-    /** Marketing: reachable contacts with no recorded opt-in (added when "include non-opted-in" is ticked). */
+    /** Reachable contacts with no recorded opt-in (added when "include non-opted-in" is ticked). */
     not_opted_in?: number;
     category: string | null;
     reach_limit: number | null;
@@ -866,7 +869,7 @@ export type ComplianceSettings = {
 
 export type ConsentEvent = {
     id: string;
-    action: 'opted_in' | 'opted_out' | 'marketing_opted_in' | 'marketing_opted_out' | (string & {});
+    action: 'opted_in' | 'opted_out' | 'marketing_opted_in' | 'marketing_opted_out' | 'consent_declined' | (string & {});
     source: string;
     detail: string | null;
     created_at: string | null;

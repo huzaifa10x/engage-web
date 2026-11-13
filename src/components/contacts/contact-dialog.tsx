@@ -35,13 +35,13 @@ type Values = z.infer<typeof schema>;
 
 const NO_STAGE = '__none__';
 
-type AttributeValue = string | boolean | string[] | undefined;
+export type AttributeValue = string | boolean | string[] | undefined;
 
 const toFormValue = (v: unknown): AttributeValue => (typeof v === 'boolean' ? v : Array.isArray(v) ? v.map(String) : v == null ? '' : String(v));
 const isEmpty = (v: AttributeValue) => v === undefined || v === '' || (Array.isArray(v) && v.length === 0);
 
 /** The right control for each custom field type. */
-function CustomFieldInput({ field, value, onChange }: { field: ContactField; value: AttributeValue; onChange: (v: AttributeValue) => void }) {
+export function CustomFieldInput({ field, value, onChange }: { field: ContactField; value: AttributeValue; onChange: (v: AttributeValue) => void }) {
     const id = `c-f-${field.key}`;
     if (field.type === 'boolean') {
         return (

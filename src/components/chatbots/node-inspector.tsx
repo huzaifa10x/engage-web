@@ -1031,10 +1031,16 @@ function Editor({ ctx, onWebhook }: { ctx: Ctx; onWebhook: (enabled: boolean) =>
                 <>
                     <Hint>
                         Records that the customer agreed to receive messages, marketing included. Put it after their “yes” — for example on a “Yes, send me
-                        offers” button of a Buttons block. (A reply of just “Subscribe” or “Start” is already recorded by the opt-in keywords.) It is saved in
-                        Consent & Privacy › Consent ledger like any other opt-in.
+                        offers” button of a Buttons block. A tapped button always reaches this flow, even one titled “Subscribe” or “Start”; only a typed
+                        keyword is recorded by the opt-in keywords instead. It is saved in Consent & Privacy › Consent ledger like any other opt-in.
                     </Hint>
-                    {text('Confirmation', LIMITS.body, undefined, 'Thank you! You’re subscribed to our updates.', 2)}
+                    {text(
+                        'Confirmation',
+                        LIMITS.body,
+                        'Sent after the opt-in is recorded. Leave empty to send your Consent & Privacy opt-in confirmation.',
+                        'Thank you! You’re subscribed to our updates.',
+                        2,
+                    )}
                 </>
             );
         case 'optout':

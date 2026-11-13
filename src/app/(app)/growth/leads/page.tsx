@@ -59,6 +59,88 @@ function Kpi({ label, value, hint, hero = false }: { label: string; value: strin
     );
 }
 
+const today = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+/** Preset periods, or any start and end date (both included, in the workspace's time zone). */
+function DateRange({ filters, onChange }: { filters: LeadFilters; onChange: (patch: Partial<LeadFilters>) => void }) {
+    const custom = !!(filters.since && filters.until);
+    const [editing, setEditing] = useState(false);
+    const [since, setSince] = useState(filters.since ?? '');
+    const [until, setUntil] = useState(filters.until ?? today());
+    const error = !since || !until ? 'Choose both dates.' : since > until ? 'The start date is after the end date.' : null;
+    const label = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+
+    return (
+        <div className="flex flex-wrap items-center gap-2">
+            <Select
+                value={custom || editing ? 'custom' : String(filters.days ?? 30)}
+                onValueChange={(v) => {
+                    if (v === 'custom') {
+                        setEditing(true);
+                        return;
+                    }
+                    setEditing(false);
+                    onChange({ days: Number(v), since: undefined, until: undefined });
+                }}
+            >
+                <SelectTrigger className="w-auto min-w-36" aria-label="Date range">
+                    <SelectValue>{custom && !editing ? `${label(filters.since!)} – ${label(filters.until!)}` : undefined}</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value="7">Last 7 days</SelectItem>
+                    <SelectItem value="30">Last 30 days</SelectItem>
+                    <SelectItem value="90">Last 90 days</SelectItem>
+                    <SelectItem value="365">Last 12 months</SelectItem>
+                    <SelectItem value="custom">Custom range…</SelectItem>
+                </SelectContent>
+            </Select>
+            {custom && !editing && (
+                <Button type="button" size="sm" variant="ghost" onClick={() => setEditing(true)}>
+                    Change dates
+                </Button>
+            )}
+            {editing && (
+                <form
+                    className="flex flex-wrap items-center gap-2"
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        if (error) return;
+                        setEditing(false);
+                        onChange({ since, until, days: undefined });
+                    }}
+                >
+                    <Input type="date" aria-label="From" value={since} max={until || undefined} onChange={(e) => setSince(e.target.value)} className="w-auto" />
+                    <span className="text-muted-foreground">to</span>
+                    <Input type="date" aria-label="To" value={until} min={since || undefined} onChange={(e) => setUntil(e.target.value)} className="w-auto" />
+                    <Button type="submit" size="sm" disabled={!!error}>
+                        Apply
+                    </Button>
+                    <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                            setEditing(false);
+                            setSince(filters.since ?? '');
+                            setUntil(filters.until ?? today());
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    {error && since && until && (
+                        <span role="alert" className="text-[12.5px] text-bad">
+                            {error}
+                        </span>
+                    )}
+                </form>
+            )}
+        </div>
+    );
+}
+
 function FilterSelect({
     label,
     value,
@@ -363,17 +445,7 @@ function LeadsPage() {
                                     all="Any stage"
                                 />
                             )}
-                            <Select value={String(filters.days ?? 30)} onValueChange={(v) => set({ days: Number(v) })}>
-                                <SelectTrigger className="w-auto min-w-36" aria-label="Date range">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="7">Last 7 days</SelectItem>
-                                    <SelectItem value="30">Last 30 days</SelectItem>
-                                    <SelectItem value="90">Last 90 days</SelectItem>
-                                    <SelectItem value="365">Last 12 months</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <DateRange filters={filters} onChange={(patch) => set(patch)} />
                         </div>
 
                         {leads.isLoading ? (

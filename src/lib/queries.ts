@@ -794,6 +794,9 @@ export type LeadFilters = {
     assigned?: string;
     stage_id?: string;
     days?: number;
+    /** A custom period instead of days: local dates (YYYY-MM-DD), both included. */
+    since?: string;
+    until?: string;
     /** A Meta ad (Tracking Setup id): leads whose original source is that ad. */
     ad?: string;
     /** Drill-down from Analytics → Marketing: the period's new-lead cohort (local dates). */

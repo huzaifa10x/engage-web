@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
+import { BulkEditDialog } from '@/components/contacts/bulk-edit-dialog';
 import { ContactDialog } from '@/components/contacts/contact-dialog';
 import { SourceChip } from '@/components/growth/source-chip';
 import { StageBadge } from '@/components/contacts/stage-badge';
@@ -44,6 +45,7 @@ import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     DropdownMenu,
     DropdownMenuCheckItem,
@@ -94,10 +96,39 @@ export default function ContactsPage() {
     // Numbers shared with the WhatsApp Business app: the only ones contacts can have been synced from.
     const syncNumbers = (usePhoneNumbers().data ?? []).filter((n) => n.onboarding_type === 'coexistence');
     const [exporting, setExporting] = useState(false);
+    // Selected contacts (by id, with the row as shown) for Edit selected. Cleared when the filters change.
+    const [selected, setSelected] = useState<Map<string, Contact>>(new Map());
+    const [bulkEditing, setBulkEditing] = useState(false);
+    const [selectionFor, setSelectionFor] = useState('');
+    const filterKey = JSON.stringify(filters);
+    if (selectionFor !== filterKey) {
+        setSelectionFor(filterKey);
+        if (selected.size > 0) setSelected(new Map());
+    }
+    const MAX_SELECTED = 500;
 
     const contacts = useContacts(filters);
     const rows = contacts.data?.pages.flatMap((p) => p.data) ?? [];
     const counts = useContactCounts(filters).data;
+    const canBulk = can(P.ContactsUpdate);
+    const allShown = rows.length > 0 && rows.every((c) => selected.has(c.id));
+    const someShown = rows.some((c) => selected.has(c.id));
+    const toggle = (c: Contact, on: boolean) =>
+        setSelected((m) => {
+            const next = new Map(m);
+            if (on && next.size < MAX_SELECTED) next.set(c.id, c);
+            if (!on) next.delete(c.id);
+            return next;
+        });
+    const toggleAll = (on: boolean) =>
+        setSelected((m) => {
+            const next = new Map(m);
+            for (const c of rows) {
+                if (on && next.size < MAX_SELECTED) next.set(c.id, c);
+                if (!on) next.delete(c.id);
+            }
+            return next;
+        });
     // One Source filter: how a contact was added (manual, import, inbound …), or the number it was synced from.
     const sourceValue = filters.synced_from ? `synced:${filters.synced_from}` : filters.source ? `source:${filters.source}` : ALL;
     const pickSource = (v: string) =>
@@ -314,6 +345,30 @@ export default function ContactsPage() {
                 </p>
             )}
 
+            {canBulk && selected.size > 0 && (
+                <div
+                    className="sticky top-2 z-10 mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-brand-500/40 bg-brand-50 px-3 py-2 text-[13px] shadow-sm"
+                    role="region"
+                    aria-label="Selected contacts"
+                >
+                    <span className="font-semibold tabular-nums">{number(selected.size)} selected</span>
+                    {selected.size >= MAX_SELECTED && <span className="text-muted-foreground">(the most at once)</span>}
+                    {!allShown && rows.length > 0 && selected.size < MAX_SELECTED && (
+                        <Button variant="ghost" size="sm" onClick={() => toggleAll(true)}>
+                            Select all {number(Math.min(rows.length, MAX_SELECTED))} shown
+                        </Button>
+                    )}
+                    <div className="ml-auto flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setSelected(new Map())}>
+                            Clear selection
+                        </Button>
+                        <Button size="sm" onClick={() => setBulkEditing(true)}>
+                            <PencilIcon /> Edit {number(selected.size)}
+                        </Button>
+                    </div>
+                </div>
+            )}
+
             <Card>
                 {contacts.isLoading ? (
                     <div className="p-5">
@@ -331,6 +386,15 @@ export default function ContactsPage() {
                     <Table>
                         <TableHeader>
                             <TableRow className="hover:bg-transparent">
+                                {canBulk && (
+                                    <TableHead className="w-10">
+                                        <Checkbox
+                                            aria-label="Select all contacts shown"
+                                            checked={allShown ? true : someShown ? 'indeterminate' : false}
+                                            onCheckedChange={(v) => toggleAll(v === true)}
+                                        />
+                                    </TableHead>
+                                )}
                                 <TableHead>Contact</TableHead>
                                 <TableHead>WhatsApp</TableHead>
                                 <TableHead>Tags</TableHead>
@@ -346,7 +410,17 @@ export default function ContactsPage() {
                         </TableHeader>
                         <TableBody>
                             {rows.map((c) => (
-                                <TableRow key={c.id}>
+                                <TableRow key={c.id} data-state={selected.has(c.id) ? 'selected' : undefined}>
+                                    {canBulk && (
+                                        <TableCell>
+                                            <Checkbox
+                                                aria-label={`Select ${c.display_name}`}
+                                                checked={selected.has(c.id)}
+                                                disabled={!selected.has(c.id) && selected.size >= MAX_SELECTED}
+                                                onCheckedChange={(v) => toggle(c, v === true)}
+                                            />
+                                        </TableCell>
+                                    )}
                                     <TableCell>
                                         <div className="flex items-center gap-3">
                                             <Avatar name={c.display_name} />
@@ -452,6 +526,7 @@ export default function ContactsPage() {
             <ImportContactsDialog open={importing} onOpenChange={setImporting} />
             <CrmSettingsDialog open={managing} onOpenChange={setManaging} canEdit={can(P.ContactsUpdate)} onEditSegment={setSegmentEditing} />
             <SegmentDialog open={segmentEditing !== undefined} onOpenChange={(o) => !o && setSegmentEditing(undefined)} segment={segmentEditing ?? null} />
+            <BulkEditDialog open={bulkEditing} onOpenChange={setBulkEditing} contacts={[...selected.values()]} onDone={() => setSelected(new Map())} />
             <ContactDialog open={editing !== undefined} onOpenChange={(o) => !o && setEditing(undefined)} contact={editing ?? null} />
             {messaging && (
                 <NewConversationDialog

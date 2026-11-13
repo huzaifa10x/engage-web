@@ -1,5 +1,6 @@
 'use client';
 
+import { XIcon } from 'lucide-react';
 import { useState } from 'react';
 
 import { matches, PALETTE_MIME } from '@/components/chatbots/block-picker';
@@ -8,14 +9,21 @@ import type { NodeType } from '@/lib/chatbots';
 import { blocksOfKind, KIND_LABEL, KINDS } from './kinds';
 
 /** “Add a step” (left column): plain-word search, grouped Send · Ask · Decide · Do. Click adds after the selected step; drag onto the map. */
-export function StepPalette({ hint, onPick, readOnly }: { hint: string; onPick: (type: NodeType) => void; readOnly: boolean }) {
+export function StepPalette({ hint, onPick, readOnly, onClose }: { hint: string; onPick: (type: NodeType) => void; readOnly: boolean; onClose?: () => void }) {
     const [q, setQ] = useState('');
     const groups = KINDS.map((k) => [k, blocksOfKind(k).filter((b) => matches(b, q))] as const).filter(([, list]) => list.length > 0);
 
     return (
         <aside className="cb-bleft" aria-label="Add a step">
             <div className="cb-scroll">
-                <h3 style={{ fontSize: 14.5 }}>Add a step</h3>
+                <div className="cb-row" style={{ justifyContent: 'space-between' }}>
+                    <h3 style={{ fontSize: 14.5 }}>Add a step</h3>
+                    {onClose && (
+                        <button type="button" className="cb-btn sm cb-iconbtn cb-drawerx" aria-label="Close the step list" onClick={onClose}>
+                            <XIcon className="size-4" />
+                        </button>
+                    )}
+                </div>
                 <input
                     className="cb-in"
                     value={q}

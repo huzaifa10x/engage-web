@@ -28,6 +28,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const fullBleed = pathname.startsWith('/inbox');
     // Chatbots & Flows has its own section menu beside the app sidebar, flush with it.
     const flush = pathname === '/chatbots' || pathname.startsWith('/chatbots/');
+    // Opening Chatbots & Flows folds the main menu to icons so the section's own menu (its submenu)
+    // stays open with room for the work; the toggle shows the full menu again for this visit only,
+    // and the person's own choice for every other page is left alone.
+    const [expandedIn, setExpandedIn] = useState<string | null>(null);
+    const section = flush ? 'chatbots' : null;
+    if (!flush && expandedIn !== null) setExpandedIn(null); // leaving the section: next visit folds again
+    const rail = flush && expandedIn !== section;
+    const menuHidden = flush ? rail : collapsed;
+    const toggleMenu = () => (flush ? setExpandedIn(rail ? section : null) : setCollapsed(!collapsed));
 
     // A module still in review is not reachable in production, not even by typing its address.
     if (!SHOW_UNRELEASED && UNRELEASED_ROUTES.some((r) => pathname === r || pathname.startsWith(`${r}/`))) notFound();
@@ -46,10 +55,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className={cn('flex flex-col', fullBleed ? 'h-dvh overflow-hidden' : 'min-h-dvh')}>
             <ImpersonationBanner />
             <div className={cn('flex flex-1', fullBleed && 'min-h-0')}>
-                {!collapsed && (
+                {rail ? (
                     <aside className="sticky top-0 hidden h-dvh shrink-0 lg:block">
-                        <Sidebar />
+                        <Sidebar rail />
                     </aside>
+                ) : (
+                    !menuHidden && (
+                        <aside className="sticky top-0 hidden h-dvh shrink-0 lg:block">
+                            <Sidebar />
+                        </aside>
+                    )
                 )}
 
                 {mobileOpen && (
@@ -79,14 +94,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                             size="icon-sm"
                             variant="ghost"
                             className="hidden lg:inline-flex"
-                            onClick={() => setCollapsed(!collapsed)}
-                            aria-label={collapsed ? 'Show the sidebar' : 'Hide the sidebar'}
-                            aria-pressed={collapsed}
-                            title={collapsed ? 'Show the sidebar' : 'Hide the sidebar for more room'}
+                            onClick={toggleMenu}
+                            aria-label={menuHidden ? 'Show the full menu' : 'Hide the menu'}
+                            aria-pressed={menuHidden}
+                            title={menuHidden ? 'Show the full menu' : 'Hide the menu for more room'}
                         >
-                            {collapsed ? <PanelLeftOpenIcon /> : <PanelLeftCloseIcon />}
+                            {menuHidden ? <PanelLeftOpenIcon /> : <PanelLeftCloseIcon />}
                         </Button>
-                        {collapsed && (
+                        {menuHidden && !rail && (
                             <span className="hidden lg:inline-flex">
                                 <Logo />
                             </span>

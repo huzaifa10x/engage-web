@@ -11,8 +11,10 @@ import {
     CopyIcon,
     HistoryIcon,
     LayoutDashboardIcon,
+    PanelRightIcon,
     Loader2Icon,
     PlayIcon,
+    PlusIcon,
     Redo2Icon,
     RocketIcon,
     Trash2Icon,
@@ -107,6 +109,10 @@ export function FlowBuilder({ flowId, initialStep = null }: { flowId: string; in
     const [testing, setTesting] = useState(false);
     const [testNode, setTestNode] = useState<string | null>(null);
     const [tab, setTab] = useState<Exclude<RightTab, 'test'>>('step');
+    // Below 1280px the right panel and below 1024px the step list are drawers over the flow (studio.css):
+    // the panel opens with a selected step or a tab, and closes with its own button.
+    const [panelOpen, setPanelOpen] = useState(false);
+    const [paletteOpen, setPaletteOpen] = useState(false);
     const [view, setView] = useStored<'simple' | 'map'>('engage.chatbots.view', 'simple');
     const [insight, setInsight] = useState<InsightMode>('off');
     const [testFrom, setTestFrom] = useState<string | null>(null);
@@ -218,6 +224,12 @@ export function FlowBuilder({ flowId, initialStep = null }: { flowId: string; in
         lastKey.current = null;
         setDirty(true);
     };
+    const selectionKey = [...selection].join(',');
+    const [seenSelection, setSeenSelection] = useState(selectionKey);
+    if (seenSelection !== selectionKey) {
+        setSeenSelection(selectionKey);
+        if (selection.size > 0) setPanelOpen(true);
+    }
     const select = (ids: string[], mode: 'replace' | 'toggle' | 'add' = 'replace') =>
         setSelection((cur) => {
             if (mode === 'replace') return new Set(ids);
@@ -585,6 +597,7 @@ export function FlowBuilder({ flowId, initialStep = null }: { flowId: string; in
     const rightTab = testing ? 'test' : tab;
     const start = graph.nodes.find((n) => n.type === 'start');
     const openTab = (t: RightTab) => {
+        setPanelOpen(true);
         if (t === 'test') {
             void save().then(() => setTesting(true));
         } else {
@@ -669,6 +682,14 @@ export function FlowBuilder({ flowId, initialStep = null }: { flowId: string; in
                         </button>
                     ))}
                 </div>
+                {!readOnly && (
+                    <button type="button" className="cb-btn sm cb-only-narrow-palette" aria-pressed={paletteOpen} onClick={() => setPaletteOpen((v) => !v)}>
+                        <PlusIcon className="size-4" /> Add step
+                    </button>
+                )}
+                <button type="button" className="cb-btn sm cb-only-narrow-panel" aria-pressed={panelOpen} onClick={() => setPanelOpen((v) => !v)}>
+                    <PanelRightIcon className="size-4" /> {panelOpen ? 'Hide panel' : 'Panel'}
+                </button>
                 <span className="cb-spacer" />
                 {!readOnly && (
                     <>
@@ -787,10 +808,14 @@ export function FlowBuilder({ flowId, initialStep = null }: { flowId: string; in
                 </div>
             )}
 
-            <div className="cb-bbody">
+            <div className="cb-bbody" data-panel={panelOpen ? 'open' : 'closed'} data-palette={paletteOpen ? 'open' : 'closed'}>
                 <StepPalette
                     readOnly={readOnly}
-                    onPick={paletteAdd}
+                    onClose={() => setPaletteOpen(false)}
+                    onPick={(type) => {
+                        paletteAdd(type);
+                        setPaletteOpen(false);
+                    }}
                     hint={
                         selectedSingle && graph.nodes.find((n) => n.id === selectedSingle)?.outputs.length
                             ? `New steps go after “${titles.get(selectedSingle)}”. Or use + on any path in the flow.`
@@ -890,26 +915,31 @@ export function FlowBuilder({ flowId, initialStep = null }: { flowId: string; in
                 </div>
 
                 <aside className="cb-bright" aria-label="Step, test, flow settings and history">
-                    <div className="cb-tabs" role="tablist">
-                        {(
-                            [
-                                ['step', 'Step'],
-                                ['test', 'Test'],
-                                ['settings', 'Flow settings'],
-                                ['history', 'History'],
-                            ] as const
-                        ).map(([k, l]) => (
-                            <button
-                                key={k}
-                                type="button"
-                                role="tab"
-                                aria-selected={rightTab === k}
-                                className={rightTab === k ? 'on' : undefined}
-                                onClick={() => openTab(k)}
-                            >
-                                {l}
-                            </button>
-                        ))}
+                    <div className="cb-rbar">
+                        <div className="cb-tabs" role="tablist">
+                            {(
+                                [
+                                    ['step', 'Step'],
+                                    ['test', 'Test'],
+                                    ['settings', 'Flow settings'],
+                                    ['history', 'History'],
+                                ] as const
+                            ).map(([k, l]) => (
+                                <button
+                                    key={k}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={rightTab === k}
+                                    className={rightTab === k ? 'on' : undefined}
+                                    onClick={() => openTab(k)}
+                                >
+                                    {l}
+                                </button>
+                            ))}
+                        </div>
+                        <button type="button" className="cb-btn sm cb-iconbtn cb-drawerx" aria-label="Close the panel" onClick={() => setPanelOpen(false)}>
+                            <XIcon className="size-4" />
+                        </button>
                     </div>
                     {rightTab === 'test' ? (
                         <div className="flex min-h-0 flex-1 flex-col">

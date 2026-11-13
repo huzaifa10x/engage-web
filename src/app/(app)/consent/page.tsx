@@ -29,11 +29,13 @@ const ACTION: Record<string, { label: string; tone: Tone }> = {
     opted_out: { label: 'Opted out', tone: 'bad' },
     marketing_opted_in: { label: 'Marketing resumed', tone: 'good' },
     marketing_opted_out: { label: 'Marketing stopped', tone: 'warn' },
+    consent_declined: { label: 'Declined (No thanks)', tone: 'grey' },
 };
 
 const SOURCE: Record<string, string> = {
     keyword: 'Keyword reply',
-    in_chat_button: 'Subscribe button in chat',
+    in_chat_button: 'Button in chat',
+    chatbot: 'Chatbot',
     agent: 'Recorded by your team',
     import: 'CSV import',
     api: 'API',

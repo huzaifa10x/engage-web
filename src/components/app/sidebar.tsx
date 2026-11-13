@@ -4,7 +4,7 @@ import { ChevronDownIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
-import { Logo } from '@/components/brand/logo';
+import { Logo, LogoMark } from '@/components/brand/logo';
 import { useStored } from '@/hooks/use-stored';
 import { cn } from '@/lib/utils';
 
@@ -24,7 +24,11 @@ function parseGroups(raw: string): Record<string, boolean> {
     );
 }
 
-export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+/**
+ * The app's main menu. `rail`: icons only (64px), for sections with a menu of their own (Chatbots &
+ * Flows), so the section's submenu stays open beside it with room for the work.
+ */
+export function Sidebar({ onNavigate, rail = false }: { onNavigate?: () => void; rail?: boolean }) {
     const pathname = usePathname();
     const { can, me, membership } = useSession();
     const roleKey = membership.role?.key;
@@ -47,6 +51,73 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         const b = h?.split('?')[0];
         return !!b && (pathname === b || pathname.startsWith(`${b}/`));
     };
+
+    if (rail) {
+        const growth = me.growth?.tier === 'full';
+        const growthAny = growth || me.growth?.tier === 'chip';
+
+        return (
+            <nav aria-label="Main" className="flex h-full w-16 flex-col items-center bg-sidebar text-sidebar-foreground">
+                <div className="flex h-14 items-center">
+                    <LogoMark dark />
+                </div>
+                <div className="flex w-full flex-1 flex-col items-center gap-0.5 overflow-y-auto px-2 pb-4">
+                    {NAV.map((section, si) => {
+                        const items = section.items.filter(
+                            (i) =>
+                                i.href &&
+                                !i.heading &&
+                                isVisible(i) &&
+                                (!i.permission || can(i.permission)) &&
+                                (!i.growth || growth) &&
+                                (!i.growthAny || growthAny) &&
+                                roleAllows(i, roleKey),
+                        );
+                        if (items.length === 0) return null;
+
+                        return (
+                            <ul
+                                key={section.title}
+                                className={cn('grid w-full gap-0.5', si > 0 && 'mt-2 border-t border-white/10 pt-2')}
+                                aria-label={section.title}
+                            >
+                                {items.map((item) => {
+                                    const Icon = item.icon;
+                                    const deeper = items.some(
+                                        (o) =>
+                                            o !== item &&
+                                            o.href &&
+                                            o.href.length > (item.href?.length ?? 0) &&
+                                            matches(o.href) &&
+                                            o.href.startsWith(item.href ?? ''),
+                                    );
+                                    const active = matches(item.href) && !deeper && item.label !== 'Billing';
+
+                                    return (
+                                        <li key={item.label}>
+                                            <Link
+                                                href={item.href!}
+                                                onClick={onNavigate}
+                                                aria-current={active ? 'page' : undefined}
+                                                aria-label={item.label}
+                                                title={item.label}
+                                                className={cn(
+                                                    'mx-auto flex size-10 items-center justify-center rounded-lg transition-colors hover:bg-sidebar-2 hover:text-white',
+                                                    active && 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground',
+                                                )}
+                                            >
+                                                <Icon className="size-[18px]" />
+                                            </Link>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        );
+                    })}
+                </div>
+            </nav>
+        );
+    }
 
     return (
         <nav aria-label="Main" className="flex h-full w-64 flex-col bg-sidebar text-sidebar-foreground">
