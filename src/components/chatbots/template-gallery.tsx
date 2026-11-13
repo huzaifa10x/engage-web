@@ -61,11 +61,14 @@ export function TemplateGallery({
     onOpenChange,
     folder,
     kind = 'bot',
+    initial = null,
 }: {
     open: boolean;
     onOpenChange: (o: boolean) => void;
     folder?: string | null;
     kind?: 'bot' | 'subflow';
+    /** Opens straight on this template's form (Templates page › Use this; My Flows › Start from scratch = "blank"). */
+    initial?: string | null;
 }) {
     const router = useRouter();
     const templates = useChatbotTemplates(open);
@@ -89,6 +92,7 @@ export function TemplateGallery({
     }
     const variables = templates.data?.meta.variables ?? {};
     const numbers = (options.data?.numbers ?? []).filter((n) => n.status !== 'disconnected');
+    const [autoPicked, setAutoPicked] = useState<string | null>(null);
 
     const choose = (t: FlowTemplate) => {
         setPicked(t);
@@ -98,6 +102,13 @@ export function TemplateGallery({
         setValues(init);
         if (numbers.length === 1) setNumber(numbers[0].id);
     };
+
+    if (open && initial && autoPicked !== initial && templates.data) {
+        setAutoPicked(initial);
+        const t = templates.data.data.find((x) => x.key === initial);
+        if (t) choose(t);
+    }
+    if (!open && autoPicked !== null) setAutoPicked(null);
 
     const create = async () => {
         if (kind === 'bot' && !picked) return;

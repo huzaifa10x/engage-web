@@ -26,6 +26,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // The inbox is an app-within-the-app: full height, panes scroll independently.
     const pathname = usePathname();
     const fullBleed = pathname.startsWith('/inbox');
+    // Chatbots & Flows has its own section menu beside the app sidebar, flush with it.
+    const flush = pathname === '/chatbots' || pathname.startsWith('/chatbots/');
 
     // A module still in review is not reachable in production, not even by typing its address.
     if (!SHOW_UNRELEASED && UNRELEASED_ROUTES.some((r) => pathname === r || pathname.startsWith(`${r}/`))) notFound();
@@ -103,7 +105,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     </header>
                     <TrialBanner />
                     <ChannelDisconnectedBanner />
-                    <main className={cn(fullBleed ? 'min-h-0 flex-1' : 'mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:py-8')}>{children}</main>
+                    <main
+                        className={cn(
+                            fullBleed ? 'min-h-0 flex-1' : flush ? 'flex min-w-0 flex-1' : 'mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:py-8',
+                        )}
+                    >
+                        {children}
+                    </main>
                 </div>
             </div>
         </div>

@@ -7,7 +7,6 @@ import { toast } from 'sonner';
 
 import { useSession } from '@/components/app/session';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -24,62 +23,9 @@ import {
     useChatbotWorkspace,
 } from '@/lib/chatbots';
 import { P } from '@/lib/permissions';
-import { cn } from '@/lib/utils';
 
-const TABS = [
-    ['business', 'Business details'],
-    ['snippets', 'Snippets'],
-    ['keys', 'API keys'],
-    ['agency', 'Review & approvals'],
-    ['testing', 'Test endpoints'],
-] as const;
-
-/** Settings shared by every flow of the workspace. */
-export function WorkspaceDialog({
-    open,
-    onOpenChange,
-    canManage,
-    canPublish,
-}: {
-    open: boolean;
-    onOpenChange: (o: boolean) => void;
-    canManage: boolean;
-    canPublish: boolean;
-}) {
-    const [tab, setTab] = useState<(typeof TABS)[number][0]>('business');
-
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-                <DialogHeader>
-                    <DialogTitle>Chatbot workspace</DialogTitle>
-                    <DialogDescription>Shared by all your flows: business details, saved text, API keys and the review rule.</DialogDescription>
-                </DialogHeader>
-                <div className="flex gap-1 rounded-lg bg-muted p-1">
-                    {TABS.map(([k, l]) => (
-                        <button
-                            key={k}
-                            onClick={() => setTab(k)}
-                            className={cn(
-                                'flex-1 rounded-md px-2 py-1.5 text-[12.5px] font-semibold',
-                                tab === k ? 'bg-card shadow-xs' : 'text-muted-foreground',
-                            )}
-                        >
-                            {l}
-                        </button>
-                    ))}
-                </div>
-                {open && tab === 'business' && <Business canManage={canManage} />}
-                {open && tab === 'snippets' && <Snippets canManage={canManage} />}
-                {open && tab === 'keys' && <Keys canManage={canManage} />}
-                {open && tab === 'agency' && <Agency canPublish={canPublish} />}
-                {open && tab === 'testing' && <TestEndpoints />}
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-function Business({ canManage }: { canManage: boolean }) {
+/** Shared by every flow (Chatbots › Bot settings): business details, saved replies, API keys, test endpoints and the review rule. */
+export function Business({ canManage }: { canManage: boolean }) {
     const qc = useQueryClient();
     const ws = useChatbotWorkspace();
     const [rows, setRows] = useState<[string, string][] | null>(null);
@@ -172,7 +118,7 @@ function Business({ canManage }: { canManage: boolean }) {
     );
 }
 
-function Snippets({ canManage }: { canManage: boolean }) {
+export function Snippets({ canManage }: { canManage: boolean }) {
     const qc = useQueryClient();
     const snippets = useChatbotSnippets();
     const [name, setName] = useState('');
@@ -255,7 +201,7 @@ function Snippets({ canManage }: { canManage: boolean }) {
     );
 }
 
-function Keys({ canManage }: { canManage: boolean }) {
+export function Keys({ canManage }: { canManage: boolean }) {
     const qc = useQueryClient();
     const secrets = useChatbotSecrets();
     const [name, setName] = useState('');
@@ -344,7 +290,7 @@ function Keys({ canManage }: { canManage: boolean }) {
     );
 }
 
-function Agency({ canPublish }: { canPublish: boolean }) {
+export function Agency({ canPublish }: { canPublish: boolean }) {
     const qc = useQueryClient();
     const ws = useChatbotWorkspace();
 
@@ -389,7 +335,7 @@ function Agency({ canPublish }: { canPublish: boolean }) {
  * The only addresses a Test chat with live integrations may call (a sandbox CRM, a test Google
  * Sheet). Set by people who manage integrations; anything not listed stays a dry run.
  */
-function TestEndpoints() {
+export function TestEndpoints() {
     const { can } = useSession();
     const allowed = can(P.IntegrationsManage);
     const qc = useQueryClient();

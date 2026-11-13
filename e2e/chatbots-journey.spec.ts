@@ -35,26 +35,25 @@ test('create, configure, test, fix, publish, run and review a flow', async ({ pa
 
     // Create flow (from the real-estate template).
     await page.goto('/chatbots');
-    await page.getByRole('button', { name: 'New flow' }).click();
-    await page.getByText('Real estate — lead qualification').click();
+    await page.getByRole('button', { name: '+ Create flow' }).click();
+    await page.getByRole('button', { name: /Start from a template/ }).click();
+    await page.waitForURL(/\/chatbots\/templates/);
+    await page.getByRole('button', { name: /^Use Real estate/ }).click();
     await page.fill('#tg-name', flowName);
     await page.getByRole('button', { name: 'Create and open the builder' }).click();
     await page.waitForURL(/\/chatbots\/builder\?id=/);
     const flowId = new URL(page.url()).searchParams.get('id') as string;
     await expect(page.getByText('All changes saved')).toBeVisible();
 
-    // Add step: a message block, added on its own (not connected yet).
-    await page.getByRole('button', { name: 'Add block' }).click();
-    await page
-        .getByRole('button', { name: /^Message/ })
-        .first()
-        .click();
+    // Add step: a message step from “Add a step”, on its own (not connected yet).
+    await expect(page.getByTestId('simple-view')).toBeVisible();
+    await page.getByRole('button', { name: 'Add Message' }).click();
     await page.getByLabel('Message', { exact: true }).fill('Thanks, one moment please.');
     await expect(page.getByText('All changes saved')).toBeVisible({ timeout: 20_000 });
 
     // Test → the publish checks find the unconnected block, and publishing is refused.
-    await expect(page.getByRole('button', { name: /2 to fix/ })).toBeVisible();
-    await page.getByRole('button', { name: 'Publish', exact: true }).click();
+    await expect(page.getByTestId('checks')).toHaveText(/2 to fix/);
+    await page.getByRole('button', { name: /^Publish · 2 to fix/ }).click();
     await expect(page.getByText('Fix the problems listed below before publishing.')).toBeVisible();
     await expect(page.getByText('Can never be reached.').first()).toBeVisible();
     let flow = await api<{ data: Flow }>(page, 'GET', `chatbots/${flowId}`);
@@ -63,14 +62,14 @@ test('create, configure, test, fix, publish, run and review a flow', async ({ pa
     // Fix: delete the block; the flow is ready again.
     await page.getByRole('button', { name: 'Delete', exact: true }).click();
     await expect(page.getByText('All changes saved')).toBeVisible({ timeout: 20_000 });
-    await expect(page.getByRole('button', { name: 'Ready' })).toBeVisible();
+    await expect(page.getByTestId('checks')).toHaveText(/Ready|No errors/);
 
     // Configure: the Area menu also saves the chosen option to the Area field (new step setting),
     // and the agent handover goes to the inbox team.
-    await page.getByText('Area', { exact: true }).first().click();
+    await page.getByRole('button', { name: 'Area', exact: true }).first().click();
     await page.getByRole('switch', { name: 'Save the chosen option' }).click();
     await choose(page, 'Save the option to', /Area \(custom field\)|Area/);
-    await page.getByText('Assign an agent', { exact: true }).first().click();
+    await page.getByRole('button', { name: 'Assign an agent', exact: true }).first().click();
     await choose(page, 'Assign the conversation', 'An inbox team');
     await choose(page, 'Inbox team', team);
     await page.getByLabel('Outcome').fill('Qualified buyer');
@@ -86,7 +85,8 @@ test('create, configure, test, fix, publish, run and review a flow', async ({ pa
     // Publish and switch on.
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
     await expect(page.getByText(/Version 1 published/)).toBeVisible();
-    await page.getByRole('switch', { name: /Live/ }).click();
+    await page.getByRole('button', { name: 'More publish options' }).click();
+    await page.getByRole('menuitem', { name: /Switch on/ }).click();
     // Another flow may already be the number's default ("any message") flow: replacing it is asked first.
     const live = page.getByText(/Live: the bot answers on this number now/);
     const replace = page.getByRole('button', { name: 'Switch this flow on' });
@@ -155,8 +155,15 @@ test('create, configure, test, fix, publish, run and review a flow', async ({ pa
 
     // Flow insights: the live version's numbers.
     await page.goto(`/chatbots?analytics=${flowId}`);
-    await expect(page.getByRole('dialog')).toContainText('Started');
+    await page.waitForURL(/\/chatbots\/insights\?flow=/);
+    await expect(page.getByText('Chats started', { exact: true })).toBeVisible();
     await expect(page.getByTestId('insights-scope')).toBeVisible();
+    await expect(page.getByTestId('insights-steps')).toContainText('Area');
+    await page.getByRole('tab', { name: 'Outcomes' }).click();
     await expect(page.getByTestId('outcomes')).toContainText('Qualified buyer');
+
+    // My Flows lists it as live, with its 30-day figures.
+    await page.goto('/chatbots');
+    await expect(page.getByTestId('my-flows')).toContainText(flowName);
     void nodes;
 });

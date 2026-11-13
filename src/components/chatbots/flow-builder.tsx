@@ -3,28 +3,21 @@
 import { useQueryClient } from '@tanstack/react-query';
 import {
     ArrowLeftIcon,
-    BarChart3Icon,
-    BotIcon,
     CalendarClockIcon,
     CheckCircle2Icon,
     ChevronDownIcon,
     CircleAlertIcon,
     ClipboardCheckIcon,
     CopyIcon,
-    Grid3x3Icon,
     HistoryIcon,
     LayoutDashboardIcon,
     Loader2Icon,
     PlayIcon,
-    PlusIcon,
     Redo2Icon,
     RocketIcon,
-    SettingsIcon,
     Trash2Icon,
     TriangleAlertIcon,
     Undo2Icon,
-    WandSparklesIcon,
-    WorkflowIcon,
     XIcon,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -42,21 +35,14 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Switch } from '@/components/ui/switch';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ApiError, errorMessage } from '@/lib/api';
 import {
     activateChatbot,
     CARD_WIDTH,
-    type ChatbotAnalytics,
     type ChatbotFlowDetail,
     chatbotKeys,
     COLUMN_GAP,
@@ -73,7 +59,6 @@ import {
     isDraftConflict,
     type DraftConflict,
     getChatbotRevision,
-    useChatbotRevisions,
     restoreChatbotVersion,
     reviewChatbot,
     RTL,
@@ -84,44 +69,29 @@ import {
     useChatbot,
     useChatbotAnalytics,
     useChatbotComments,
-    useChatbotHistory,
     useChatbotOptions,
     withOutputs,
 } from '@/lib/chatbots';
+import { useStored } from '@/hooks/use-stored';
 import { mergeDrafts } from '@/lib/flow-merge';
 import { cn } from '@/lib/utils';
 
-import { BlockList } from './block-picker';
 import { type CanvasApi, FlowCanvas } from './flow-canvas';
 import { FlowSettingsDialog } from './flow-settings-dialog';
 import { NodeInspector } from './node-inspector';
-import { RunPeriodDialog, runPeriodLabel } from './run-period-dialog';
+import { RunPeriodDialog } from './run-period-dialog';
+import { HistoryPanel } from './studio/history-panel';
+import { StepPalette } from './studio/palette';
+import { type InsightMode, SimpleView } from './studio/simple-view';
 import { TestChat } from './test-chat';
 
 const NO_NUMBER = '__none__';
+
+type RightTab = 'step' | 'test' | 'settings' | 'history';
 const CLIPBOARD = 'engage.chatbot.clipboard';
 
-const ACTIONS: Record<string, string> = {
-    'chatbot.created': 'Created',
-    'chatbot.published': 'Published',
-    'chatbot.activated': 'Switched on',
-    'chatbot.deactivated': 'Switched off',
-    'chatbot.version_restored': 'Rolled back',
-    'chatbot.archived': 'Archived',
-    'chatbot.unarchived': 'Restored from the archive',
-    'chatbot.scheduled': 'Scheduled',
-    'chatbot.exported': 'Exported',
-    'chatbot.imported': 'Imported',
-    'chatbot.review_request': 'Asked for a review',
-    'chatbot.review_approve': 'Approved',
-    'chatbot.review_changes': 'Asked for changes',
-    'chatbot.review_cancel': 'Cancelled the review',
-    'chatbot.webhook_created': 'Created the webhook URL',
-    'chatbot.webhook_removed': 'Removed the webhook URL',
-};
-
 /** The full-screen flow builder: canvas · block settings, with test, review and publish. Blocks are added with "Add block", the "+" on a branch, or paste. */
-export function FlowBuilder({ flowId }: { flowId: string }) {
+export function FlowBuilder({ flowId, initialStep = null }: { flowId: string; initialStep?: string | null }) {
     const qc = useQueryClient();
     const flow = useChatbot(flowId);
     const options = useChatbotOptions();
@@ -138,10 +108,10 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
     const [saving, setSaving] = useState<'idle' | 'saving' | 'error'>('idle');
     const [testing, setTesting] = useState(false);
     const [testNode, setTestNode] = useState<string | null>(null);
-    const [settingsOpen, setSettingsOpen] = useState(false);
-    const [showStats, setShowStats] = useState(false);
+    const [tab, setTab] = useState<Exclude<RightTab, 'test'>>('step');
+    const [view, setView] = useStored<'simple' | 'map'>('engage.chatbots.view', 'simple');
+    const [insight, setInsight] = useState<InsightMode>('off');
     const [showIssues, setShowIssues] = useState(false);
-    const [adding, setAdding] = useState(false);
     const [runPeriod, setRunPeriod] = useState(false);
     /** Leaving with changes that are not saved (or saved but not published): where to go once confirmed. */
     const [leaving, setLeaving] = useState<string | null>(null);
@@ -153,12 +123,11 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
     const [replace, setReplace] = useState<{ name: string } | null>(null);
     const [restore, setRestore] = useState<number | null>(null);
     const [reviewOpen, setReviewOpen] = useState(false);
-    const [historyOpen, setHistoryOpen] = useState(false);
     const lastKey = useRef<{ key: string; at: number } | null>(null);
     const clock = useRef(Date.now); // read only in event handlers (undo grouping)
     const canvas = useRef<CanvasApi | null>(null);
     const clipboard = useRef<FlowNode[]>([]);
-    const analytics = useChatbotAnalytics(flowId, 30, showStats);
+    const analytics = useChatbotAnalytics(flowId, 30, insight !== 'off');
 
     const data = flow.data;
     /** The draft this editor last loaded or saved (and its revision): the base of a merge when a teammate saved first. */
@@ -174,6 +143,12 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
         setBase({ graph: data.draft, settings: data.settings, name: data.name, revision: data.draft_revision });
         setPast([]);
         setFuture([]);
+        // Opened on a step (Runs › Open this step, Start rules › Edit): select it.
+        const want = initialStep === 'start' ? data.draft.nodes.find((n) => n.type === 'start')?.id : initialStep;
+        if (want && data.draft.nodes.some((n) => n.id === want)) {
+            setSelection(new Set([want]));
+            requestAnimationFrame(() => document.querySelector(`[data-step="${want}"]`)?.scrollIntoView({ block: 'center' }));
+        }
     }
 
     const readOnly = !(data?.can.edit ?? false);
@@ -225,7 +200,7 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
         setDirty(true);
     };
     const updateNode = (id: string, fn: (n: FlowNode) => FlowNode, key?: string) =>
-        graph && change({ nodes: graph.nodes.map((n) => (n.id === id ? fn(n) : n)) }, key);
+        graph && change({ ...graph, nodes: graph.nodes.map((n) => (n.id === id ? fn(n) : n)) }, key);
     const connect = (from: string, output: string, to: string | null) =>
         updateNode(from, (n) => ({ ...n, outputs: n.outputs.map((o) => (o.id === output ? { ...o, to } : o)) }));
     const undo = () => {
@@ -286,7 +261,7 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
         const nodes = [...graph.nodes, node].map((n) =>
             source && output && n.id === source.id ? { ...n, outputs: n.outputs.map((o) => (o.id === output ? { ...o, to: node.id } : o)) } : n,
         );
-        change({ nodes });
+        change({ ...graph, nodes });
         setSelection(new Set([node.id]));
         if (source && output) toast.success(`Added after “${source.outputs.find((o) => o.id === output)?.label}”`, { duration: 1500 });
     };
@@ -297,11 +272,39 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
         const open = sel?.outputs.find((o) => !o.to);
         addNode(type, at, sel && open ? { node: sel.id, output: open.id } : undefined);
     };
+    /** “+” on a path: the new step goes on that path, and whatever the path led to follows the new step. */
+    const addOnPath = (from: string, output: string, type: NodeType) => {
+        if (!graph) return;
+        const source = graph.nodes.find((n) => n.id === from);
+        if (!source) return;
+        const index = Math.max(
+            0,
+            source.outputs.findIndex((o) => o.id === output),
+        );
+        const before = source.outputs.find((o) => o.id === output)?.to ?? null;
+        const created = newNode(type, snap(source.x + CARD_WIDTH + COLUMN_GAP, snapOn), snap(source.y + index * 60, snapOn));
+        const node =
+            before && created.outputs.length > 0 ? { ...created, outputs: created.outputs.map((o, i) => (i === 0 ? { ...o, to: before } : o)) } : created;
+        const section = (source as FlowNode & { section?: string }).section;
+        const placed = section ? ({ ...node, section } as FlowNode) : node;
+        change({
+            ...graph,
+            nodes: [
+                ...graph.nodes.map((n) => (n.id === from ? { ...n, outputs: n.outputs.map((o) => (o.id === output ? { ...o, to: placed.id } : o)) } : n)),
+                placed,
+            ],
+        });
+        setSelection(new Set([placed.id]));
+        setTesting(false);
+        setTab('step');
+        requestAnimationFrame(() => document.querySelector(`[data-step="${placed.id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+    };
     const deleteNodes = (ids: string[]) => {
         if (!graph) return;
         const gone = new Set(ids.filter((id) => graph.nodes.find((n) => n.id === id)?.type !== 'start'));
         if (gone.size === 0) return;
         change({
+            ...graph,
             nodes: graph.nodes
                 .filter((n) => !gone.has(n.id))
                 .map((n) => ({ ...n, outputs: n.outputs.map((o) => (o.to && gone.has(o.to) ? { ...o, to: null } : o)) })),
@@ -329,7 +332,7 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
             40,
         );
         if (copies.length === 0) return;
-        change({ nodes: [...graph.nodes, ...copies] });
+        change({ ...graph, nodes: [...graph.nodes, ...copies] });
         setSelection(new Set(copies.map((n) => n.id)));
     };
     const copy = () => {
@@ -354,7 +357,7 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
         }
         if (nodes.length === 0) return;
         const copies = cloneNodes(nodes, 60, 60);
-        change({ nodes: [...graph.nodes, ...copies] });
+        change({ ...graph, nodes: [...graph.nodes, ...copies] });
         setSelection(new Set(copies.map((n) => n.id)));
     };
     const tidyUp = () => {
@@ -365,6 +368,7 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
     const jumpTo = (id: string) => {
         setSelection(new Set([id]));
         canvas.current?.center(id);
+        document.querySelector(`[data-step="${id}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     };
 
     // ── Autosave ────────────────────────────────────────────────────────────────────────────
@@ -446,7 +450,7 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
         } else if (mod && k === 'a' && graph) {
             e.preventDefault();
             setSelection(new Set(graph.nodes.map((n) => n.id)));
-        } else if (!mod && k === 'f') {
+        } else if (!mod && k === 'f' && view === 'map') {
             canvas.current?.fit();
         } else if (e.key === 'Escape') {
             setSelection(new Set());
@@ -579,401 +583,584 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
     const needsReview = data.approvals_required && !(data.review?.status === 'approved' && data.review.current);
     const savedLabel = readOnly ? 'View only' : saving === 'saving' ? 'Saving…' : saving === 'error' ? 'Not saved' : dirty ? 'Unsaved' : 'All changes saved';
 
+    const rightTab = testing ? 'test' : tab;
+    const start = graph.nodes.find((n) => n.type === 'start');
+    const openTab = (t: RightTab) => {
+        if (t === 'test') {
+            void save().then(() => setTesting(true));
+        } else {
+            setTesting(false);
+            setTestNode(null);
+            setTab(t);
+        }
+    };
+    const sections = ((graph as FlowGraph & { sections?: { id: string; name: string }[] }).sections ?? []) as { id: string; name: string }[];
+    const setSections = (next: { id: string; name: string }[], key?: string) => change({ ...graph, sections: next } as FlowGraph, key);
+    const statusChip =
+        data.status === 'live'
+            ? { cls: 'live', label: `Live · v${data.published_version}` }
+            : data.status === 'paused'
+              ? { cls: 'off', label: `Off · v${data.published_version}` }
+              : data.status === 'archived'
+                ? { cls: 'off', label: 'Archived' }
+                : { cls: 'draft', label: 'Draft' };
+    const checkLabel =
+        errors.length > 0
+            ? `${errors.length} to fix${warnings.length ? ` · ${warnings.length} warning${warnings.length === 1 ? '' : 's'}` : ''}`
+            : warnings.length > 0
+              ? `No errors · ${warnings.length} warning${warnings.length === 1 ? '' : 's'}`
+              : 'Ready';
+
     return (
-        <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background">
-            {/* Top bar */}
-            <header className="flex h-14 shrink-0 items-center gap-2 border-b bg-card px-3">
-                <Button variant="ghost" size="icon-sm" aria-label="Back to Chatbots" onClick={() => leave('/chatbots')}>
-                    <ArrowLeftIcon />
-                </Button>
-                <span className="flex size-8 items-center justify-center rounded-lg bg-brand-100 text-brand-600">
-                    {data.kind === 'subflow' ? <WorkflowIcon className="size-4" /> : <BotIcon className="size-4" />}
+        <div className="cb-bld flex h-full min-h-0 min-w-0 flex-1 flex-col" style={{ background: 'var(--cb-bg)' }}>
+            <header className="cb-bhead">
+                <button
+                    type="button"
+                    className="cb-btn sm cb-iconbtn"
+                    aria-label="Back to My Flows"
+                    onClick={() => leave('/chatbots')}
+                    style={{ width: 36, height: 36 }}
+                >
+                    <ArrowLeftIcon className="size-4" />
+                </button>
+                <input
+                    className="cb-name"
+                    value={name}
+                    onChange={(e) => {
+                        setName(e.target.value.slice(0, 120));
+                        setDirty(true);
+                    }}
+                    disabled={readOnly}
+                    aria-label="Bot name"
+                />
+                {data.kind === 'subflow' && <span className="cb-chip info">Subflow</span>}
+                <span className={`cb-chip ${statusChip.cls}`}>
+                    <span className="dot" />
+                    {statusChip.label}
                 </span>
-                <div className="min-w-0">
-                    <Input
-                        value={name}
-                        onChange={(e) => {
-                            setName(e.target.value.slice(0, 120));
-                            setDirty(true);
-                        }}
-                        disabled={readOnly}
-                        className="h-7 w-[min(22rem,40vw)] border-transparent px-1.5 text-[14.5px] font-bold shadow-none hover:border-input focus-visible:border-brand-500"
-                        aria-label="Bot name"
-                    />
-                    <p className="flex items-center gap-1.5 px-1.5 text-[11px] text-muted-foreground" aria-live="polite">
-                        {saving === 'saving' && <Loader2Icon className="size-3 animate-spin" />}
-                        {savedLabel}
-                        {data.kind === 'subflow' && (
-                            <Badge tone="info" className="py-0 text-[10px]">
-                                Subflow
-                            </Badge>
-                        )}
-                    </p>
+                {data.published_version !== null && data.has_unpublished_changes && <span className="cb-chip warn">Unpublished changes</span>}
+                <span className="cb-small cb-muted" aria-live="polite">
+                    {saving === 'saving' ? (
+                        <>
+                            <Loader2Icon className="inline size-3 animate-spin" /> Saving…
+                        </>
+                    ) : (
+                        savedLabel
+                    )}
+                </span>
+                <div className="cb-seg" aria-label="View">
+                    <button type="button" className={view === 'simple' ? 'on' : undefined} aria-pressed={view === 'simple'} onClick={() => setView('simple')}>
+                        Simple
+                    </button>
+                    <button type="button" className={view === 'map' ? 'on' : undefined} aria-pressed={view === 'map'} onClick={() => setView('map')}>
+                        Map
+                    </button>
                 </div>
-                {data.kind === 'bot' && (
-                    <Select
-                        value={data.phone_number_id ?? NO_NUMBER}
-                        disabled={readOnly || data.is_active}
-                        onValueChange={async (v) => {
-                            try {
-                                updateCache({ ...(await saveChatbot(flowId, { phone_number_id: v === NO_NUMBER ? null : v })), draft: graph });
-                            } catch (e) {
-                                toast.error(errorMessage(e));
-                            }
-                        }}
-                    >
-                        <SelectTrigger
-                            size="sm"
-                            className="hidden w-52 md:flex"
-                            aria-label="WhatsApp number"
-                            title={data.is_active ? 'Switch the bot off to move it to another number.' : undefined}
+                <div className="cb-seg" aria-label="Insights on the steps">
+                    {(
+                        [
+                            ['off', 'Insights off'],
+                            ['counts', 'Counts'],
+                            ['percent', '%'],
+                            ['gaveup', 'Gave up'],
+                        ] as const
+                    ).map(([k, l]) => (
+                        <button key={k} type="button" className={insight === k ? 'on' : undefined} aria-pressed={insight === k} onClick={() => setInsight(k)}>
+                            {l}
+                        </button>
+                    ))}
+                </div>
+                <span className="cb-spacer" />
+                {!readOnly && (
+                    <>
+                        <button
+                            type="button"
+                            className="cb-btn sm cb-iconbtn"
+                            onClick={undo}
+                            disabled={past.length === 0}
+                            aria-label="Undo (Ctrl+Z)"
+                            title="Undo (Ctrl+Z)"
                         >
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value={NO_NUMBER}>No number yet</SelectItem>
-                            {numbers.map((n) => (
-                                <SelectItem key={n.id} value={n.id}>
-                                    {n.verified_name ?? n.display_phone_number} {n.verified_name ? `· ${n.display_phone_number}` : ''}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                            <Undo2Icon className="size-4" />
+                        </button>
+                        <button
+                            type="button"
+                            className="cb-btn sm cb-iconbtn"
+                            onClick={redo}
+                            disabled={future.length === 0}
+                            aria-label="Redo (Ctrl+Shift+Z)"
+                            title="Redo (Ctrl+Shift+Z)"
+                        >
+                            <Redo2Icon className="size-4" />
+                        </button>
+                    </>
                 )}
-                <Badge tone={data.status === 'live' ? 'good' : data.status === 'paused' ? 'grey' : data.status === 'archived' ? 'grey' : 'warn'} dot>
-                    {data.status === 'live'
-                        ? `Live · v${data.published_version}`
-                        : data.status === 'paused'
-                          ? `Published · v${data.published_version}`
-                          : data.status === 'archived'
-                            ? 'Archived'
-                            : 'Draft'}
-                </Badge>
-                {data.published_version !== null && data.has_unpublished_changes && (
-                    <Badge tone="info" className="hidden lg:inline-flex">
-                        Unpublished changes
-                    </Badge>
-                )}
-                {data.kind === 'bot' && runPeriodLabel(data) && (
-                    <button type="button" onClick={() => data.can.publish && setRunPeriod(true)} className="hidden xl:inline-flex" title="When this bot runs">
-                        <Badge tone="grey">
-                            <CalendarClockIcon className="size-3" /> {runPeriodLabel(data)}
-                        </Badge>
+                <button
+                    type="button"
+                    className={cn('cb-btn sm', errors.length > 0 && 'danger')}
+                    onClick={() => setShowIssues((v) => !v)}
+                    aria-pressed={showIssues}
+                    data-testid="checks"
+                >
+                    {errors.length > 0 ? (
+                        <CircleAlertIcon className="size-4" />
+                    ) : warnings.length > 0 ? (
+                        <TriangleAlertIcon className="size-4" style={{ color: 'var(--cb-warn-i)' }} />
+                    ) : (
+                        <CheckCircle2Icon className="size-4" style={{ color: 'var(--cb-brand-deep)' }} />
+                    )}
+                    {checkLabel}
+                </button>
+                <button type="button" className="cb-btn sm" onClick={() => openTab('test')}>
+                    <PlayIcon className="size-3.5" /> Test
+                </button>
+                {data.approvals_required && !readOnly && needsReview && (
+                    <button
+                        type="button"
+                        className={cn('cb-btn sm', data.review?.status === 'changes_requested' && 'danger')}
+                        onClick={() => setReviewOpen(true)}
+                    >
+                        <ClipboardCheckIcon className="size-4" /> {data.review?.status === 'requested' ? 'In review' : 'Review'}
                     </button>
                 )}
-
-                <div className="ml-auto flex items-center gap-1">
-                    {!readOnly && (
-                        <Popover open={adding} onOpenChange={setAdding}>
-                            <PopoverTrigger asChild>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    title="Add a block after the selected one (it connects itself), or drag one onto the canvas"
-                                >
-                                    <PlusIcon /> Add block
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent align="end" className="w-80 p-2.5">
-                                <p className="mb-2 text-[11.5px] leading-snug text-muted-foreground">
-                                    {selectedSingle
-                                        ? 'Added after the selected block and connected to it.'
-                                        : 'Added to the canvas. Select a block first to connect it.'}{' '}
-                                    You can also drag a block onto the canvas.
-                                </p>
-                                <BlockList
-                                    onPick={(t) => {
-                                        paletteAdd(t);
-                                        setAdding(false);
-                                    }}
-                                    draggable
-                                    autoFocus
-                                    dense
-                                />
-                            </PopoverContent>
-                        </Popover>
-                    )}
-                    {!readOnly && (
-                        <div className="hidden items-center gap-0.5 rounded-lg border p-0.5 lg:flex">
-                            <Button variant="ghost" size="icon-sm" onClick={undo} disabled={past.length === 0} aria-label="Undo (Ctrl+Z)" title="Undo (Ctrl+Z)">
-                                <Undo2Icon />
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={redo}
-                                disabled={future.length === 0}
-                                aria-label="Redo (Ctrl+Shift+Z)"
-                                title="Redo (Ctrl+Shift+Z)"
-                            >
-                                <Redo2Icon />
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={tidyUp}
-                                aria-label="Tidy up the layout"
-                                title="Tidy up: arrange the blocks left to right"
-                            >
-                                <WandSparklesIcon />
-                            </Button>
-                            <Button
-                                variant={snapOn ? 'secondary' : 'ghost'}
-                                size="icon-sm"
-                                onClick={() => setSnapOn((v) => !v)}
-                                aria-pressed={snapOn}
-                                aria-label="Snap to grid"
-                                title="Snap to grid"
-                            >
-                                <Grid3x3Icon />
-                            </Button>
-                        </div>
-                    )}
-                    <Button
-                        variant={showStats ? 'secondary' : 'ghost'}
-                        size="sm"
-                        onClick={() => setShowStats((v) => !v)}
-                        aria-pressed={showStats}
-                        title="Show how many customers reach each block (last 30 days)"
-                    >
-                        <BarChart3Icon /> <span className="hidden xl:inline">Analytics</span>
-                    </Button>
-                    <Button
-                        variant={showIssues ? 'secondary' : 'ghost'}
-                        size="sm"
-                        onClick={() => setShowIssues((v) => !v)}
-                        aria-pressed={showIssues}
-                        className={cn(errors.length > 0 && 'text-bad')}
-                    >
-                        {errors.length > 0 ? (
-                            <CircleAlertIcon />
-                        ) : warnings.length > 0 ? (
-                            <TriangleAlertIcon className="text-warn" />
-                        ) : (
-                            <CheckCircle2Icon className="text-good" />
-                        )}
-                        {errors.length > 0
-                            ? `${errors.length} to fix`
-                            : warnings.length > 0
-                              ? `${warnings.length} warning${warnings.length === 1 ? '' : 's'}`
-                              : 'Ready'}
-                    </Button>
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon-sm" aria-label="More">
-                                <SettingsIcon />
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                            <DropdownMenuItem onSelect={() => setSettingsOpen(true)}>
-                                <SettingsIcon /> Flow settings
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onSelect={() => setHistoryOpen(true)}>
-                                <HistoryIcon /> Versions & history
-                            </DropdownMenuItem>
-                            {data.approvals_required && (
-                                <DropdownMenuItem onSelect={() => setReviewOpen(true)}>
-                                    <ClipboardCheckIcon /> Review
-                                </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            {data.kind === 'bot' && data.can.publish && (
-                                <DropdownMenuItem onSelect={() => setRunPeriod(true)}>
-                                    <CalendarClockIcon /> Run period…
-                                </DropdownMenuItem>
-                            )}
-                            <DropdownMenuItem onSelect={() => leave(`/chatbots?analytics=${flowId}`)}>
-                                <LayoutDashboardIcon /> Flow dashboard
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                            void save().then(() => {
-                                setTesting(true);
-                                setSelection(new Set());
-                            })
-                        }
-                    >
-                        <PlayIcon /> Test
-                    </Button>
-                    {data.approvals_required && !readOnly && needsReview && (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setReviewOpen(true)}
-                            className={cn(data.review?.status === 'changes_requested' && 'border-warn text-warn')}
+                {data.can.publish && (
+                    <div className="flex">
+                        <button
+                            type="button"
+                            className="cb-btn sm pri"
+                            onClick={() => void publish()}
+                            disabled={publishing || readOnly}
+                            style={{ borderTopRightRadius: 0, borderBottomRightRadius: 0 }}
                         >
-                            <ClipboardCheckIcon /> {data.review?.status === 'requested' ? 'In review' : 'Review'}
-                        </Button>
-                    )}
-                    {data.can.publish && (
-                        <div className="flex">
-                            <Button size="sm" onClick={() => void publish()} disabled={publishing || readOnly} className="rounded-r-none">
-                                {publishing ? <Loader2Icon className="animate-spin" /> : <RocketIcon />} Publish
-                            </Button>
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button
-                                        size="sm"
-                                        className="rounded-l-none border-l border-l-black/10 px-1.5"
-                                        aria-label="More publish options"
-                                        disabled={publishing}
-                                    >
-                                        <ChevronDownIcon />
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    {data.kind === 'bot' && !data.is_active && (
-                                        <DropdownMenuItem disabled={!data.phone_number_id} onSelect={() => void publish(true)}>
-                                            <RocketIcon /> Publish and go live
-                                        </DropdownMenuItem>
-                                    )}
-                                    {data.kind === 'bot' && data.published_version !== null && (
-                                        <DropdownMenuItem onSelect={() => void setLive(!data.is_active)}>
-                                            <PlayIcon /> {data.is_active ? 'Switch off' : 'Switch on (published version)'}
-                                        </DropdownMenuItem>
-                                    )}
-                                    <DropdownMenuItem onSelect={() => setHistoryOpen(true)}>
-                                        <HistoryIcon /> Versions & roll back
+                            {publishing && <Loader2Icon className="size-4 animate-spin" />}
+                            {errors.length > 0 ? `Publish · ${errors.length} to fix` : 'Publish'}
+                        </button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <button
+                                    type="button"
+                                    className="cb-btn sm pri"
+                                    aria-label="More publish options"
+                                    disabled={publishing}
+                                    style={{ borderTopLeftRadius: 0, borderBottomLeftRadius: 0, borderLeft: '1px solid rgba(0,0,0,.12)', padding: '0 6px' }}
+                                >
+                                    <ChevronDownIcon className="size-4" />
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                {data.kind === 'bot' && !data.is_active && (
+                                    <DropdownMenuItem disabled={!data.phone_number_id} onSelect={() => void publish(true)}>
+                                        <RocketIcon /> Publish and go live
                                     </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        </div>
-                    )}
-                    {data.kind === 'bot' && data.can.publish && (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <label className="ml-1 hidden items-center gap-2 rounded-lg border px-2.5 py-1 text-[12.5px] font-semibold sm:flex">
-                                    Live
-                                    <Switch
-                                        checked={data.is_active}
-                                        onCheckedChange={(v) => void setLive(v)}
-                                        disabled={data.published_version === null || !data.phone_number_id}
-                                    />
-                                </label>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                {data.published_version === null
-                                    ? 'Publish the flow first.'
-                                    : !data.phone_number_id
-                                      ? 'Choose a WhatsApp number first.'
-                                      : 'Answer customers on this number with the published version.'}
-                            </TooltipContent>
-                        </Tooltip>
-                    )}
-                </div>
+                                )}
+                                {data.kind === 'bot' && data.published_version !== null && (
+                                    <DropdownMenuItem disabled={!data.phone_number_id} onSelect={() => void setLive(!data.is_active)}>
+                                        <PlayIcon /> {data.is_active ? 'Switch off (stop answering)' : 'Switch on (published version)'}
+                                    </DropdownMenuItem>
+                                )}
+                                {data.kind === 'bot' && (
+                                    <DropdownMenuItem onSelect={() => setRunPeriod(true)}>
+                                        <CalendarClockIcon /> Run period…
+                                    </DropdownMenuItem>
+                                )}
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onSelect={() => openTab('history')}>
+                                    <HistoryIcon /> Versions & roll back
+                                </DropdownMenuItem>
+                                {data.approvals_required && (
+                                    <DropdownMenuItem onSelect={() => setReviewOpen(true)}>
+                                        <ClipboardCheckIcon /> Review
+                                    </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem onSelect={() => leave(`/chatbots/insights?flow=${flowId}`)}>
+                                    <LayoutDashboardIcon /> Flow insights
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+                )}
             </header>
 
             {data.review && data.approvals_required && data.review.status === 'changes_requested' && (
-                <div className="flex items-center gap-2 border-b bg-warn-bg px-4 py-1.5 text-[12.5px] text-warn">
+                <div className="cb-banner warn" style={{ borderRadius: 0 }}>
                     <TriangleAlertIcon className="size-4" /> {data.review.reviewer ?? 'The reviewer'} asked for changes
                     {data.review.note ? `: “${data.review.note}”` : '.'}
                 </div>
             )}
 
-            <div className="flex min-h-0 flex-1">
-                <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-                    <FlowCanvas
-                        graph={graph}
-                        selection={selection}
-                        focusId={testing ? testNode : null}
-                        onSelect={select}
-                        onMoveMany={(moves) => {
-                            const at = new Map(moves.map((m) => [m.id, m]));
-                            change(
-                                { nodes: graph.nodes.map((n) => (at.has(n.id) ? { ...n, x: at.get(n.id)?.x ?? n.x, y: at.get(n.id)?.y ?? n.y } : n)) },
-                                `move:${moves.map((m) => m.id).join(',')}`,
-                            );
-                        }}
-                        onMoveEnd={() => {
-                            lastKey.current = null;
-                        }}
-                        onConnect={connect}
-                        onDropNode={(type, x, y) => paletteAdd(type, { x, y })}
-                        onQuickAdd={(from, output, type) => addNode(type, undefined, { node: from, output })}
-                        issues={allIssues}
-                        openPorts={ports}
-                        analytics={showStats ? (analytics.data?.nodes ?? {}) : null}
-                        comments={commentCounts}
-                        titles={titles}
-                        subflows={options.data?.subflows ?? []}
-                        readOnly={readOnly}
-                        snapOn={snapOn}
-                        apiRef={canvas}
-                        rtl={RTL.includes(settings.languages[0] ?? 'en')}
-                    />
-                    {showIssues && <IssuesPanel errors={errors} warnings={warnings} titles={titles} onJump={jumpTo} onClose={() => setShowIssues(false)} />}
-                    {showStats && analytics.data && <StatsStrip analytics={analytics.data} />}
-                </div>
+            <div className="cb-bbody">
+                <StepPalette
+                    readOnly={readOnly}
+                    onPick={paletteAdd}
+                    hint={
+                        selectedSingle && graph.nodes.find((n) => n.id === selectedSingle)?.outputs.length
+                            ? `New steps go after “${titles.get(selectedSingle)}”. Or use + on any path in the flow.`
+                            : view === 'map'
+                              ? 'Select a step first, or drag a step onto the map, or use + on any path.'
+                              : 'Select a step first, or use + on any path in the flow.'
+                    }
+                />
 
-                {/* Right panel */}
-                <aside className="flex w-[400px] shrink-0 flex-col border-l bg-card max-xl:w-[360px]" aria-label="Block settings">
-                    {testing ? (
-                        <TestChat
-                            flowId={flowId}
-                            botName={name}
-                            languages={settings.languages}
-                            numberId={data.phone_number_id}
-                            options={options.data}
-                            onClose={() => {
-                                setTesting(false);
-                                setTestNode(null);
-                            }}
-                            onNode={(id) => {
-                                setTestNode(id);
-                                if (id) canvas.current?.center(id);
-                            }}
-                        />
-                    ) : node ? (
-                        <NodeInspector
-                            key={node.id}
-                            flowId={flowId}
-                            node={node}
+                <div className="cb-bcenter" data-testid="builder-center">
+                    {view === 'simple' ? (
+                        <SimpleView
                             graph={graph}
-                            settings={settings}
-                            options={options.data}
+                            triggers={data.triggers}
+                            selection={selection}
                             issues={allIssues}
+                            analytics={insight !== 'off' ? (analytics.data ?? null) : null}
+                            insight={insight}
                             readOnly={readOnly}
-                            webhookUrl={data.webhook_url}
-                            phone={phone}
-                            onTitle={(title, auto) => updateNode(node.id, (n) => ({ ...n, title, auto_title: auto }), `title:${node.id}`)}
-                            onConfig={(config: NodeConfig) => updateNode(node.id, (n) => withOutputs({ ...n, config }), `config:${node.id}`)}
-                            onDelete={() => deleteNodes([node.id])}
-                            onDuplicate={() => duplicate([node.id])}
-                            onSelect={jumpTo}
-                            onConnect={(output, to) => connect(node.id, output, to)}
-                            onWebhook={async (enabled) => {
-                                if (!data.can.publish) return;
-                                try {
-                                    updateCache({ ...(await setChatbotWebhook(flowId, enabled)), draft: graph });
-                                } catch (e) {
-                                    toast.error(errorMessage(e));
-                                }
+                            onSelect={(id) => {
+                                setSelection(new Set([id]));
+                                if (rightTab !== 'step') openTab('step');
                             }}
-                        />
-                    ) : selectedNodes.length > 1 ? (
-                        <MultiSelection
-                            count={selectedNodes.length}
-                            readOnly={readOnly}
-                            onDuplicate={() => duplicate([...selection])}
-                            onDelete={() => deleteNodes([...selection])}
-                            onCopy={copy}
+                            onOpenStep={(id) => {
+                                setSelection(new Set([id]));
+                                openTab('step');
+                            }}
+                            onConfig={(id, config) => updateNode(id, (n) => withOutputs({ ...n, config }), `config:${id}`)}
+                            onConnect={connect}
+                            onAddOnPath={addOnPath}
+                            onDuplicate={(id) => duplicate([id])}
+                            onDelete={(id) => deleteNodes([id])}
+                            onTest={() => openTab('test')}
+                            onStartRules={() => leave('/chatbots/start-rules')}
+                            onRenameSection={(id, nm) =>
+                                setSections(
+                                    sections.map((x) => (x.id === id ? { ...x, name: nm.slice(0, 60) } : x)),
+                                    `sec:${id}`,
+                                )
+                            }
                         />
                     ) : (
-                        <Overview
-                            detail={data}
-                            graph={graph}
-                            errors={errors}
-                            warnings={warnings}
-                            analytics={showStats ? (analytics.data ?? null) : null}
-                            onJump={jumpTo}
-                            onSettings={() => setSettingsOpen(true)}
-                            onTidy={tidyUp}
-                            readOnly={readOnly}
-                        />
+                        <div className="absolute inset-0 flex">
+                            <FlowCanvas
+                                graph={graph}
+                                selection={selection}
+                                focusId={testing ? testNode : null}
+                                onSelect={select}
+                                onMoveMany={(moves) => {
+                                    const at = new Map(moves.map((m) => [m.id, m]));
+                                    change(
+                                        {
+                                            ...graph,
+                                            nodes: graph.nodes.map((n) => (at.has(n.id) ? { ...n, x: at.get(n.id)?.x ?? n.x, y: at.get(n.id)?.y ?? n.y } : n)),
+                                        },
+                                        `move:${moves.map((m) => m.id).join(',')}`,
+                                    );
+                                }}
+                                onMoveEnd={() => {
+                                    lastKey.current = null;
+                                }}
+                                onConnect={connect}
+                                onDropNode={(type, x, y) => paletteAdd(type, { x, y })}
+                                onQuickAdd={(from, output, type) => addOnPath(from, output, type)}
+                                issues={allIssues}
+                                openPorts={ports}
+                                analytics={insight !== 'off' ? (analytics.data?.nodes ?? {}) : null}
+                                comments={commentCounts}
+                                titles={titles}
+                                subflows={options.data?.subflows ?? []}
+                                readOnly={readOnly}
+                                snapOn={snapOn}
+                                apiRef={canvas}
+                                rtl={RTL.includes(settings.languages[0] ?? 'en')}
+                            />
+                            {!readOnly && (
+                                <div className="cb-mapctl" style={{ left: 'auto', right: 12, top: 12, bottom: 'auto' }}>
+                                    <button type="button" onClick={tidyUp}>
+                                        Auto-arrange
+                                    </button>
+                                    <button
+                                        type="button"
+                                        aria-pressed={snapOn}
+                                        onClick={() => setSnapOn((v) => !v)}
+                                        style={snapOn ? { fontWeight: 600 } : undefined}
+                                    >
+                                        Snap {snapOn ? 'on' : 'off'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    {showIssues && <IssuesPanel errors={errors} warnings={warnings} titles={titles} onJump={jumpTo} onClose={() => setShowIssues(false)} />}
+                </div>
+
+                <aside className="cb-bright" aria-label="Step, test, flow settings and history">
+                    <div className="cb-tabs" role="tablist">
+                        {(
+                            [
+                                ['step', 'Step'],
+                                ['test', 'Test'],
+                                ['settings', 'Flow settings'],
+                                ['history', 'History'],
+                            ] as const
+                        ).map(([k, l]) => (
+                            <button
+                                key={k}
+                                type="button"
+                                role="tab"
+                                aria-selected={rightTab === k}
+                                className={rightTab === k ? 'on' : undefined}
+                                onClick={() => openTab(k)}
+                            >
+                                {l}
+                            </button>
+                        ))}
+                    </div>
+                    {rightTab === 'test' ? (
+                        <div className="flex min-h-0 flex-1 flex-col">
+                            <TestChat
+                                flowId={flowId}
+                                botName={name}
+                                languages={settings.languages}
+                                numberId={data.phone_number_id}
+                                options={options.data}
+                                onClose={() => openTab('step')}
+                                onNode={(id) => {
+                                    setTestNode(id);
+                                    if (id) jumpTo(id);
+                                }}
+                            />
+                        </div>
+                    ) : rightTab === 'step' ? (
+                        node ? (
+                            <div className="flex min-h-0 flex-1 flex-col">
+                                {sections.length > 0 && !readOnly && node.type !== 'start' && (
+                                    <label className="cb-row cb-small" style={{ padding: '10px 16px 0' }}>
+                                        <span className="cb-muted">Section</span>
+                                        <select
+                                            className="cb-in"
+                                            style={{ width: 'auto', height: 30, minHeight: 30 }}
+                                            value={(node as FlowNode & { section?: string }).section ?? ''}
+                                            onChange={(e) => updateNode(node.id, (n) => ({ ...n, section: e.target.value || undefined }) as FlowNode)}
+                                        >
+                                            <option value="">Not in a section</option>
+                                            {sections.map((x) => (
+                                                <option key={x.id} value={x.id}>
+                                                    {x.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </label>
+                                )}
+                                <NodeInspector
+                                    key={node.id}
+                                    flowId={flowId}
+                                    node={node}
+                                    graph={graph}
+                                    settings={settings}
+                                    options={options.data}
+                                    issues={allIssues}
+                                    readOnly={readOnly}
+                                    webhookUrl={data.webhook_url}
+                                    phone={phone}
+                                    onTitle={(title, auto) => updateNode(node.id, (n) => ({ ...n, title, auto_title: auto }), `title:${node.id}`)}
+                                    onConfig={(config: NodeConfig) => updateNode(node.id, (n) => withOutputs({ ...n, config }), `config:${node.id}`)}
+                                    onDelete={() => deleteNodes([node.id])}
+                                    onDuplicate={() => duplicate([node.id])}
+                                    onSelect={jumpTo}
+                                    onConnect={(output, to) => connect(node.id, output, to)}
+                                    onWebhook={async (enabled) => {
+                                        if (!data.can.publish) return;
+                                        try {
+                                            updateCache({ ...(await setChatbotWebhook(flowId, enabled)), draft: graph });
+                                        } catch (e) {
+                                            toast.error(errorMessage(e));
+                                        }
+                                    }}
+                                />
+                            </div>
+                        ) : selectedNodes.length > 1 ? (
+                            <MultiSelection
+                                count={selectedNodes.length}
+                                readOnly={readOnly}
+                                onDuplicate={() => duplicate([...selection])}
+                                onDelete={() => deleteNodes([...selection])}
+                                onCopy={copy}
+                            />
+                        ) : (
+                            <div className="cb-scroll">
+                                <div className="cb-empty" style={{ padding: '24px 8px' }}>
+                                    <b style={{ color: 'var(--cb-ink)' }}>Select a step to configure it.</b>
+                                    <span>Click any step in the flow. Use + on a path to add a new one.</span>
+                                </div>
+                                <Overview detail={data} graph={graph} errors={errors} warnings={warnings} onJump={jumpTo} />
+                            </div>
+                        )
+                    ) : rightTab === 'settings' ? (
+                        <div className="cb-scroll" data-testid="flow-settings">
+                            {data.kind === 'bot' && (
+                                <>
+                                    <label className="cb-field">
+                                        <span className="l">Purpose</span>
+                                        <input
+                                            className="cb-in"
+                                            list="cb-purposes"
+                                            defaultValue={data.folder ?? ''}
+                                            disabled={readOnly}
+                                            placeholder="e.g. Bookings, Support, Lead capture"
+                                            onBlur={async (e) => {
+                                                const v = e.target.value.trim() || null;
+                                                if (v === (data.folder ?? null)) return;
+                                                try {
+                                                    updateCache({ ...(await saveChatbot(flowId, { folder: v })), draft: graph });
+                                                } catch (err) {
+                                                    toast.error(errorMessage(err));
+                                                }
+                                            }}
+                                        />
+                                        <datalist id="cb-purposes">
+                                            {['Bookings', 'Support', 'Lead capture', 'Sales', 'Orders'].map((x) => (
+                                                <option key={x} value={x} />
+                                            ))}
+                                        </datalist>
+                                    </label>
+                                    <label className="cb-field">
+                                        <span className="l">WhatsApp number</span>
+                                        <select
+                                            className="cb-in"
+                                            value={data.phone_number_id ?? NO_NUMBER}
+                                            disabled={readOnly || data.is_active}
+                                            title={data.is_active ? 'Switch the flow off to move it to another number.' : undefined}
+                                            onChange={async (e) => {
+                                                const v = e.target.value;
+                                                try {
+                                                    updateCache({
+                                                        ...(await saveChatbot(flowId, { phone_number_id: v === NO_NUMBER ? null : v })),
+                                                        draft: graph,
+                                                    });
+                                                } catch (err) {
+                                                    toast.error(errorMessage(err));
+                                                }
+                                            }}
+                                        >
+                                            <option value={NO_NUMBER}>No number yet</option>
+                                            {numbers.map((n) => (
+                                                <option key={n.id} value={n.id}>
+                                                    {n.verified_name ?? n.display_phone_number} {n.verified_name ? `· ${n.display_phone_number}` : ''}
+                                                    {n.status === 'disconnected' ? ' (disconnected)' : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <span className="cb-h">
+                                            {data.is_active
+                                                ? 'Switch the flow off to move it to another number.'
+                                                : 'Which messages start it is set in Start rules.'}
+                                        </span>
+                                    </label>
+                                    <div className="cb-col" style={{ gap: 6 }}>
+                                        <h3>Start rules for this flow</h3>
+                                        <p className="cb-small">
+                                            {data.triggers.length ? data.triggers.join(' · ') : 'Nothing starts it yet: open the Start step.'}
+                                        </p>
+                                        <div className="cb-row">
+                                            <button type="button" className="cb-btn sm" onClick={() => leave('/chatbots/start-rules')}>
+                                                Manage start rules
+                                            </button>
+                                            {start && (
+                                                <button type="button" className="cb-btn sm" onClick={() => jumpTo(start.id)}>
+                                                    Edit the Start step
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </>
+                            )}
+                            <div className="cb-col" style={{ gap: 6 }}>
+                                <h3>Sections</h3>
+                                <p className="cb-small cb-muted">Sections only group steps in the Simple view; they never change how a chat runs.</p>
+                                {sections.map((x, i) => (
+                                    <div key={x.id} className="cb-row" style={{ flexWrap: 'nowrap' }}>
+                                        <input
+                                            className="cb-in"
+                                            value={x.name}
+                                            disabled={readOnly}
+                                            aria-label="Section name"
+                                            onChange={(e) =>
+                                                setSections(
+                                                    sections.map((y) => (y.id === x.id ? { ...y, name: e.target.value.slice(0, 60) } : y)),
+                                                    `secname:${x.id}`,
+                                                )
+                                            }
+                                        />
+                                        <span className="cb-small cb-muted" style={{ flex: 'none' }}>
+                                            {graph.nodes.filter((n) => (n as FlowNode & { section?: string }).section === x.id).length} steps
+                                        </span>
+                                        <button
+                                            type="button"
+                                            className="cb-btn xs"
+                                            aria-label="Move up"
+                                            disabled={readOnly || i === 0}
+                                            onClick={() => {
+                                                const l = sections.slice();
+                                                [l[i - 1], l[i]] = [l[i], l[i - 1]];
+                                                setSections(l);
+                                            }}
+                                        >
+                                            ↑
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="cb-btn xs"
+                                            aria-label={`Delete section ${x.name}`}
+                                            disabled={readOnly || graph.nodes.some((n) => (n as FlowNode & { section?: string }).section === x.id)}
+                                            title="Only empty sections can be deleted"
+                                            onClick={() => setSections(sections.filter((y) => y.id !== x.id))}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                ))}
+                                <button
+                                    type="button"
+                                    className="cb-btn sm"
+                                    style={{ alignSelf: 'flex-start' }}
+                                    disabled={readOnly}
+                                    onClick={() => setSections([...sections, { id: `sec_${Date.now().toString(36)}`, name: 'New section' }])}
+                                >
+                                    + Add section
+                                </button>
+                            </div>
+                            <h3>Behaviour for this flow</h3>
+                            <FlowSettingsDialog
+                                inline
+                                publishedLevel={data.published_engine_level}
+                                open
+                                onOpenChange={() => undefined}
+                                settings={settings}
+                                options={options.data}
+                                readOnly={readOnly}
+                                onSave={(next) => {
+                                    setSettings(next);
+                                    setDirty(true);
+                                }}
+                            />
+                        </div>
+                    ) : (
+                        <div className="cb-scroll">
+                            <HistoryPanel
+                                detail={data}
+                                canRestore={data.can.publish}
+                                onRestore={setRestore}
+                                canEdit={!readOnly}
+                                onLoadDraft={async (revision) => {
+                                    try {
+                                        const r = await getChatbotRevision(flowId, revision);
+                                        if (graph) setPast((p) => [...p.slice(-79), graph]);
+                                        setFuture([]);
+                                        setGraph(r.draft);
+                                        setSettings(r.settings);
+                                        setName(r.name);
+                                        setDirty(true);
+                                        toast.success(`Draft ${revision} loaded. It is saved as the newest draft; Undo brings back what you had.`);
+                                    } catch (e) {
+                                        toast.error(errorMessage(e));
+                                    }
+                                }}
+                            />
+                        </div>
                     )}
                 </aside>
             </div>
@@ -1065,18 +1252,6 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
                 </DialogContent>
             </Dialog>
 
-            <FlowSettingsDialog
-                open={settingsOpen}
-                onOpenChange={setSettingsOpen}
-                settings={settings}
-                options={options.data}
-                readOnly={readOnly}
-                onSave={(next) => {
-                    setSettings(next);
-                    setDirty(true);
-                }}
-            />
-
             <ReviewDialog
                 open={reviewOpen}
                 onOpenChange={setReviewOpen}
@@ -1086,30 +1261,6 @@ export function FlowBuilder({ flowId }: { flowId: string }) {
                     setIssues(detail.issues);
                 }}
                 beforeRequest={save}
-            />
-
-            <HistoryDialog
-                open={historyOpen}
-                onOpenChange={setHistoryOpen}
-                detail={data}
-                canRestore={data.can.publish}
-                onRestore={setRestore}
-                canEdit={!readOnly}
-                onLoadDraft={async (revision) => {
-                    try {
-                        const r = await getChatbotRevision(flowId, revision);
-                        if (graph) setPast((p) => [...p.slice(-79), graph]);
-                        setFuture([]);
-                        setGraph(r.draft);
-                        setSettings(r.settings);
-                        setName(r.name);
-                        setDirty(true); // saved as the newest draft, on top of the current revision
-                        setHistoryOpen(false);
-                        toast.success(`Draft ${revision} loaded. It is saved as the newest draft; Undo brings back what you had.`);
-                    } catch (e) {
-                        toast.error(errorMessage(e));
-                    }
-                }}
             />
 
             <AlertDialog open={replace !== null} onOpenChange={(o) => !o && setReplace(null)}>
@@ -1240,26 +1391,6 @@ function IssuesPanel({
     );
 }
 
-function StatsStrip({ analytics }: { analytics: ChatbotAnalytics }) {
-    const s = analytics.sessions;
-    const stat = (label: string, value: string | number) => (
-        <div className="px-3">
-            <p className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">{label}</p>
-            <p className="text-[15px] font-bold tabular-nums">{value}</p>
-        </div>
-    );
-
-    return (
-        <div className="pointer-events-none absolute top-3 left-1/2 z-10 flex -translate-x-1/2 divide-x rounded-xl border bg-card/95 py-1.5 shadow-sm backdrop-blur">
-            {stat('Started (30d)', s.started)}
-            {stat('Completed', s.completion_rate === null ? '—' : `${s.completion_rate}%`)}
-            {stat('Handed off', s.handoff_rate === null ? '—' : `${s.handoff_rate}%`)}
-            {stat('Avg. time', s.avg_seconds === null ? '—' : s.avg_seconds < 60 ? `${s.avg_seconds}s` : `${Math.round(s.avg_seconds / 60)} min`)}
-            {stat('Left midway', s.abandoned)}
-        </div>
-    );
-}
-
 function MultiSelection({
     count,
     readOnly,
@@ -1294,31 +1425,23 @@ function MultiSelection({
     );
 }
 
+/** Step tab with nothing selected: the publish checks, each problem one click from its step. */
 function Overview({
     detail,
     graph,
     errors,
     warnings,
-    analytics,
     onJump,
-    onSettings,
-    onTidy,
-    readOnly,
 }: {
     detail: ChatbotFlowDetail;
     graph: FlowGraph;
     errors: FlowIssue[];
     warnings: FlowIssue[];
-    analytics: ChatbotAnalytics | null;
     onJump: (id: string) => void;
-    onSettings: () => void;
-    onTidy: () => void;
-    readOnly: boolean;
 }) {
-    const start = graph.nodes.find((n) => n.type === 'start');
     const checks: [boolean, string][] = [
-        [errors.filter((e) => e.code === 'unconnected').length === 0, 'Every branch has a next step'],
-        [errors.filter((e) => e.code === 'unreachable').length === 0, 'Every block can be reached'],
+        [errors.filter((e) => e.code === 'unconnected').length === 0, 'Every path has a next step'],
+        [errors.filter((e) => e.code === 'unreachable').length === 0, 'Every step can be reached'],
         [detail.kind === 'subflow' || graph.nodes.some((n) => n.type === 'handoff'), 'A person can always be reached'],
         [
             errors.filter((e) => ['needs_template', 'missing_template', 'template_status'].includes(e.code ?? '')).length === 0,
@@ -1333,97 +1456,37 @@ function Overview({
     if (detail.approvals_required) checks.push([!errors.some((e) => e.code === 'approval'), 'Approved by a reviewer']);
 
     return (
-        <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="border-b px-4 py-3.5">
-                <p className="text-[14.5px] font-bold">Flow overview</p>
-                <p className="text-[12px] text-muted-foreground">Click a block to edit it. Nothing selected right now.</p>
-            </div>
-            <div className="space-y-5 px-4 py-4">
-                <section>
-                    <p className="mb-2 text-[11px] font-bold tracking-wider text-muted-foreground uppercase">What starts it</p>
-                    <button
-                        type="button"
-                        onClick={() => start && onJump(start.id)}
-                        className="w-full rounded-lg border px-3 py-2 text-left text-[12.5px] hover:bg-muted/60"
-                    >
-                        {detail.triggers.length ? detail.triggers.join(' · ') : <span className="text-warn">Nothing yet — open the Start block</span>}
-                    </button>
-                </section>
-                <section>
-                    <p className="mb-2 text-[11px] font-bold tracking-wider text-muted-foreground uppercase">Before publishing</p>
-                    <ul className="space-y-1.5 text-[12.5px]">
-                        {checks.map(([ok, label]) => (
-                            <li key={label} className="flex items-center gap-2">
-                                {ok ? <CheckCircle2Icon className="size-4 shrink-0 text-good" /> : <CircleAlertIcon className="size-4 shrink-0 text-bad" />}{' '}
-                                {label}
-                            </li>
-                        ))}
-                    </ul>
-                    {errors.length === 0 ? (
-                        <p className="mt-3 rounded-lg bg-good-bg px-3 py-2 text-[12px] text-good">
-                            Ready to publish{warnings.length ? ` (${warnings.length} warning${warnings.length === 1 ? '' : 's'})` : ''}.
-                        </p>
-                    ) : (
-                        <div className="mt-3 space-y-1.5">
-                            {errors.slice(0, 6).map((i, n) => (
-                                <button
-                                    key={n}
-                                    type="button"
-                                    onClick={() => i.node_id && onJump(i.node_id)}
-                                    className="block w-full rounded-lg bg-bad-bg px-3 py-2 text-left text-[12px] text-bad hover:underline"
-                                >
-                                    {i.message}
-                                </button>
-                            ))}
-                            {errors.length > 6 && (
-                                <p className="text-[11.5px] text-muted-foreground">…and {errors.length - 6} more (see “to fix” at the top).</p>
-                            )}
-                        </div>
-                    )}
-                </section>
-                {analytics && (
-                    <section>
-                        <p className="mb-2 text-[11px] font-bold tracking-wider text-muted-foreground uppercase">Where customers leave</p>
-                        {analytics.dropoff.length === 0 ? (
-                            <p className="text-[12px] text-muted-foreground">Nobody left midway in the last {analytics.days} days.</p>
+        <div className="cb-col" style={{ gap: 10 }}>
+            <h3>Before publishing</h3>
+            <ul className="cb-col" style={{ gap: 6, listStyle: 'none', margin: 0, padding: 0 }}>
+                {checks.map(([ok, label]) => (
+                    <li key={label} className="cb-row cb-small">
+                        {ok ? (
+                            <CheckCircle2Icon className="size-4 shrink-0" style={{ color: 'var(--cb-brand-deep)' }} />
                         ) : (
-                            <ul className="space-y-1">
-                                {analytics.dropoff.map((d) => (
-                                    <li key={d.node_id}>
-                                        <button
-                                            type="button"
-                                            onClick={() => onJump(d.node_id)}
-                                            className="flex w-full items-center justify-between gap-2 rounded-md px-2 py-1 text-[12.5px] hover:bg-muted"
-                                        >
-                                            <span className="truncate">{d.title}</span>
-                                            <span className="font-semibold text-warn tabular-nums">
-                                                {d.abandoned} of {d.entries}
-                                            </span>
-                                        </button>
-                                    </li>
-                                ))}
-                            </ul>
+                            <CircleAlertIcon className="size-4 shrink-0" style={{ color: 'var(--cb-bad-i)' }} />
                         )}
-                    </section>
-                )}
-                {!readOnly && (
-                    <section className="grid grid-cols-2 gap-2">
-                        <Button variant="outline" size="sm" onClick={onSettings}>
-                            <SettingsIcon /> Flow settings
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={onTidy}>
-                            <WandSparklesIcon /> Tidy up
-                        </Button>
-                    </section>
-                )}
-                <section className="rounded-lg bg-muted px-3 py-2.5 text-[11.5px] leading-relaxed text-ink-2">
-                    <p className="font-semibold">Shortcuts</p>
-                    <p className="mt-1">
-                        Delete · Ctrl/⌘ Z undo · Ctrl/⌘ Shift Z redo · Ctrl/⌘ C / V copy & paste · Ctrl/⌘ D duplicate · Ctrl/⌘ A select all · F fit · Shift +
-                        drag to select a group · Ctrl + scroll to zoom
-                    </p>
-                </section>
-            </div>
+                        {label}
+                    </li>
+                ))}
+            </ul>
+            {errors.length === 0 ? (
+                <p className="cb-banner ok cb-small">
+                    Ready to publish{warnings.length ? ` (${warnings.length} warning${warnings.length === 1 ? '' : 's'})` : ''}.
+                </p>
+            ) : (
+                errors.slice(0, 8).map((i, n) => (
+                    <button
+                        key={n}
+                        type="button"
+                        onClick={() => i.node_id && onJump(i.node_id)}
+                        className="cb-banner bad cb-small"
+                        style={{ border: 0, textAlign: 'left', cursor: 'pointer' }}
+                    >
+                        {i.message}
+                    </button>
+                ))
+            )}
         </div>
     );
 }
@@ -1510,114 +1573,6 @@ function ReviewDialog({
                         </div>
                     )}
                 </DialogFooter>
-            </DialogContent>
-        </Dialog>
-    );
-}
-
-function HistoryDialog({
-    open,
-    onOpenChange,
-    detail,
-    canRestore,
-    onRestore,
-    canEdit,
-    onLoadDraft,
-}: {
-    open: boolean;
-    onOpenChange: (o: boolean) => void;
-    detail: ChatbotFlowDetail;
-    canRestore: boolean;
-    onRestore: (v: number) => void;
-    canEdit: boolean;
-    onLoadDraft: (revision: number) => void;
-}) {
-    const history = useChatbotHistory(detail.id, open);
-    const drafts = useChatbotRevisions(detail.id, open);
-    const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '');
-
-    return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
-                <DialogHeader>
-                    <DialogTitle>Versions & history</DialogTitle>
-                    <DialogDescription>Every publish is a version you can roll back to. The log shows who changed what.</DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-5 sm:grid-cols-2">
-                    <section>
-                        <p className="mb-2 text-[11px] font-bold tracking-wider text-muted-foreground uppercase">Versions</p>
-                        {detail.versions.length === 0 ? (
-                            <p className="text-[12px] text-muted-foreground">Not published yet.</p>
-                        ) : (
-                            <ul className="divide-y rounded-lg border text-[12.5px]">
-                                {detail.versions.map((v) => (
-                                    <li key={v.version} className="flex items-center justify-between gap-2 px-3 py-1.5">
-                                        <span>
-                                            v{v.version}
-                                            {v.version === detail.published_version && (
-                                                <Badge tone="good" className="ml-1.5">
-                                                    current
-                                                </Badge>
-                                            )}
-                                            <span className="block text-[11px] text-muted-foreground">{when(v.created_at)}</span>
-                                        </span>
-                                        {canRestore && v.version !== detail.published_version && (
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => {
-                                                    onOpenChange(false);
-                                                    onRestore(v.version);
-                                                }}
-                                            >
-                                                Roll back
-                                            </Button>
-                                        )}
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </section>
-                    <section className="sm:col-span-2">
-                        <p className="mb-2 text-[11px] font-bold tracking-wider text-muted-foreground uppercase">Saved drafts (last 50)</p>
-                        <ul className="max-h-48 divide-y overflow-y-auto rounded-lg border text-[12.5px]" data-testid="saved-drafts">
-                            {(drafts.data ?? []).map((d) => (
-                                <li key={d.revision} className="flex items-center justify-between gap-2 px-3 py-1.5">
-                                    <span>
-                                        Draft {d.revision}
-                                        {d.revision === detail.draft_revision && (
-                                            <Badge tone="brand" className="ml-1.5">
-                                                current
-                                            </Badge>
-                                        )}
-                                        <span className="block text-[11px] text-muted-foreground">
-                                            {d.by ?? 'Someone'} · {d.steps} steps · {when(d.created_at)}
-                                        </span>
-                                    </span>
-                                    {canEdit && d.revision !== detail.draft_revision && (
-                                        <Button variant="ghost" size="sm" onClick={() => onLoadDraft(d.revision)}>
-                                            Load
-                                        </Button>
-                                    )}
-                                </li>
-                            ))}
-                            {drafts.data?.length === 0 && <li className="px-3 py-1.5 text-muted-foreground">No saved drafts yet.</li>}
-                        </ul>
-                    </section>
-                    <section>
-                        <p className="mb-2 text-[11px] font-bold tracking-wider text-muted-foreground uppercase">Activity</p>
-                        <ul className="space-y-2 text-[12.5px]">
-                            {(history.data ?? []).map((h, i) => (
-                                <li key={i}>
-                                    <span className="font-semibold">{ACTIONS[h.action] ?? h.action.replace(/^chatbot\./, '').replace(/_/g, ' ')}</span>
-                                    {typeof h.meta?.version === 'number' && ` v${h.meta.version}`} <span className="text-muted-foreground">· {h.actor}</span>
-                                    <span className="block text-[11px] text-muted-foreground">{when(h.created_at)}</span>
-                                </li>
-                            ))}
-                            {history.isLoading && <Skeleton className="h-20 w-full" />}
-                        </ul>
-                    </section>
-                </div>
             </DialogContent>
         </Dialog>
     );

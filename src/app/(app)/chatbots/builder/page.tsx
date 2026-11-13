@@ -10,12 +10,13 @@ import { P } from '@/lib/permissions';
 
 function Builder() {
     const { can } = useSession();
-    const id = useSearchParams().get('id');
+    const params = useSearchParams();
+    const id = params.get('id');
 
     if (!can(P.ChatbotsView)) return <Forbidden />;
     if (!id) return <Forbidden />;
 
-    return <FlowBuilder key={id} flowId={id} />;
+    return <FlowBuilder key={id} flowId={id} initialStep={params.get('step')} />;
 }
 
 /** Full-screen flow builder (/chatbots/builder?id=…). */

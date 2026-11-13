@@ -58,12 +58,10 @@ test('two editors: the second save is refused, merged without losing either chan
     const a = await openBuilder(browser, id);
     const b = await openBuilder(browser, id);
 
-    await a.getByText('First message', { exact: true }).first().click();
-    await a.getByLabel('Message', { exact: true }).fill('First, edited by A');
+    await a.getByLabel('Message of First').fill('First, edited by A');
     await expect(a.getByText('All changes saved')).toBeVisible({ timeout: 20_000 });
 
-    await b.getByText('Second message', { exact: true }).first().click();
-    await b.getByLabel('Message', { exact: true }).fill('Second, edited by B');
+    await b.getByLabel('Message of Second').fill('Second, edited by B');
     await expect(b.getByRole('dialog')).toContainText('saved this flow while you were editing');
     await expect(b.getByRole('dialog')).toContainText('both sets of changes fit together');
     await b.getByRole('button', { name: 'Merge and save' }).click();
@@ -91,19 +89,17 @@ test('a flow from before the upgrade keeps its behaviour until someone upgrades 
         `$c=app(App\\Domain\\Tenancy\\TenantContext::class); $c->bypass(fn()=>Illuminate\\Support\\Facades\\DB::statement("UPDATE chatbot_flows SET settings = jsonb_set(COALESCE(settings,'{}'::jsonb),'{engine_level}','1') WHERE id = '${id}'")); $c->bypass(fn()=>Illuminate\\Support\\Facades\\DB::statement("UPDATE chatbot_flow_versions SET settings = jsonb_set(COALESCE(settings,'{}'::jsonb),'{engine_level}','1') WHERE flow_id = '${id}'"));`,
     );
     await page.goto(`/chatbots/builder?id=${id}`);
-    await page.getByRole('button', { name: 'Flow settings' }).first().click();
+    await page.getByRole('tab', { name: 'Flow settings' }).click();
     await expect(page.getByTestId('engine-level-1')).toBeVisible();
 
-    // Editing other settings keeps level 1.
-    await page.getByRole('button', { name: 'Save settings' }).click();
+    // Editing other settings keeps level 1 (they save with the draft at once).
+    await page.getByRole('button', { name: '+ Add section' }).click();
     await expect(page.getByText('All changes saved')).toBeVisible({ timeout: 20_000 });
     expect((await api<{ data: Detail }>(page, 'GET', `chatbots/${id}`)).data.engine_level).toBe(1);
 
     // Upgrade: the draft moves to level 2; customers keep level 1 until it is published.
-    await page.getByRole('button', { name: 'Flow settings' }).first().click();
     await page.getByRole('button', { name: 'Upgrade' }).click();
     await expect(page.getByTestId('engine-level-upgraded')).toBeVisible();
-    await page.getByRole('button', { name: 'Save settings' }).click();
     await expect(page.getByText('All changes saved')).toBeVisible({ timeout: 20_000 });
     let detail = (await api<{ data: Detail }>(page, 'GET', `chatbots/${id}`)).data;
     expect(detail.engine_level).toBe(2);
@@ -131,12 +127,12 @@ test('the step settings, test conditions and live-call safeguards in the builder
     await page.goto(`/chatbots/builder?id=${id}`);
 
     // Booking window on a date question; sample answer on an API step; outcome on the handover.
-    await page.getByText('Which day?', { exact: true }).first().click();
+    await page.getByRole('button', { name: 'Day', exact: true }).last().click();
     await page.getByLabel('Booking window in days').fill('30');
-    await page.getByText('Crm', { exact: true }).first().click();
+    await page.getByRole('button', { name: 'Crm', exact: true }).last().click();
     await page.getByLabel('Sample status code').fill('201');
     await page.getByLabel('Sample response body').fill('{"lead":{"id":"SAMPLE-1"}}');
-    await page.getByText('Team', { exact: true }).first().click();
+    await page.getByRole('button', { name: 'Team', exact: true }).last().click();
     await page.getByLabel('Outcome').fill('Qualified lead');
     await expect(page.getByText('All changes saved')).toBeVisible({ timeout: 20_000 });
     const nodes = Object.fromEntries((await api<{ data: Detail }>(page, 'GET', `chatbots/${id}`)).data.draft.nodes.map((n) => [n.id, n.config]));
@@ -192,9 +188,8 @@ test('start rules: overlaps, priority per number and the tester', async ({ page 
 
 test('test endpoints are set in the workspace and unsafe addresses are refused', async ({ page }) => {
     await signIn(page);
-    await page.goto('/chatbots');
-    await page.getByRole('button', { name: 'Workspace', exact: true }).click();
-    await page.getByRole('button', { name: 'Test endpoints' }).click();
+    await page.goto('/chatbots/settings');
+    await page.getByRole('tab', { name: 'Test endpoints' }).click();
     await page.getByRole('button', { name: 'Add an address' }).click();
     await page.getByLabel('Test endpoint 1').fill('http://10.0.0.5/hook');
     await page.getByRole('button', { name: 'Save', exact: true }).click();

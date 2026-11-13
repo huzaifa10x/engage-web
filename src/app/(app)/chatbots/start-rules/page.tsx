@@ -1,25 +1,23 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowDownIcon, ArrowUpIcon, PencilIcon, TriangleAlertIcon } from 'lucide-react';
+import { ArrowDownIcon, ArrowUpIcon, PencilIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
-import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
+import { Forbidden } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
-import { ChatbotsTabs } from '@/components/chatbots/chatbots-tabs';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { errorMessage } from '@/lib/api';
-import { orderStartRules, type StartRule, type StartRuleKind, testStartRules, useStartRules } from '@/lib/chatbots';
+import { Switch } from '@/components/ui/switch';
+import { ApiError, errorMessage } from '@/lib/api';
+import { activateChatbot, orderStartRules, type StartRule, type StartRuleKind, testStartRules, useStartRules } from '@/lib/chatbots';
 import { P } from '@/lib/permissions';
+import { cn } from '@/lib/utils';
 
 const KIND: Record<StartRuleKind, string> = {
     campaign: 'Campaign button',
@@ -56,6 +54,7 @@ export default function StartRulesPage() {
     const { can } = useSession();
     const allowed = can(P.ChatbotsView);
     const canOrder = can(P.ChatbotsPublish);
+    const canManage = can(P.ChatbotsManage);
     const qc = useQueryClient();
     const rules = useStartRules(allowed);
     const [number, setNumber] = useState<string | null>(null);
@@ -63,6 +62,7 @@ export default function StartRulesPage() {
     if (!allowed) return <Forbidden />;
     const numbers = rules.data ?? [];
     const current = numbers.find((n) => n.phone_number_id === number) ?? numbers[0];
+    const label = (n: (typeof numbers)[number]) => n.verified_name ?? n.display_phone_number ?? n.phone_number_id;
 
     const move = async (index: number, delta: -1 | 1) => {
         if (!current) return;
@@ -79,110 +79,181 @@ export default function StartRulesPage() {
             setBusy(false);
         }
     };
+    const toggle = async (r: StartRule, on: boolean) => {
+        setBusy(true);
+        try {
+            await activateChatbot(r.flow_id, on);
+            toast.success(on ? `“${r.name}” is on` : `“${r.name}” is off`);
+            await qc.invalidateQueries({ queryKey: ['chatbots'] });
+        } catch (e) {
+            toast.error(
+                e instanceof ApiError && e.status === 409
+                    ? 'Another flow already has this role on the number. Switch it on from My Flows to replace it.'
+                    : errorMessage(e),
+            );
+        } finally {
+            setBusy(false);
+        }
+    };
 
     return (
         <>
-            <ChatbotsTabs />
-            <PageHeader
-                title="Start rules"
-                description="What starts each flow on each number, in the order a new message is checked. Rules on different numbers never compete, and no flow starts while a person is handling the chat."
-            />
+            <div className="cb-pagehead">
+                <div>
+                    <h1>Start rules</h1>
+                    <p>
+                        One list per number. A new message is checked against the rules for its number, top to bottom; the first that matches starts its flow
+                        and the rest are skipped. Rules on different numbers never compete, and a flow never starts while a person is handling the chat.
+                    </p>
+                </div>
+                {canManage && (
+                    <Link href="/chatbots?create=1" className="cb-btn pri cb-spacer" title="A rule belongs to a flow: create the flow, then set what starts it">
+                        + New rule
+                    </Link>
+                )}
+            </div>
             {rules.isLoading ? (
                 <Skeleton className="h-64 w-full" />
             ) : numbers.length === 0 ? (
-                <Card>
-                    <EmptyState title="No flows on a number yet" description="Choose a WhatsApp number for a flow and its start rules show up here." />
-                </Card>
+                <div className="cb-card cb-empty">Choose a WhatsApp number for a flow and its start rule shows up here.</div>
             ) : (
-                <div className="space-y-4">
-                    {numbers.length > 1 && (
-                        <Select value={current?.phone_number_id} onValueChange={setNumber}>
-                            <SelectTrigger className="w-72" aria-label="Number">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {numbers.map((n) => (
-                                    <SelectItem key={n.phone_number_id} value={n.phone_number_id}>
-                                        {n.display_phone_number ?? n.phone_number_id} {n.verified_name ? `· ${n.verified_name}` : ''}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    )}
-                    <p className="text-[12.5px] text-muted-foreground">
-                        Order of checking: campaign button replies, QR codes, ads and keywords (by this list), then the greeting flow, then the default flow.
-                        The first match starts its flow.
-                    </p>
+                <>
                     {current && current.overlaps.length > 0 && (
-                        <div className="space-y-1 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12.5px]" data-testid="overlaps">
-                            <p className="flex items-center gap-1.5 font-semibold">
-                                <TriangleAlertIcon className="size-4" /> Flows that can match the same message
-                            </p>
+                        <div className="cb-banner warn cb-col" style={{ gap: 4 }} data-testid="overlaps">
+                            <b>Rules that can match the same message</b>
                             {current.overlaps.map((o, i) => (
-                                <p key={i}>{o.text}</p>
+                                <span key={i} className="cb-small">
+                                    {o.text}
+                                </span>
                             ))}
                         </div>
                     )}
-                    {current && (
-                        <Card className="divide-y" data-testid="start-rules">
-                            {current.rules.map((r, i) => (
-                                <div key={r.flow_id} className="flex items-start gap-3 px-4 py-3">
-                                    <div className="flex w-9 flex-col items-center gap-0.5">
-                                        <Button
-                                            variant="ghost"
-                                            size="icon-sm"
-                                            aria-label={`Move ${r.name} up`}
-                                            disabled={!canOrder || busy || i === 0}
-                                            onClick={() => void move(i, -1)}
-                                        >
-                                            <ArrowUpIcon />
-                                        </Button>
-                                        <span className="text-[13px] font-bold tabular-nums">{i + 1}</span>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon-sm"
-                                            aria-label={`Move ${r.name} down`}
-                                            disabled={!canOrder || busy || i === current.rules.length - 1}
-                                            onClick={() => void move(i, 1)}
-                                        >
-                                            <ArrowDownIcon />
-                                        </Button>
-                                    </div>
-                                    <div className="min-w-0 flex-1 space-y-1">
-                                        <div className="flex flex-wrap items-center gap-2">
-                                            <p className="font-semibold">{r.name}</p>
-                                            <Badge tone={r.status === 'live' ? 'good' : 'grey'}>
-                                                {r.status === 'live' ? 'Live' : r.status === 'paused' ? 'Published, off' : 'Draft'}
-                                            </Badge>
-                                            {r.kinds.map((k) => (
-                                                <Badge key={k} tone="outline">
-                                                    {KIND[k]}
-                                                </Badge>
-                                            ))}
-                                        </div>
-                                        <ul className="text-[12.5px] text-muted-foreground">
-                                            {describe(r).map((d) => (
-                                                <li key={d}>When: {d}</li>
-                                            ))}
-                                            <li>
-                                                Starts again: {REENTRY[r.reentry]}
-                                                {r.reentry === 'cooldown' ? ` ${r.cooldown_hours} hours` : ''}
-                                            </li>
-                                            {r.status !== 'live' && <li>Waits until the flow is live.</li>}
-                                        </ul>
-                                    </div>
-                                    <Button asChild size="sm" variant="outline">
-                                        <Link href={`/chatbots/builder?id=${r.flow_id}`}>
-                                            <PencilIcon /> Edit triggers
-                                        </Link>
-                                    </Button>
-                                </div>
+                    <div className="cb-row">
+                        <span className="cb-small cb-muted">Number:</span>
+                        <div className="cb-seg" role="tablist" aria-label="Number">
+                            {numbers.map((n) => (
+                                <button
+                                    key={n.phone_number_id}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={current?.phone_number_id === n.phone_number_id}
+                                    className={current?.phone_number_id === n.phone_number_id ? 'on' : undefined}
+                                    onClick={() => setNumber(n.phone_number_id)}
+                                >
+                                    {label(n)}
+                                    {n.overlaps.length > 0 && ' ⚠'}
+                                </button>
                             ))}
-                        </Card>
+                        </div>
+                    </div>
+                    <p className="cb-small cb-muted">
+                        Checked in this order: campaign button replies, QR codes, ads and keywords (by this list), then the greeting rule, then the rule that
+                        takes any message. Within a kind, the higher rule wins.
+                    </p>
+                    {current && (
+                        <div className="cb-card" data-testid="start-rules">
+                            {current.rules.map((r, i) => {
+                                const when = describe(r).filter((d) => !d.startsWith('Outside business hours'));
+                                const off = r.status !== 'live';
+
+                                return (
+                                    <div
+                                        key={r.flow_id}
+                                        className="cb-row"
+                                        style={{
+                                            padding: 16,
+                                            alignItems: 'flex-start',
+                                            flexWrap: 'nowrap',
+                                            borderTop: i ? '1px solid var(--cb-line-2)' : undefined,
+                                            opacity: off ? 0.75 : 1,
+                                        }}
+                                    >
+                                        <div className="cb-col" style={{ gap: 2, alignItems: 'center', flex: 'none' }}>
+                                            <button
+                                                type="button"
+                                                className="cb-btn xs"
+                                                aria-label={`Move ${r.name} up`}
+                                                disabled={!canOrder || busy || i === 0}
+                                                onClick={() => void move(i, -1)}
+                                            >
+                                                <ArrowUpIcon className="size-3.5" />
+                                            </button>
+                                            <b className="cb-num">{i + 1}</b>
+                                            <button
+                                                type="button"
+                                                className="cb-btn xs"
+                                                aria-label={`Move ${r.name} down`}
+                                                disabled={!canOrder || busy || i === current.rules.length - 1}
+                                                onClick={() => void move(i, 1)}
+                                            >
+                                                <ArrowDownIcon className="size-3.5" />
+                                            </button>
+                                        </div>
+                                        <div className="cb-col cb-grow" style={{ gap: 8 }}>
+                                            <div className="cb-row">
+                                                <b>{r.name}</b>
+                                                <span className={cn('cb-chip', r.status === 'live' ? 'live' : 'off')}>
+                                                    {r.status === 'live' ? 'Live' : r.status === 'paused' ? 'Off' : 'Draft'}
+                                                </span>
+                                                {r.kinds.map((k) => (
+                                                    <span key={k} className="cb-chip">
+                                                        {KIND[k]}
+                                                    </span>
+                                                ))}
+                                                {off && <span className="cb-small cb-muted">Waits until the flow is live</span>}
+                                            </div>
+                                            <div className="grid gap-2 md:grid-cols-3">
+                                                <div className="cb-fig" style={{ display: 'block', padding: '8px 10px' }}>
+                                                    <div className="cb-tiny cb-muted" style={{ fontWeight: 600 }}>
+                                                        WHEN
+                                                    </div>
+                                                    {when.map((d) => (
+                                                        <div key={d}>{d}</div>
+                                                    ))}
+                                                    <div className="cb-muted">on {label(current)}</div>
+                                                </div>
+                                                <div className="cb-fig" style={{ display: 'block', padding: '8px 10px' }}>
+                                                    <div className="cb-tiny cb-muted" style={{ fontWeight: 600 }}>
+                                                        IF
+                                                    </div>
+                                                    {r.after_hours ? 'Outside business hours' : 'Any time'}
+                                                </div>
+                                                <div className="cb-fig" style={{ display: 'block', padding: '8px 10px' }}>
+                                                    <div className="cb-tiny cb-muted" style={{ fontWeight: 600 }}>
+                                                        THEN
+                                                    </div>
+                                                    Start {r.name}
+                                                    <div className="cb-muted">
+                                                        Starts again: {REENTRY[r.reentry]}
+                                                        {r.reentry === 'cooldown' ? ` ${r.cooldown_hours} hours` : ''}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="cb-col" style={{ gap: 6, alignItems: 'flex-end', flex: 'none' }}>
+                                            {canOrder && r.published && (
+                                                <label className="cb-row cb-small">
+                                                    <Switch
+                                                        checked={r.status === 'live'}
+                                                        disabled={busy}
+                                                        onCheckedChange={(v) => void toggle(r, v)}
+                                                        aria-label={`${r.name} on`}
+                                                    />
+                                                    {r.status === 'live' ? 'On' : 'Off'}
+                                                </label>
+                                            )}
+                                            <Link href={`/chatbots/builder?id=${r.flow_id}&step=start`} className="cb-btn xs">
+                                                <PencilIcon className="size-3" /> Edit
+                                            </Link>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     )}
-                    {!canOrder && <p className="text-[12px] text-muted-foreground">Only people who can publish flows can change the order.</p>}
+                    {!canOrder && <p className="cb-small cb-muted">Only people who can publish flows can change the order or switch rules on and off.</p>}
                     {current && <Tester numberId={current.phone_number_id} />}
-                </div>
+                </>
             )}
         </>
     );
@@ -198,8 +269,8 @@ function Tester({ numberId }: { numberId: string }) {
     const [busy, setBusy] = useState(false);
 
     return (
-        <Card className="space-y-3 p-4">
-            <p className="font-semibold">Test a message</p>
+        <div className="cb-card cb-col" style={{ padding: 16, gap: 10 }}>
+            <h3>Which flow would answer?</h3>
             <div className="flex flex-wrap gap-2">
                 <Input
                     value={text}
@@ -243,11 +314,11 @@ function Tester({ numberId }: { numberId: string }) {
                 ))}
             </div>
             {result && (
-                <p className="rounded-md bg-muted px-3 py-2 text-[13px]" data-testid="tester-result">
+                <p className="cb-banner sample" data-testid="tester-result">
                     {result}
                 </p>
             )}
             <p className="text-[11.5px] text-muted-foreground">Uses your business hours as they are right now. Nothing is sent or saved.</p>
-        </Card>
+        </div>
     );
 }
