@@ -516,7 +516,16 @@ function ChatbotsList() {
                                     </thead>
                                     <tbody>
                                         {shown.map((f) => (
-                                            <tr key={f.id} className="click" onClick={(e) => !(e.target as HTMLElement).closest('button, a') && open(f)}>
+                                            <tr
+                                                key={f.id}
+                                                className="click"
+                                                onClick={(e) => {
+                                                    // Menu items render in a portal, outside the row, but their clicks still bubble here: ignore them.
+                                                    const t = e.target as HTMLElement;
+                                                    if (!e.currentTarget.contains(t) || t.closest('button, a, [role="menuitem"]')) return;
+                                                    open(f);
+                                                }}
+                                            >
                                                 <td>
                                                     <Link
                                                         href={`/chatbots/builder?id=${f.id}`}

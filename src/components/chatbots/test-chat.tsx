@@ -1,12 +1,11 @@
 'use client';
 
-import { ClockIcon, ImageIcon, ListIcon, MapPinIcon, MicIcon, RotateCcwIcon, SendIcon, StickyNoteIcon, UserIcon, XIcon } from 'lucide-react';
+import { ClockIcon, ImageIcon, ListIcon, MapPinIcon, MicIcon, RotateCcwIcon, SendIcon, StickyNoteIcon, XIcon } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { errorMessage } from '@/lib/api';
 import { useSession } from '@/components/app/session';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -37,6 +36,10 @@ export function TestChat({
     options,
     onClose,
     onNode,
+    fromNode = null,
+    fromTitle,
+    selectedNode = null,
+    onFromNode,
 }: {
     flowId: string;
     botName: string;
@@ -45,6 +48,12 @@ export function TestChat({
     options: ChatbotOptions | undefined;
     onClose: () => void;
     onNode: (id: string | null) => void;
+    /** Start the test at this step instead of the beginning (“Test from this step”). */
+    fromNode?: string | null;
+    fromTitle?: string;
+    /** The step selected in the builder, for “From selected step”. */
+    selectedNode?: string | null;
+    onFromNode?: (id: string | null) => void;
 }) {
     const { can } = useSession();
     const mayGoLive = can(P.ChatbotsPublish) && can(P.IntegrationsManage);
@@ -85,6 +94,7 @@ export function TestChat({
                     test_id: fresh ? null : testId,
                     contact_id: contact === NOBODY ? null : contact,
                     language: fresh ? language : undefined,
+                    from_node: fresh ? (fromNode ?? undefined) : undefined,
                     ...conditions,
                     source: fresh ? (conditions.source ?? undefined) : undefined,
                     ...input,
@@ -112,7 +122,7 @@ export function TestChat({
     // The conversation starts as soon as the simulator opens.
     useEffect(() => {
         let alive = true;
-        testChatbot(flowId, { language: languages[0] ?? null, ...cfg, source: undefined })
+        testChatbot(flowId, { language: languages[0] ?? null, ...cfg, source: undefined, from_node: fromNode ?? undefined })
             .then((r) => alive && apply(r))
             .catch((e) => alive && setError(errorMessage(e)))
             .finally(() => alive && setBusy(false));
@@ -137,97 +147,52 @@ export function TestChat({
         void turn({ text: t }, t);
     };
 
+    const conditionsChanged = live || cfg.window === 'closed' || cfg.api_mode !== 'success' || !!cfg.source || contactId !== NOBODY;
+
     return (
         <div className="flex min-h-0 flex-1 flex-col">
-            <div className="space-y-2 border-b px-4 py-3">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <p className="text-[14.5px] font-bold">Test the flow</p>
-                        <p className="text-[11.5px] text-muted-foreground">Runs your draft. Nothing is sent or saved.</p>
-                    </div>
-                    <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => {
-                            onNode(null);
-                            onClose();
-                        }}
-                        aria-label="Close the test"
-                    >
-                        <XIcon />
-                    </Button>
+            <div className="cb-col" style={{ gap: 10, padding: '12px 16px', borderBottom: '1px solid var(--cb-line)' }}>
+                <div className="cb-banner sample cb-small">
+                    <span>
+                        <b>Test mode.</b> Runs this draft on the same engine as live chats. Nothing is sent on WhatsApp, no contact is changed, API and Sheets
+                        steps use sample answers unless you choose your test endpoints, and tests never appear in Runs or Insights.
+                    </span>
                 </div>
-                <div className="flex items-center gap-2">
-                    <UserIcon className="size-4 shrink-0 text-muted-foreground" />
-                    <Select
-                        value={contactId}
-                        onValueChange={(v) => {
-                            setContactId(v);
-                            restart(v);
-                        }}
-                    >
-                        <SelectTrigger size="sm" className="min-w-0 flex-1" aria-label="Test as contact">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value={NOBODY}>Sample customer</SelectItem>
-                            {people.map((c) => (
-                                <SelectItem key={c.id} value={c.id}>
-                                    As {c.display_name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    {languages.length > 1 && (
-                        <Select
-                            value={lang}
-                            onValueChange={(v) => {
-                                setLang(v);
-                                restart(contactId, v);
-                            }}
-                        >
-                            <SelectTrigger size="sm" className="w-20" aria-label="Language">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {languages.map((l) => (
-                                    <SelectItem key={l} value={l} title={LANGUAGES[l]}>
-                                        {l.toUpperCase()}
-                                    </SelectItem>
+                <details className="cb-card" style={{ padding: 0 }} open={showCfg} onToggle={(e) => setShowCfg((e.target as HTMLDetailsElement).open)}>
+                    <summary className="cursor-pointer px-3 py-2.5 text-[13.5px] font-semibold" aria-label="Test settings">
+                        Test settings{conditionsChanged ? ' · changed' : ''}
+                    </summary>
+                    <div className="grid grid-cols-2 gap-2 px-3 pb-3 text-[12.5px]" data-testid="test-conditions">
+                        <label className="cb-field">
+                            <span className="l">Customer</span>
+                            <select
+                                className="cb-in"
+                                value={contactId}
+                                onChange={(e) => {
+                                    setContactId(e.target.value);
+                                    restart(e.target.value);
+                                }}
+                                aria-label="Test as contact"
+                            >
+                                <option value={NOBODY}>New customer (unknown)</option>
+                                {people.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                        {c.display_name}
+                                    </option>
                                 ))}
-                            </SelectContent>
-                        </Select>
-                    )}
-                    <Button size="sm" variant="outline" onClick={() => restart()} disabled={busy} title="Start again">
-                        <RotateCcwIcon />
-                    </Button>
-                </div>
-                <button className="text-[11.5px] font-semibold text-muted-foreground underline" onClick={() => setShowCfg((v) => !v)} aria-expanded={showCfg}>
-                    {showCfg ? 'Hide test conditions' : 'Test conditions'}
-                    {live ? ' · live integrations' : cfg.window === 'closed' || cfg.api_mode !== 'success' || cfg.source ? ' · changed' : ''}
-                </button>
-                {showCfg && (
-                    <div className="grid grid-cols-2 gap-2 text-[12px]" data-testid="test-conditions">
+                            </select>
+                        </label>
                         <CfgSelect
-                            label="Number"
+                            label="WhatsApp number"
                             value={cfg.number_id ?? '__flow__'}
                             onChange={(v) => changeCfg({ number_id: v === '__flow__' ? numberId : v })}
                             options={[
                                 ['__flow__', 'The flow’s number'],
-                                ...(options?.numbers ?? []).map((n) => [n.id, n.display_phone_number ?? n.verified_name ?? n.id] as [string, string]),
+                                ...(options?.numbers ?? []).map((n) => [n.id, n.verified_name ?? n.display_phone_number ?? n.id] as [string, string]),
                             ]}
                         />
                         <CfgSelect
-                            label="24-hour window"
-                            value={cfg.window ?? 'open'}
-                            onChange={(v) => changeCfg({ window: v as 'open' | 'closed' })}
-                            options={[
-                                ['open', 'Open'],
-                                ['closed', 'Closed (templates only)'],
-                            ]}
-                        />
-                        <CfgSelect
-                            label="API and Sheets steps"
+                            label="API and integrations"
                             value={live ? 'live' : (cfg.api_mode ?? 'success')}
                             onChange={(v) => {
                                 if (v === 'live') setAskLive(true);
@@ -240,10 +205,19 @@ export function TestChat({
                                     });
                             }}
                             options={[
-                                ['success', 'Sample answer (not sent)'],
+                                ['success', 'Succeed (sample answer)'],
                                 ['error', 'Fail with an error'],
                                 ['timeout', 'Time out'],
                                 ...(mayGoLive ? [['live', 'Call test endpoints for real…'] as [string, string]] : []),
+                            ]}
+                        />
+                        <CfgSelect
+                            label="24-hour window"
+                            value={cfg.window ?? 'open'}
+                            onChange={(v) => changeCfg({ window: v as 'open' | 'closed' })}
+                            options={[
+                                ['open', 'Open (customer wrote)'],
+                                ['closed', 'Closed (templates only)'],
                             ]}
                         />
                         <CfgSelect
@@ -257,10 +231,58 @@ export function TestChat({
                                 ['paid_other', 'Other paid source'],
                             ]}
                         />
+                        {languages.length > 1 && (
+                            <CfgSelect
+                                label="Language"
+                                value={lang}
+                                onChange={(v) => {
+                                    setLang(v);
+                                    restart(contactId, v);
+                                }}
+                                options={languages.map((l) => [l, LANGUAGES[l] ?? l.toUpperCase()] as [string, string])}
+                            />
+                        )}
                     </div>
-                )}
+                </details>
+                <div className="cb-row">
+                    <button type="button" className="cb-btn sm" onClick={() => (fromNode && onFromNode ? onFromNode(null) : restart())} disabled={busy}>
+                        <RotateCcwIcon className="size-3.5" /> Restart
+                    </button>
+                    {onFromNode && (
+                        <button
+                            type="button"
+                            className="cb-btn sm"
+                            disabled={busy || !selectedNode}
+                            title={selectedNode ? 'Start the test at the step selected in the flow' : 'Select a step in the flow first'}
+                            onClick={() => (selectedNode === fromNode ? restart() : onFromNode(selectedNode))}
+                        >
+                            ▶ From selected step
+                        </button>
+                    )}
+                    <button
+                        type="button"
+                        className="cb-btn sm"
+                        disabled={busy || !state?.has_timeout}
+                        title="Pretend the customer stopped answering: the step’s No reply path runs now"
+                        onClick={() => void turn({ action: 'timeout' }, undefined)}
+                    >
+                        <ClockIcon className="size-3.5" /> No reply
+                    </button>
+                    <button
+                        type="button"
+                        className="cb-btn sm cb-iconbtn cb-spacer"
+                        onClick={() => {
+                            onNode(null);
+                            onClose();
+                        }}
+                        aria-label="Close the test"
+                        title="Close the test"
+                    >
+                        <XIcon className="size-4" />
+                    </button>
+                </div>
                 {live && (
-                    <p className="rounded-md bg-amber-50 px-2 py-1.5 text-[11.5px] text-amber-900" data-testid="live-banner">
+                    <p className="cb-banner warn cb-small" data-testid="live-banner">
                         Live integrations: API and Sheets steps call your workspace’s test endpoints for real, and each call is recorded in the audit log.
                         Anything else stays a dry run. WhatsApp messages are never sent from a test.
                     </p>
@@ -555,20 +577,15 @@ function BotMessage({
 
 function CfgSelect({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: [string, string][] }) {
     return (
-        <label className="grid gap-1">
-            <span className="font-semibold text-muted-foreground">{label}</span>
-            <Select value={value} onValueChange={onChange}>
-                <SelectTrigger size="sm" aria-label={label}>
-                    <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                    {options.map(([v, l]) => (
-                        <SelectItem key={v} value={v}>
-                            {l}
-                        </SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
+        <label className="cb-field">
+            <span className="l">{label}</span>
+            <select className="cb-in" value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}>
+                {options.map(([v, l]) => (
+                    <option key={v} value={v}>
+                        {l}
+                    </option>
+                ))}
+            </select>
         </label>
     );
 }

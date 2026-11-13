@@ -1,6 +1,6 @@
 import { type Browser, expect, type Page, test } from '@playwright/test';
 
-import { api, backendPhp, choose, signIn, unique } from './helpers';
+import { api, backendPhp, signIn, unique } from './helpers';
 
 type Detail = {
     id: string;
@@ -148,9 +148,14 @@ test('the step settings, test conditions and live-call safeguards in the builder
     await page.getByRole('button', { name: 'Send', exact: true }).click();
     await expect(page.getByText('Sorry, that date doesn’t exist. Please check the day and month.')).toBeVisible();
 
+    // Test from one step: the run starts there.
+    await page.getByRole('button', { name: 'Test from Team' }).click();
+    await expect(page.getByText('Started at “Team”')).toBeVisible();
+    await expect(page.getByText('A person will reply.').last()).toBeVisible();
+
     // Live calls: confirmation with a reason, and refused while the workspace has no test endpoints.
-    await page.getByRole('button', { name: 'Test conditions' }).click();
-    await choose(page, 'API and Sheets steps', 'Call test endpoints for real…');
+    await page.getByText('Test settings').click();
+    await page.getByLabel('API and integrations').selectOption('live');
     await expect(page.getByRole('button', { name: 'Call for real' })).toBeDisabled();
     await page.getByLabel('Reason').fill('Check the sandbox CRM');
     await page.getByRole('button', { name: 'Call for real' }).click();

@@ -1,29 +1,10 @@
 'use client';
 
-import {
-    ArrowLeftIcon,
-    BotIcon,
-    CakeIcon,
-    CalendarIcon,
-    CarIcon,
-    CheckIcon,
-    HomeIcon,
-    Loader2Icon,
-    MenuIcon,
-    MoonIcon,
-    PlusIcon,
-    SparklesIcon,
-    StethoscopeIcon,
-    UserIcon,
-    WorkflowIcon,
-    XIcon,
-    type LucideIcon,
-} from 'lucide-react';
+import { ArrowLeftIcon, Loader2Icon, PlusIcon, WorkflowIcon, XIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
 import { FormError } from '@/components/app/field';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -33,19 +14,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { errorMessage } from '@/lib/api';
 import { createChatbot, type FlowTemplate, type TemplateField, useChatbotOptions, useChatbotTemplates } from '@/lib/chatbots';
 import { cn } from '@/lib/utils';
-
-const ICONS: Record<string, LucideIcon> = {
-    calendar: CalendarIcon,
-    cake: CakeIcon,
-    moon: MoonIcon,
-    home: HomeIcon,
-    stethoscope: StethoscopeIcon,
-    sparkles: SparklesIcon,
-    car: CarIcon,
-    menu: MenuIcon,
-    user: UserIcon,
-    plus: PlusIcon,
-};
 
 const NO_NUMBER = '__none__';
 
@@ -80,6 +48,7 @@ export function TemplateGallery({
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [wasOpen, setWasOpen] = useState(false);
+    const [page, setPage] = useState(0);
     if (open !== wasOpen) {
         setWasOpen(open);
         if (open) {
@@ -88,6 +57,7 @@ export function TemplateGallery({
             setValues({});
             setError(null);
             setBusy(false);
+            setPage(0);
         }
     }
     const variables = templates.data?.meta.variables ?? {};
@@ -96,6 +66,7 @@ export function TemplateGallery({
 
     const choose = (t: FlowTemplate) => {
         setPicked(t);
+        setPage(0);
         setName(t.key === 'blank' ? 'My chatbot' : t.name.split(' — ')[0]);
         const init: Record<string, unknown> = {};
         for (const f of t.fields) init[f.key] = f.scope === 'business' ? (variables[f.key] ?? f.default ?? '') : (f.default ?? (f.type === 'list' ? [] : ''));
@@ -169,153 +140,160 @@ export function TemplateGallery({
         );
     }
 
+    // One question at a time (approved design): the flow's name and number first, then each answer the template needs.
+    const pages: ('basics' | TemplateField)[] = picked ? ['basics', ...picked.fields] : [];
+    const at = Math.min(page, Math.max(0, pages.length - 1));
+    const current = pages[at];
+    const last = at === pages.length - 1;
+    const next = () => {
+        if (current && current !== 'basics' && current.required && !String(values[current.key] ?? '').trim()) {
+            setError(`Fill in “${current.label}”.`);
+
+            return;
+        }
+        setError(null);
+        if (last) void create();
+        else setPage(at + 1);
+    };
+    const sample = (v: unknown) => (Array.isArray(v) ? v.filter(Boolean).slice(0, 3).join(' · ') : String(v ?? ''));
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
-                <DialogHeader className="border-b px-6 py-4">
+            <DialogContent className="cbx flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-5xl">
+                <DialogHeader className="px-5 py-4" style={{ borderBottom: '1px solid var(--cb-line-2)' }}>
                     <DialogTitle className="flex items-center gap-2 text-[17px]">
-                        {picked && (
+                        {picked && !initial && (
                             <Button variant="ghost" size="icon-sm" onClick={() => setPicked(null)} aria-label="Back to the templates">
                                 <ArrowLeftIcon />
                             </Button>
                         )}
-                        {picked ? picked.name : 'Start with a ready-made flow'}
+                        {picked ? `Set up · ${picked.name}` : 'Start with a ready-made flow'}
                     </DialogTitle>
-                    <DialogDescription>
-                        {picked
-                            ? 'Fill in your details — you can change everything in the builder afterwards.'
-                            : 'Pick the closest one to your business. Every template is ready to publish as it is.'}
+                    <DialogDescription className={picked ? 'sr-only' : undefined}>
+                        {picked ? 'Answer a few questions; the flow is built from your answers.' : 'Pick the closest one to your business.'}
                     </DialogDescription>
                 </DialogHeader>
 
                 {!picked ? (
-                    <div className="min-h-0 flex-1 overflow-y-auto p-6">
+                    <div className="min-h-0 flex-1 overflow-y-auto p-5">
                         {templates.isLoading && <Skeleton className="h-72 w-full" />}
                         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                            {(templates.data?.data ?? []).map((t) => {
-                                const Icon = ICONS[t.icon] ?? BotIcon;
-
-                                return (
-                                    <button
-                                        key={t.key}
-                                        type="button"
-                                        onClick={() => choose(t)}
-                                        className="group flex flex-col rounded-2xl border bg-card p-4 text-left transition hover:-translate-y-0.5 hover:border-brand-500/60 hover:shadow-[0_8px_24px_rgba(16,24,40,.08)]"
-                                    >
-                                        <div className="flex items-start justify-between gap-2">
-                                            <span className="flex size-10 items-center justify-center rounded-xl bg-brand-100 text-brand-600">
-                                                <Icon className="size-5" />
-                                            </span>
-                                            {t.recommended && <Badge tone="brand">Start here</Badge>}
-                                        </div>
-                                        <p className="mt-3 text-[14.5px] font-bold">{t.name}</p>
-                                        <p className="text-[11.5px] font-semibold text-muted-foreground">{t.industry}</p>
-                                        <p className="mt-2 text-[12.5px] leading-snug text-ink-2">{t.description}</p>
-                                        <ol className="mt-3 space-y-1 border-t pt-3 text-[11.5px] text-muted-foreground">
-                                            {t.steps.slice(0, 5).map((s, i) => (
-                                                <li key={i} className="flex gap-1.5">
-                                                    <span className="font-bold text-brand-600">{i + 1}</span> {s}
-                                                </li>
-                                            ))}
-                                            {t.steps.length > 5 && <li className="pl-3">+ {t.steps.length - 5} more steps</li>}
-                                        </ol>
-                                    </button>
-                                );
-                            })}
+                            {(templates.data?.data ?? []).map((t) => (
+                                <button
+                                    key={t.key}
+                                    type="button"
+                                    onClick={() => choose(t)}
+                                    className="cb-card cb-col"
+                                    style={{ padding: 16, textAlign: 'left', cursor: 'pointer', gap: 6 }}
+                                >
+                                    <span className="cb-row">
+                                        <span className="cb-chip">{t.industry}</span>
+                                        {t.recommended && <span className="cb-chip ok">Start here</span>}
+                                        <span className="cb-spacer cb-small cb-muted">{t.steps.length} steps</span>
+                                    </span>
+                                    <b>{t.name}</b>
+                                    <span className="cb-small" style={{ color: 'var(--cb-ink-2)' }}>
+                                        {t.description}
+                                    </span>
+                                </button>
+                            ))}
                         </div>
                     </div>
                 ) : (
-                    <div className="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[1fr_300px]">
-                        <div className="min-h-0 space-y-5 overflow-y-auto p-6">
-                            <FormError message={error} />
-                            <div className="grid gap-3 sm:grid-cols-2">
-                                <div className="grid gap-1.5">
-                                    <Label htmlFor="tg-name">Flow name</Label>
-                                    <Input id="tg-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />
+                    <>
+                        <div className="grid min-h-0 flex-1 overflow-hidden md:grid-cols-[1fr_340px]">
+                            <div className="min-h-0 space-y-4 overflow-y-auto p-5">
+                                <p className="cb-small cb-muted">
+                                    Question {at + 1} of {pages.length}
+                                </p>
+                                <div className="cb-bar" aria-hidden>
+                                    <span style={{ width: `${Math.round(((at + 1) / pages.length) * 100)}%` }} />
                                 </div>
-                                <div className="grid gap-1.5">
-                                    <Label htmlFor="tg-number">WhatsApp number</Label>
-                                    <Select value={number} onValueChange={setNumber}>
-                                        <SelectTrigger id="tg-number">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value={NO_NUMBER}>Choose later</SelectItem>
-                                            {numbers.map((n) => (
-                                                <SelectItem key={n.id} value={n.id}>
-                                                    {n.verified_name ?? n.display_phone_number} {n.verified_name ? `· ${n.display_phone_number}` : ''}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
+                                <FormError message={error} />
+                                {current === 'basics' ? (
+                                    <div className="grid gap-4">
+                                        <h3 style={{ fontSize: 17 }}>What should this flow be called, and which number does it answer on?</h3>
+                                        <div className="grid gap-1.5">
+                                            <Label htmlFor="tg-name">Flow name</Label>
+                                            <Input id="tg-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />
+                                        </div>
+                                        <div className="grid gap-1.5">
+                                            <Label htmlFor="tg-number">WhatsApp number</Label>
+                                            <Select value={number} onValueChange={setNumber}>
+                                                <SelectTrigger id="tg-number">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value={NO_NUMBER}>Choose later</SelectItem>
+                                                    {numbers.map((n) => (
+                                                        <SelectItem key={n.id} value={n.id}>
+                                                            {n.verified_name ?? n.display_phone_number} {n.verified_name ? `· ${n.display_phone_number}` : ''}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                ) : current ? (
+                                    <div className="grid gap-3">
+                                        <h3 style={{ fontSize: 17 }}>{current.label}</h3>
+                                        {current.scope === 'business' && (
+                                            <p className="cb-small cb-muted">
+                                                Saved once for all your flows; messages use it as {`{{business.${current.key}}}`}.
+                                            </p>
+                                        )}
+                                        <FieldInput
+                                            key={current.key}
+                                            field={current}
+                                            value={values[current.key]}
+                                            onChange={(v) => setValues((st) => ({ ...st, [current.key]: v }))}
+                                            values={values}
+                                            templates={options.data?.templates ?? []}
+                                        />
+                                    </div>
+                                ) : null}
                             </div>
-                            {picked.fields.some((f) => f.scope === 'business') && (
-                                <section className="space-y-3">
-                                    <div>
-                                        <p className="text-[13px] font-bold">Your business</p>
-                                        <p className="text-[11.5px] text-muted-foreground">
-                                            Saved once for all your flows; the messages use them as {'{{business.…}}'}.
-                                        </p>
+                            <aside className="hidden min-h-0 flex-col p-4 md:flex" style={{ borderLeft: '1px solid var(--cb-line-2)' }}>
+                                <p className="cb-small cb-muted" style={{ marginBottom: 8 }}>
+                                    Preview from your answers
+                                </p>
+                                <div className="cb-phone" style={{ minHeight: 0, flex: 1 }}>
+                                    <div className="cb-ph">
+                                        <span className="cb-av">{(name || 'Bot').slice(0, 2).toUpperCase()}</span>
+                                        <span>
+                                            <b>{name || picked.name}</b>
+                                            <span style={{ display: 'block', fontSize: 11.5, opacity: 0.8 }}>Preview · not a real conversation</span>
+                                        </span>
                                     </div>
-                                    <div className="grid gap-3 sm:grid-cols-2">
+                                    <div className="cb-chat">
+                                        {picked.steps.map((st, i) => (
+                                            <div key={i} className="cb-msg bot">
+                                                {st}
+                                            </div>
+                                        ))}
                                         {picked.fields
-                                            .filter((f) => f.scope === 'business')
+                                            .filter((f) => sample(values[f.key]))
                                             .map((f) => (
-                                                <FieldInput
-                                                    key={f.key}
-                                                    field={f}
-                                                    value={values[f.key]}
-                                                    onChange={(v) => setValues((s) => ({ ...s, [f.key]: v }))}
-                                                />
+                                                <div key={f.key} className="cb-sysmsg">
+                                                    {f.label}: {sample(values[f.key])}
+                                                </div>
                                             ))}
                                     </div>
-                                </section>
-                            )}
-                            {picked.fields.some((f) => f.scope === 'flow') && (
-                                <section className="space-y-3">
-                                    <p className="text-[13px] font-bold">This flow</p>
-                                    {picked.fields
-                                        .filter((f) => f.scope === 'flow')
-                                        .map((f) => (
-                                            <FieldInput
-                                                key={f.key}
-                                                field={f}
-                                                value={values[f.key]}
-                                                onChange={(v) => setValues((s) => ({ ...s, [f.key]: v }))}
-                                                values={values}
-                                                templates={options.data?.templates ?? []}
-                                            />
-                                        ))}
-                                </section>
-                            )}
+                                </div>
+                            </aside>
                         </div>
-                        <aside className="hidden min-h-0 flex-col border-l bg-muted/40 p-5 md:flex">
-                            <p className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">What it does</p>
-                            <ol className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto">
-                                {picked.steps.map((s, i) => (
-                                    <li key={i} className="flex gap-2 text-[12.5px]">
-                                        <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-brand-100 text-[10.5px] font-bold text-brand-600">
-                                            {i + 1}
-                                        </span>
-                                        {s}
-                                    </li>
-                                ))}
-                            </ol>
-                            <p className="mt-3 flex items-start gap-1.5 text-[11.5px] text-muted-foreground">
-                                <CheckIcon className="mt-0.5 size-3.5 shrink-0 text-good" /> Passes the publish checks as it is. Test it in the builder, then
-                                publish.
-                            </p>
-                            <Button className="mt-4" onClick={create} disabled={busy}>
-                                {busy ? <Loader2Icon className="animate-spin" /> : null} Create and open the builder
-                            </Button>
-                        </aside>
-                        <div className="border-t p-4 md:hidden">
-                            <Button className="w-full" onClick={create} disabled={busy}>
-                                Create and open the builder
-                            </Button>
+                        <div className="cb-row" style={{ padding: '12px 20px', borderTop: '1px solid var(--cb-line-2)', justifyContent: 'flex-end' }}>
+                            {at > 0 && (
+                                <button type="button" className="cb-btn" onClick={() => setPage(at - 1)} disabled={busy}>
+                                    Back
+                                </button>
+                            )}
+                            <button type="button" className="cb-btn pri" onClick={next} disabled={busy}>
+                                {busy && <Loader2Icon className="size-4 animate-spin" />}
+                                {last ? 'Create and open the builder' : 'Next'}
+                            </button>
                         </div>
-                    </div>
+                    </>
                 )}
             </DialogContent>
         </Dialog>

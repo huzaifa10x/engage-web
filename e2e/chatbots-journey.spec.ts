@@ -40,7 +40,10 @@ test('create, configure, test, fix, publish, run and review a flow', async ({ pa
     await page.waitForURL(/\/chatbots\/templates/);
     await page.getByRole('button', { name: /^Use Real estate/ }).click();
     await page.fill('#tg-name', flowName);
-    await page.getByRole('button', { name: 'Create and open the builder' }).click();
+    // One question at a time; the template's own answers are fine as they are.
+    const create = page.getByRole('button', { name: 'Create and open the builder' });
+    for (let i = 0; i < 12 && !(await create.isVisible()); i++) await page.getByRole('button', { name: 'Next', exact: true }).click();
+    await create.click();
     await page.waitForURL(/\/chatbots\/builder\?id=/);
     const flowId = new URL(page.url()).searchParams.get('id') as string;
     await expect(page.getByText('All changes saved')).toBeVisible();
@@ -77,8 +80,8 @@ test('create, configure, test, fix, publish, run and review a flow', async ({ pa
 
     // Test in the test chat: nothing is sent, the flow answers.
     await page.getByRole('button', { name: 'Test', exact: true }).click();
-    await expect(page.getByText('Test the flow')).toBeVisible();
-    await page.getByRole('button', { name: 'Test conditions' }).click();
+    await expect(page.getByText('Test mode.')).toBeVisible();
+    await page.getByText('Test settings').click();
     await expect(page.getByTestId('test-conditions')).toBeVisible();
     await page.getByRole('button', { name: 'Close the test' }).click();
 
@@ -165,5 +168,11 @@ test('create, configure, test, fix, publish, run and review a flow', async ({ pa
     // My Flows lists it as live, with its 30-day figures.
     await page.goto('/chatbots');
     await expect(page.getByTestId('my-flows')).toContainText(flowName);
+
+    // Its menu opens what was picked, not the builder.
+    await page.getByRole('button', { name: `Actions for ${flowName}` }).click();
+    await page.getByRole('menuitem', { name: 'Runs & Activity' }).click();
+    await page.waitForURL(/\/chatbots\/runs\?flow=/);
+    await expect(page.getByTestId('runs-table')).toContainText('Sara E2E');
     void nodes;
 });

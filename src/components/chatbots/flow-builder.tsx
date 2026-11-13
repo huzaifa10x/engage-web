@@ -85,8 +85,6 @@ import { StepPalette } from './studio/palette';
 import { type InsightMode, SimpleView } from './studio/simple-view';
 import { TestChat } from './test-chat';
 
-const NO_NUMBER = '__none__';
-
 type RightTab = 'step' | 'test' | 'settings' | 'history';
 const CLIPBOARD = 'engage.chatbot.clipboard';
 
@@ -111,6 +109,7 @@ export function FlowBuilder({ flowId, initialStep = null }: { flowId: string; in
     const [tab, setTab] = useState<Exclude<RightTab, 'test'>>('step');
     const [view, setView] = useStored<'simple' | 'map'>('engage.chatbots.view', 'simple');
     const [insight, setInsight] = useState<InsightMode>('off');
+    const [testFrom, setTestFrom] = useState<string | null>(null);
     const [showIssues, setShowIssues] = useState(false);
     const [runPeriod, setRunPeriod] = useState(false);
     /** Leaving with changes that are not saved (or saved but not published): where to go once confirmed. */
@@ -824,7 +823,10 @@ export function FlowBuilder({ flowId, initialStep = null }: { flowId: string; in
                             onAddOnPath={addOnPath}
                             onDuplicate={(id) => duplicate([id])}
                             onDelete={(id) => deleteNodes([id])}
-                            onTest={() => openTab('test')}
+                            onTest={(id) => {
+                                setTestFrom(id);
+                                openTab('test');
+                            }}
                             onStartRules={() => leave('/chatbots/start-rules')}
                             onRenameSection={(id, nm) =>
                                 setSections(
@@ -912,7 +914,12 @@ export function FlowBuilder({ flowId, initialStep = null }: { flowId: string; in
                     {rightTab === 'test' ? (
                         <div className="flex min-h-0 flex-1 flex-col">
                             <TestChat
+                                key={testFrom ?? 'start'}
                                 flowId={flowId}
+                                fromNode={testFrom}
+                                fromTitle={testFrom ? titles.get(testFrom) : undefined}
+                                selectedNode={selectedSingle && selectedSingle !== start?.id ? selectedSingle : null}
+                                onFromNode={setTestFrom}
                                 botName={name}
                                 languages={settings.languages}
                                 numberId={data.phone_number_id}
@@ -927,24 +934,6 @@ export function FlowBuilder({ flowId, initialStep = null }: { flowId: string; in
                     ) : rightTab === 'step' ? (
                         node ? (
                             <div className="flex min-h-0 flex-1 flex-col">
-                                {sections.length > 0 && !readOnly && node.type !== 'start' && (
-                                    <label className="cb-row cb-small" style={{ padding: '10px 16px 0' }}>
-                                        <span className="cb-muted">Section</span>
-                                        <select
-                                            className="cb-in"
-                                            style={{ width: 'auto', height: 30, minHeight: 30 }}
-                                            value={(node as FlowNode & { section?: string }).section ?? ''}
-                                            onChange={(e) => updateNode(node.id, (n) => ({ ...n, section: e.target.value || undefined }) as FlowNode)}
-                                        >
-                                            <option value="">Not in a section</option>
-                                            {sections.map((x) => (
-                                                <option key={x.id} value={x.id}>
-                                                    {x.name}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </label>
-                                )}
                                 <NodeInspector
                                     key={node.id}
                                     flowId={flowId}
@@ -962,6 +951,13 @@ export function FlowBuilder({ flowId, initialStep = null }: { flowId: string; in
                                     onDuplicate={() => duplicate([node.id])}
                                     onSelect={jumpTo}
                                     onConnect={(output, to) => connect(node.id, output, to)}
+                                    onTest={() => {
+                                        setTestFrom(node.type === 'start' ? null : node.id);
+                                        openTab('test');
+                                    }}
+                                    onAddOnPath={readOnly ? undefined : (output, type) => addOnPath(node.id, output, type)}
+                                    sections={sections}
+                                    onSection={readOnly ? undefined : (id) => updateNode(node.id, (n) => ({ ...n, section: id ?? undefined }) as FlowNode)}
                                     onWebhook={async (enabled) => {
                                         if (!data.can.publish) return;
                                         try {
@@ -1017,39 +1013,37 @@ export function FlowBuilder({ flowId, initialStep = null }: { flowId: string; in
                                             ))}
                                         </datalist>
                                     </label>
-                                    <label className="cb-field">
+                                    <div className="cb-field" role="radiogroup" aria-label="WhatsApp number">
                                         <span className="l">WhatsApp number</span>
-                                        <select
-                                            className="cb-in"
-                                            value={data.phone_number_id ?? NO_NUMBER}
-                                            disabled={readOnly || data.is_active}
-                                            title={data.is_active ? 'Switch the flow off to move it to another number.' : undefined}
-                                            onChange={async (e) => {
-                                                const v = e.target.value;
-                                                try {
-                                                    updateCache({
-                                                        ...(await saveChatbot(flowId, { phone_number_id: v === NO_NUMBER ? null : v })),
-                                                        draft: graph,
-                                                    });
-                                                } catch (err) {
-                                                    toast.error(errorMessage(err));
-                                                }
-                                            }}
-                                        >
-                                            <option value={NO_NUMBER}>No number yet</option>
-                                            {numbers.map((n) => (
-                                                <option key={n.id} value={n.id}>
-                                                    {n.verified_name ?? n.display_phone_number} {n.verified_name ? `· ${n.display_phone_number}` : ''}
-                                                    {n.status === 'disconnected' ? ' (disconnected)' : ''}
-                                                </option>
-                                            ))}
-                                        </select>
+                                        {numbers.map((n) => (
+                                            <label key={n.id} className="cb-row cb-small" style={{ flexWrap: 'nowrap' }}>
+                                                <input
+                                                    type="radio"
+                                                    name="flow-number"
+                                                    checked={data.phone_number_id === n.id}
+                                                    disabled={readOnly || data.is_active}
+                                                    onChange={async () => {
+                                                        try {
+                                                            updateCache({ ...(await saveChatbot(flowId, { phone_number_id: n.id })), draft: graph });
+                                                        } catch (err) {
+                                                            toast.error(errorMessage(err));
+                                                        }
+                                                    }}
+                                                />
+                                                <b>{n.verified_name ?? n.display_phone_number}</b>
+                                                {n.verified_name && <span>{n.display_phone_number}</span>}
+                                                <span className={`cb-chip ${n.status === 'disconnected' ? 'bad' : 'live'}`}>
+                                                    {n.status === 'disconnected' ? 'disconnected' : 'connected'}
+                                                </span>
+                                            </label>
+                                        ))}
+                                        {numbers.length === 0 && <span className="cb-small cb-muted">No WhatsApp number is connected yet (Channels).</span>}
                                         <span className="cb-h">
                                             {data.is_active
                                                 ? 'Switch the flow off to move it to another number.'
-                                                : 'Which messages start it is set in Start rules.'}
+                                                : 'Which messages start it on that number is set in Start rules.'}
                                         </span>
-                                    </label>
+                                    </div>
                                     <div className="cb-col" style={{ gap: 6 }}>
                                         <h3>Start rules for this flow</h3>
                                         <p className="cb-small">
@@ -1142,6 +1136,18 @@ export function FlowBuilder({ flowId, initialStep = null }: { flowId: string; in
                         <div className="cb-scroll">
                             <HistoryPanel
                                 detail={data}
+                                draft={graph}
+                                onRestoreDraft={async (v) => {
+                                    try {
+                                        if (dirty && !(await save())) return;
+                                        const detail = await restoreChatbotVersion(flowId, v, false);
+                                        qc.setQueryData(chatbotKeys.flow(flowId), detail);
+                                        setLoaded(null); // reload the editor with that version as the draft
+                                        toast.success(`Version ${v} is your draft again. Nothing was published.`);
+                                    } catch (e) {
+                                        toast.error(errorMessage(e));
+                                    }
+                                }}
                                 canRestore={data.can.publish}
                                 onRestore={setRestore}
                                 canEdit={!readOnly}

@@ -3,7 +3,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import {
     CheckIcon,
-    CircleAlertIcon,
     CopyIcon,
     ExternalLinkIcon,
     FileUpIcon,
@@ -13,8 +12,6 @@ import {
     PlusIcon,
     RotateCcwIcon,
     SparklesIcon,
-    Trash2Icon,
-    TriangleAlertIcon,
     WandSparklesIcon,
     XIcon,
 } from 'lucide-react';
@@ -26,8 +23,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { errorMessage, upload } from '@/lib/api';
 import {
     addChatbotComment,
@@ -41,12 +38,12 @@ import {
     type FlowNode,
     type FlowSettings,
     formatMinutes,
-    groupOf,
     isInput,
     LANGUAGES,
     LIMITS,
     type NodeComment,
     type NodeConfig,
+    type NodeType,
     resolveChatbotComment,
     RTL,
     useChatbotComments,
@@ -72,7 +69,8 @@ import {
     Toggle,
     VarText,
 } from './inspector-fields';
-import { messageOf, WaBubble } from './wa-preview';
+import { BlockList } from './block-picker';
+import { KIND_LABEL, kindOf } from './studio/kinds';
 
 type Ctx = {
     node: FlowNode;
@@ -103,6 +101,10 @@ export function NodeInspector({
     onSelect,
     onConnect,
     onWebhook,
+    onTest,
+    onAddOnPath,
+    sections,
+    onSection,
 }: {
     flowId: string;
     node: FlowNode;
@@ -120,179 +122,196 @@ export function NodeInspector({
     onSelect: (id: string) => void;
     onConnect: (output: string, to: string | null) => void;
     onWebhook: (enabled: boolean) => void;
+    /** ▶ Test from this step. */
+    onTest?: () => void;
+    /** “+” on a path that goes nowhere: add a step there. */
+    onAddOnPath?: (output: string, type: NodeType) => void;
+    sections?: { id: string; name: string }[];
+    onSection?: (id: string | null) => void;
 }) {
-    const [tab, setTab] = useState<'edit' | 'comments'>('edit');
     const [lang, setLang] = useState(settings.languages[0] ?? 'en');
     const comments = useChatbotComments(flowId);
     const mine = (comments.data ?? []).filter((c) => c.node_id === node.id);
     const open = mine.filter((c) => !c.resolved_at).length;
     const block = blockOf(node.type);
-    const group = groupOf(node.type);
-    const Icon = block.icon;
     const set: Patch = (patch) => onConfig({ ...node.config, ...patch });
     const vars = variablesFor(graph, options);
     const problems = issues.filter((i) => i.node_id === node.id);
     const defaultLang = settings.languages[0] ?? 'en';
     const translating = lang !== defaultLang && settings.languages.includes(lang);
     const ctx: Ctx = { node, graph, options, set, vars, settings, webhookUrl, phone };
-    const preview = messageOf(translating ? localized(node, lang) : node);
+
+    const kind = kindOf(node.type);
 
     return (
         <div className="flex min-h-0 flex-1 flex-col">
-            <div className="border-b px-4 pt-3.5">
-                <div className="flex items-start gap-3">
-                    <span className={cn('mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl', group.chip)}>
-                        <Icon className="size-[18px]" />
+            <fieldset disabled={readOnly} className="cb-scroll min-h-0 flex-1" data-testid="step-panel">
+                <div className="cb-row">
+                    <span className={`cb-chip cb-kind ${kind}`}>{KIND_LABEL[kind]}</span>
+                    <span className="cb-small cb-muted">{node.type === 'start' ? 'What starts the flow' : block.label}</span>
+                    {(node as FlowNode & { setup?: boolean }).setup && <span className="cb-chip ok">Set up by you</span>}
+                </div>
+                <label className="cb-field">
+                    <span className="l">Step name</span>
+                    <span className="cb-row" style={{ flexWrap: 'nowrap', gap: 4 }}>
+                        <input
+                            className="cb-in"
+                            value={node.title}
+                            maxLength={60}
+                            onChange={(e) => onTitle(e.target.value.slice(0, 60), false)}
+                            aria-label="Step name"
+                        />
+                        {!readOnly && !node.auto_title && node.type !== 'start' && (
+                            <button
+                                type="button"
+                                className="cb-btn sm cb-iconbtn"
+                                title="Name it from its content again"
+                                aria-label="Automatic name"
+                                onClick={() => onTitle(autoTitle(node), true)}
+                            >
+                                <WandSparklesIcon className="size-4" />
+                            </button>
+                        )}
                     </span>
-                    <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1">
-                            <Input
-                                value={node.title}
-                                onChange={(e) => onTitle(e.target.value.slice(0, 60), false)}
-                                disabled={readOnly}
-                                className="h-8 border-transparent px-1.5 text-[14.5px] font-semibold shadow-none hover:border-input focus-visible:border-brand-500"
-                                aria-label="Block name"
-                            />
-                            {!readOnly && !node.auto_title && node.type !== 'start' && (
-                                <Button
-                                    variant="ghost"
-                                    size="icon-sm"
-                                    title="Name it from its content again"
-                                    aria-label="Automatic name"
-                                    onClick={() => onTitle(autoTitle(node), true)}
-                                >
-                                    <WandSparklesIcon />
-                                </Button>
-                            )}
-                        </div>
-                        <p className="px-1.5 text-[11.5px] text-muted-foreground">
-                            <span className={cn('font-bold tracking-wide uppercase', group.tone)}>{node.type === 'start' ? 'Trigger' : block.label}</span> ·{' '}
-                            {block.blurb}
-                        </p>
+                </label>
+
+                {problems.map((i, n) => (
+                    <div key={n} className={cn('cb-banner', i.level === 'error' ? 'bad' : 'warn')} style={{ fontSize: 13 }}>
+                        <span>
+                            <b>{i.message.replace(/^“[^”]+”:?\s*/, '').replace(/^./, (m) => m.toUpperCase())}</b> {i.fix}
+                        </span>
                     </div>
-                </div>
-                <div className="mt-3 flex gap-4 text-[12.5px] font-semibold">
-                    {(
-                        [
-                            ['edit', 'Settings'],
-                            ['comments', `Comments${open ? ` (${open})` : ''}`],
-                        ] as const
-                    ).map(([k, l]) => (
-                        <button
-                            key={k}
-                            onClick={() => setTab(k)}
-                            className={cn(
-                                '-mb-px border-b-2 pb-2',
-                                tab === k ? 'border-brand-500 text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
-                            )}
-                        >
-                            {l}
-                        </button>
-                    ))}
-                </div>
-            </div>
+                ))}
 
-            {tab === 'comments' ? (
-                <Comments flowId={flowId} nodeId={node.id} comments={mine} />
-            ) : (
-                <fieldset disabled={readOnly} className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4">
-                    {problems.length > 0 && (
-                        <div className="space-y-1.5">
-                            {problems.map((i, n) => (
-                                <div
-                                    key={n}
-                                    className={cn('rounded-lg px-3 py-2 text-[12px]', i.level === 'error' ? 'bg-bad-bg text-bad' : 'bg-warn-bg text-warn')}
-                                >
-                                    <p className="flex items-start gap-1.5 font-semibold">
-                                        {i.level === 'error' ? (
-                                            <CircleAlertIcon className="mt-px size-3.5 shrink-0" />
-                                        ) : (
-                                            <TriangleAlertIcon className="mt-px size-3.5 shrink-0" />
-                                        )}
-                                        {i.message.replace(/^“[^”]+”:?\s*/, '').replace(/^./, (m) => m.toUpperCase())}
-                                    </p>
-                                    {i.fix && <p className="mt-0.5 pl-5 text-ink-2">{i.fix}</p>}
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                {settings.languages.length > 1 && hasText(node) && (
+                    <div className="cb-row">
+                        <LanguagesIcon className="size-4" style={{ color: 'var(--cb-muted)' }} />
+                        <Segmented value={lang} options={settings.languages.map((l) => [l, l.toUpperCase()] as [string, string])} onChange={setLang} />
+                    </div>
+                )}
 
-                    {preview && (
-                        <div className="rounded-xl bg-[#efeae2] p-3" aria-label="Preview on WhatsApp">
-                            <p className="mb-1.5 text-[10px] font-bold tracking-wider text-[#54656f] uppercase">Preview{translating ? ` · ${lang}` : ''}</p>
-                            <div className="max-w-[92%]">
-                                <WaBubble message={preview} rtl={RTL.includes(translating ? lang : defaultLang)} />
-                            </div>
-                        </div>
-                    )}
+                {translating ? <TranslationEditor ctx={ctx} lang={lang} /> : <Editor ctx={ctx} onWebhook={onWebhook} />}
 
-                    {settings.languages.length > 1 && hasText(node) && (
-                        <div className="flex items-center gap-2">
-                            <LanguagesIcon className="size-4 text-muted-foreground" />
-                            <Segmented value={lang} options={settings.languages.map((l) => [l, l.toUpperCase()] as [string, string])} onChange={setLang} />
-                        </div>
-                    )}
+                {isInput(node) && !translating && (
+                    <Section title="When the answer doesn’t fit" open={problems.some((i) => ['no_match', 'fallback'].includes(i.output_id ?? ''))}>
+                        <NoMatch ctx={ctx} />
+                    </Section>
+                )}
 
-                    {translating ? <TranslationEditor ctx={ctx} lang={lang} /> : <Editor ctx={ctx} onWebhook={onWebhook} />}
-
-                    {!translating && FALLBACK_TYPES.has(node.type) && (
+                {!translating && FALLBACK_TYPES.has(node.type) && (
+                    <Section title="If the 24-hour window has closed" open={problems.some((i) => ['needs_template', 'window_risk'].includes(i.code ?? ''))}>
                         <FallbackTemplatePicker c={node.config} set={set} options={options} settings={settings} />
-                    )}
+                    </Section>
+                )}
 
-                    {isInput(node) && !translating && <NoMatch ctx={ctx} />}
-
-                    {node.outputs.length > 0 && (
-                        <Section title="Connections">
-                            <div className="divide-y rounded-lg border">
-                                {node.outputs.map((o) => (
-                                    <div key={o.id} className="flex items-center gap-2 px-2.5 py-1.5 text-[12.5px]">
-                                        <span className="w-24 shrink-0 truncate font-medium" title={o.label}>
-                                            {o.label}
-                                        </span>
-                                        <Select value={o.to ?? '__none__'} onValueChange={(v) => onConnect(o.id, v === '__none__' ? null : v)}>
-                                            <SelectTrigger size="sm" className={cn('h-7 min-w-0 flex-1 text-[12px]', !o.to && 'border-warn/60 text-warn')}>
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="__none__">Not connected</SelectItem>
-                                                {graph.nodes
-                                                    .filter((n) => n.id !== node.id && n.type !== 'start')
-                                                    .map((n) => (
-                                                        <SelectItem key={n.id} value={n.id}>
-                                                            → {n.title}
-                                                        </SelectItem>
-                                                    ))}
-                                            </SelectContent>
-                                        </Select>
-                                        {o.to && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon-sm"
-                                                onClick={() => onSelect(o.to as string)}
-                                                aria-label="Go to that block"
-                                                title="Go to that block"
-                                            >
-                                                <ExternalLinkIcon />
-                                            </Button>
-                                        )}
-                                    </div>
-                                ))}
+                {node.outputs.length > 0 && (
+                    <Section title="What happens next">
+                        {node.outputs.map((o) => (
+                            <div key={o.id} className="cb-row" style={{ flexWrap: 'nowrap' }}>
+                                <span className="cb-small" style={{ width: 120, flex: 'none', color: 'var(--cb-ink-2)' }} title={o.label}>
+                                    {o.label}
+                                </span>
+                                <select
+                                    className={cn('cb-in', !o.to && 'err')}
+                                    aria-label={`Where “${o.label}” goes`}
+                                    value={o.to ?? ''}
+                                    onChange={(e) => onConnect(o.id, e.target.value || null)}
+                                >
+                                    <option value="">Not connected</option>
+                                    {graph.nodes
+                                        .filter((n) => n.id !== node.id && n.type !== 'start')
+                                        .map((n) => (
+                                            <option key={n.id} value={n.id}>
+                                                {n.title}
+                                            </option>
+                                        ))}
+                                </select>
+                                {o.to ? (
+                                    <button
+                                        type="button"
+                                        className="cb-btn sm cb-iconbtn"
+                                        onClick={() => onSelect(o.to as string)}
+                                        aria-label="Go to that step"
+                                        title="Go to that step"
+                                    >
+                                        <ExternalLinkIcon className="size-3.5" />
+                                    </button>
+                                ) : (
+                                    onAddOnPath && <AddOnPath label={o.label} onPick={(t) => onAddOnPath(o.id, t)} />
+                                )}
                             </div>
-                        </Section>
+                        ))}
+                        <span className="cb-tiny cb-muted">Paths come from the step’s settings: buttons, rows, Wrong answer and No reply each add one.</span>
+                    </Section>
+                )}
+
+                {sections && sections.length > 0 && node.type !== 'start' && onSection && (
+                    <Section title="Section" open={false}>
+                        <select
+                            className="cb-in"
+                            aria-label="Section"
+                            value={(node as FlowNode & { section?: string }).section ?? ''}
+                            onChange={(e) => onSection(e.target.value || null)}
+                        >
+                            <option value="">Not in a section</option>
+                            {sections.map((x) => (
+                                <option key={x.id} value={x.id}>
+                                    {x.name}
+                                </option>
+                            ))}
+                        </select>
+                        <span className="cb-tiny cb-muted">Sections only group steps; they never change how a chat runs.</span>
+                    </Section>
+                )}
+
+                <Section title={`Comments${open ? ` (${open})` : ''}`} open={open > 0}>
+                    <Comments flowId={flowId} nodeId={node.id} comments={mine} />
+                </Section>
+
+                <div className="cb-row">
+                    {onTest && (
+                        <button type="button" className="cb-btn sm" onClick={onTest}>
+                            ▶ Test from this step
+                        </button>
                     )}
-                </fieldset>
-            )}
-            {!readOnly && node.type !== 'start' && tab === 'edit' && (
-                <div className="flex gap-2 border-t px-4 py-3">
-                    <Button variant="outline" size="sm" className="flex-1" onClick={onDuplicate}>
-                        <CopyIcon /> Duplicate
-                    </Button>
-                    <Button variant="outline" size="sm" className="flex-1 text-bad hover:text-bad" onClick={onDelete}>
-                        <Trash2Icon /> Delete
-                    </Button>
+                    {!readOnly && node.type !== 'start' && (
+                        <>
+                            <button type="button" className="cb-btn sm" onClick={onDuplicate}>
+                                Duplicate
+                            </button>
+                            <button type="button" className="cb-btn sm danger" onClick={onDelete}>
+                                Delete
+                            </button>
+                        </>
+                    )}
                 </div>
-            )}
+            </fieldset>
         </div>
+    );
+}
+
+/** “+” beside a path that goes nowhere yet: pick the step to add there. */
+function AddOnPath({ label, onPick }: { label: string; onPick: (type: NodeType) => void }) {
+    const [isOpen, setOpen] = useState(false);
+
+    return (
+        <Popover open={isOpen} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <button type="button" className="cb-plus" aria-label={`Add a step on “${label}”`}>
+                    +
+                </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 p-2.5">
+                <BlockList
+                    onPick={(t) => {
+                        setOpen(false);
+                        onPick(t);
+                    }}
+                    autoFocus
+                    dense
+                />
+            </PopoverContent>
+        </Popover>
     );
 }
 
@@ -313,28 +332,6 @@ const TRANSLATABLE: [string, string, number][] = [
 
 function hasText(node: FlowNode) {
     return TRANSLATABLE.some(([f]) => f in node.config) || ['buttons', 'list', 'product'].includes(node.type);
-}
-
-function localized(node: FlowNode, lang: string): FlowNode {
-    const t = (node.config.i18n ?? {})[lang] as Record<string, any> | undefined;
-    if (!t) return node;
-    const c = { ...node.config };
-    for (const [f] of TRANSLATABLE) if (t[f]) c[f] = t[f];
-    if (t.buttons && c.buttons) c.buttons = c.buttons.map((b: { id: string; title: string }) => ({ ...b, title: t.buttons[b.id] || b.title }));
-    if (t.rows && c.sections)
-        c.sections = c.sections.map((s: { rows: { id: string; title: string; description?: string | null }[] }) => ({
-            ...s,
-            rows: s.rows.map((r) => {
-                const v = t.rows[r.id];
-
-                return typeof v === 'object' && v
-                    ? { ...r, title: v.title || r.title, description: v.description ?? r.description }
-                    : { ...r, title: v || r.title };
-            }),
-        }));
-    if (t.items && c.items) c.items = c.items.map((p: { id: string; name: string }) => ({ ...p, name: t.items[p.id] || p.name }));
-
-    return { ...node, config: c };
 }
 
 function TranslationEditor({ ctx, lang }: { ctx: Ctx; lang: string }) {

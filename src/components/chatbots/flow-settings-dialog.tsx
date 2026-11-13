@@ -59,7 +59,7 @@ export function FlowSettingsDialog({
 
     const body = (
         <>
-            <div className="flex gap-1 rounded-lg bg-muted p-1">
+            <div className={cn('flex gap-1 rounded-lg bg-muted p-1', inline && 'hidden')}>
                 {TABS.map(([k, l]) => (
                     <button
                         key={k}
@@ -101,7 +101,8 @@ export function FlowSettingsDialog({
                 </p>
             )}
             <fieldset disabled={readOnly} className="grid gap-5">
-                {tab === 'timing' && (
+                {inline && <h4 className="border-t pt-3 text-[13.5px] font-semibold">When customers stop answering</h4>}
+                {(inline || tab === 'timing') && (
                     <section className="grid gap-4">
                         <div className="flex items-start justify-between gap-3">
                             <div>
@@ -198,7 +199,8 @@ export function FlowSettingsDialog({
                     </section>
                 )}
 
-                {tab === 'answers' && (
+                {inline && <h4 className="border-t pt-3 text-[13.5px] font-semibold">Answers and words that work anywhere</h4>}
+                {(inline || tab === 'answers') && (
                     <section className="grid gap-4">
                         <div className="grid gap-1.5">
                             <Label>Answers the bot does not understand</Label>
@@ -282,7 +284,8 @@ export function FlowSettingsDialog({
                     </section>
                 )}
 
-                {tab === 'languages' && (
+                {inline && <h4 className="border-t pt-3 text-[13.5px] font-semibold">Languages</h4>}
+                {(inline || tab === 'languages') && (
                     <section className="grid gap-4">
                         <div className="grid gap-1.5">
                             <Label>Languages of this flow</Label>
@@ -366,7 +369,8 @@ export function FlowSettingsDialog({
                     </section>
                 )}
 
-                {tab === 'window' && (
+                {inline && <h4 className="border-t pt-3 text-[13.5px] font-semibold">If the 24-hour window has closed</h4>}
+                {(inline || tab === 'window') && (
                     <section className="grid gap-3">
                         <p className="text-[12.5px] leading-relaxed text-ink-2">
                             WhatsApp delivers normal messages only within 24 hours of the customer’s last message. After that only approved templates arrive.

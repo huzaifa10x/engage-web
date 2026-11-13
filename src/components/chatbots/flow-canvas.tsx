@@ -1,26 +1,16 @@
 'use client';
 
-import { CircleAlertIcon, LocateFixedIcon, MaximizeIcon, MessageSquareIcon, MinusIcon, PlusIcon, TriangleAlertIcon } from 'lucide-react';
+import { LocateFixedIcon, MaximizeIcon, MessageSquareIcon, MinusIcon, PlusIcon, TriangleAlertIcon } from 'lucide-react';
 import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react';
 
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
-import {
-    blockOf,
-    CARD_WIDTH,
-    type FlowGraph,
-    type FlowIssue,
-    type FlowNode,
-    groupOf,
-    isInput,
-    type NodeStats,
-    nodeSummary,
-    type NodeType,
-    snap,
-} from '@/lib/chatbots';
+import { blockOf, CARD_WIDTH, type FlowGraph, type FlowIssue, type FlowNode, isInput, type NodeStats, nodeSummary, type NodeType, snap } from '@/lib/chatbots';
 import { cn } from '@/lib/utils';
 
+import { KIND_LABEL, kindOf } from './studio/kinds';
+
 import { BlockList, PALETTE_MIME } from './block-picker';
-import { messageOf, WaBubble } from './wa-preview';
+import { messageOf } from './wa-preview';
 
 export type CanvasApi = {
     fit: () => void;
@@ -632,14 +622,13 @@ function NodeCard({
     onPortDown: (e: React.PointerEvent, output: string) => void;
 }) {
     const block = blockOf(node.type);
-    const group = groupOf(node.type);
-    const Icon = block.icon;
     const bubble = messageOf(node);
     const errors = issues.filter((i) => i.level === 'error');
     const warnings = issues.filter((i) => i.level === 'warning');
-    const choiceOutputs = node.type === 'buttons' || node.type === 'list';
     const softOutputs = ['fallback', 'timeout', 'failed'];
     const showStats = stats !== undefined;
+
+    const kind = kindOf(node.type);
 
     return (
         <div
@@ -647,145 +636,103 @@ function NodeCard({
             onPointerDown={onPointerDown}
             style={{ left: node.x, top: node.y, width: CARD_WIDTH }}
             className={cn(
-                'group/card absolute z-[2] rounded-2xl border bg-card shadow-[0_1px_2px_rgba(16,24,40,.06),0_4px_14px_rgba(16,24,40,.05)] transition-[box-shadow,border-color]',
+                'cb-mnode z-[2]',
+                selected && 'sel',
+                focused && 'run',
                 readOnly ? 'cursor-pointer' : 'cursor-grab',
-                node.type === 'start' && 'border-brand-500/50 bg-gradient-to-b from-brand-50 to-card',
-                errors.length > 0 && 'border-bad/70 shadow-[0_0_0_3px_rgba(229,72,77,.14)]',
-                errors.length === 0 && warnings.length > 0 && 'border-warn/60',
-                selected && 'border-brand-500 shadow-[0_0_0_3px_rgba(169,227,36,.5)]',
-                focused && 'ring-4 ring-sky-400/50',
                 dragging && 'z-[5] cursor-grabbing shadow-[0_14px_34px_rgba(16,24,40,.18)]',
+                errors.length > 0 && !selected && 'border-[#F2C9C3]',
             )}
+            aria-label={node.title}
         >
-            {/* Input */}
             {node.type !== 'start' && (
-                <span data-in={node.id} className="absolute top-[22px] -left-[7px] z-[3] size-3.5 rounded-full border-2 border-[#a3a8b1] bg-card" aria-hidden />
+                <span data-in={node.id} className="absolute top-[14px] -left-[7px] z-[3] size-3 rounded-full border-2 border-[#a3a8b1] bg-white" aria-hidden />
             )}
-
-            <div className="flex items-center gap-2.5 px-3 pt-3 pb-2">
-                <span className={cn('flex size-8 shrink-0 items-center justify-center rounded-lg', group.chip)}>
-                    <Icon className="size-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13.5px] leading-tight font-semibold">{node.title}</p>
-                    <p className={cn('text-[10px] font-bold tracking-wider uppercase', group.tone)}>{node.type === 'start' ? 'Trigger' : block.label}</p>
-                </div>
-                <div className="flex shrink-0 items-center gap-1">
+            <div className="cb-mh">
+                <span className={`cb-chip cb-kind ${kind}`}>{KIND_LABEL[kind]}</span>
+                <span className="cb-small cb-muted">{node.type === 'start' ? 'Start' : block.label}</span>
+                <span className="ml-auto flex items-center gap-1">
                     {comments > 0 && (
-                        <span
-                            className="flex items-center gap-0.5 rounded-full bg-sky-100 px-1.5 py-px text-[10.5px] font-bold text-sky-700"
-                            title={`${comments} open comment(s)`}
-                        >
+                        <span className="cb-chip info" title={`${comments} open comment(s)`}>
                             <MessageSquareIcon className="size-3" /> {comments}
                         </span>
                     )}
                     {errors.length > 0 ? (
-                        <span
-                            className="flex items-center gap-0.5 rounded-full bg-bad px-1.5 py-px text-[10.5px] font-bold text-white"
-                            title={errors.map((i) => i.message).join('\n')}
-                        >
-                            <CircleAlertIcon className="size-3" /> {errors.length}
+                        <span className="cb-chip bad" title={errors.map((i) => i.message).join('\n')}>
+                            {errors.length} to fix
                         </span>
                     ) : warnings.length > 0 ? (
-                        <span className="flex items-center rounded-full bg-warn-bg px-1 py-px text-warn" title={warnings.map((i) => i.message).join('\n')}>
+                        <span className="cb-chip warn" title={warnings.map((i) => i.message).join('\n')}>
                             <TriangleAlertIcon className="size-3" />
                         </span>
                     ) : null}
-                </div>
+                </span>
             </div>
-
+            <div className="cb-mt" dir={rtl ? 'rtl' : undefined}>
+                {node.title}
+            </div>
+            {(bubble?.text || summary) && (
+                <p className="line-clamp-2 px-[10px] pb-[6px] text-[11.5px] leading-snug" style={{ color: 'var(--cb-muted)' }}>
+                    {bubble?.text ?? summary}
+                </p>
+            )}
             {showStats && (
-                <div
-                    className="mx-3 mb-2 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 rounded-lg bg-slate-900 px-2.5 py-1 text-[10.5px] font-semibold text-white"
-                    title="Last 30 days"
-                >
-                    <span>▶ {stats?.entries ?? 0}</span>
-                    {(stats?.abandoned ?? 0) > 0 && <span className="text-amber-300">⏏ {stats?.abandoned} left</span>}
-                    {(stats?.no_match ?? 0) > 0 && <span className="text-sky-300">? {stats?.no_match}</span>}
-                    {(stats?.errors ?? 0) > 0 && <span className="text-red-300">⚠ {stats?.errors}</span>}
-                    {(stats?.handoffs ?? 0) > 0 && <span>👤 {stats?.handoffs}</span>}
+                <div className="cb-fig mx-[10px] mb-[6px]" title="Last 30 days">
+                    <b className="cb-num">{stats?.entries ?? 0}</b> reached
+                    {(stats?.abandoned ?? 0) > 0 && <span>· {stats?.abandoned} gave up</span>}
+                    {(stats?.errors ?? 0) > 0 && <span>· {stats?.errors} failed</span>}
                 </div>
             )}
+            {node.outputs.map((out) => {
+                const key = `${node.id}:${out.id}`;
+                const bad = badPorts.has(key);
 
-            <div className="px-3 pb-2">
-                {bubble ? (
-                    <div className="rounded-xl bg-[#efeae2] p-2">
-                        <WaBubble message={{ ...bubble, buttons: [] }} compact rtl={rtl} />
+                return (
+                    <div key={out.id} className="cb-mo" style={softOutputs.includes(out.id) ? { color: 'var(--cb-warn-i)' } : undefined}>
+                        <span className="truncate" title={out.label}>
+                            {out.label}
+                            {showStats && stats?.clicks[out.id] ? <b className="ml-1.5 tabular-nums">· {stats.clicks[out.id]}</b> : null}
+                        </span>
+                        <span
+                            data-port={key}
+                            onPointerDown={(e) => onPortDown(e, out.id)}
+                            role="button"
+                            aria-label={`Connect “${out.label}”`}
+                            title={out.to ? 'Drag to another step to change where this goes' : 'Drag to a step to connect, or click + to add one'}
+                            className={cn('cb-port', out.to ? 'on' : bad ? 'bad' : '', readOnly ? 'cursor-default' : 'cursor-crosshair')}
+                        />
+                        {!out.to && !readOnly && (
+                            <Popover open={adding === out.id} onOpenChange={(o) => onAdding(o ? out.id : null)}>
+                                <PopoverAnchor asChild>
+                                    <button
+                                        data-ui
+                                        type="button"
+                                        onClick={() => onAdding(out.id)}
+                                        className="cb-edgeplus"
+                                        style={{ right: -40, top: 1 }}
+                                        aria-label={`Add the next step after “${out.label}”`}
+                                        title="Add the next step here"
+                                    >
+                                        +
+                                    </button>
+                                </PopoverAnchor>
+                                <PopoverContent side="right" align="start" className="w-72 p-2.5" onPointerDown={(e) => e.stopPropagation()}>
+                                    <p className="mb-2 px-1 text-[12px] font-semibold">After “{out.label}”, add…</p>
+                                    <BlockList onPick={(type) => onQuickAdd(out.id, type)} autoFocus dense />
+                                </PopoverContent>
+                            </Popover>
+                        )}
                     </div>
-                ) : (
-                    summary && <p className="line-clamp-2 text-[11.5px] leading-snug text-muted-foreground">{summary}</p>
-                )}
-                {bubble && node.type !== 'note' && summary && ['question', 'handoff', 'end', 'product'].includes(node.type) && (
-                    <p className="mt-1.5 line-clamp-1 text-[11px] text-muted-foreground">{summary}</p>
-                )}
-                {isInput(node) && node.config.no_match === 'off' && <p className="mt-1.5 text-[10.5px] font-medium text-warn">Unknown answers: no reply</p>}
-            </div>
-
-            {node.outputs.length > 0 && (
-                <div className="space-y-1 px-3 pb-3">
-                    {node.outputs.map((out) => {
-                        const key = `${node.id}:${out.id}`;
-                        const bad = badPorts.has(key);
-                        const soft = softOutputs.includes(out.id);
-                        const choice = choiceOutputs && !soft;
-
-                        return (
-                            <div
-                                key={out.id}
-                                className={cn(
-                                    'relative flex h-8 items-center rounded-lg pr-3 pl-2.5 text-[12px]',
-                                    choice ? 'justify-center border bg-card font-semibold text-[#027eb5]' : 'justify-end bg-muted/60 text-ink-2',
-                                    soft && 'border border-dashed border-amber-300 bg-amber-50 text-amber-800',
-                                    bad && 'border-bad/60 bg-bad-bg text-bad',
-                                )}
-                            >
-                                <span className="truncate" title={out.label}>
-                                    {out.label}
-                                    {showStats && stats?.clicks[out.id] ? <b className="ml-1.5 text-slate-500 tabular-nums">· {stats.clicks[out.id]}</b> : null}
-                                </span>
-                                <span
-                                    data-port={key}
-                                    onPointerDown={(e) => onPortDown(e, out.id)}
-                                    role="button"
-                                    aria-label={`Connect “${out.label}”`}
-                                    title={out.to ? 'Drag to another block to change where this goes' : 'Drag to a block to connect, or click + to add one'}
-                                    className={cn(
-                                        'absolute top-1/2 -right-[19px] z-[3] size-3.5 -translate-y-1/2 rounded-full border-2 bg-card',
-                                        readOnly ? 'cursor-default' : 'cursor-crosshair hover:scale-125',
-                                        out.to ? 'border-brand-500 bg-brand-500' : bad ? 'border-bad bg-bad-bg' : 'border-[#a3a8b1]',
-                                    )}
-                                />
-                                {!out.to && !readOnly && (
-                                    <Popover open={adding === out.id} onOpenChange={(o) => onAdding(o ? out.id : null)}>
-                                        <PopoverAnchor asChild>
-                                            <button
-                                                data-ui
-                                                type="button"
-                                                onClick={() => onAdding(out.id)}
-                                                className={cn(
-                                                    'absolute top-1/2 -right-[46px] z-[3] flex size-5 -translate-y-1/2 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-xs hover:border-brand-500 hover:bg-brand-50 hover:text-brand-600',
-                                                    bad && 'border-bad/60 text-bad',
-                                                )}
-                                                aria-label={`Add the next block after “${out.label}”`}
-                                                title="Add the next block here"
-                                            >
-                                                <PlusIcon className="size-3" />
-                                            </button>
-                                        </PopoverAnchor>
-                                        <PopoverContent side="right" align="start" className="w-72 p-2.5" onPointerDown={(e) => e.stopPropagation()}>
-                                            <p className="mb-2 px-1 text-[12px] font-semibold">After “{out.label}”, add…</p>
-                                            <BlockList onPick={(type) => onQuickAdd(out.id, type)} autoFocus dense />
-                                        </PopoverContent>
-                                    </Popover>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
+                );
+            })}
             {node.outputs.length === 0 && node.type !== 'goto' && (
-                <p className="mx-3 mb-3 rounded-lg bg-muted/60 px-2.5 py-1.5 text-center text-[11px] font-semibold text-muted-foreground">
-                    {node.type === 'handoff' ? 'The bot pauses · a person continues' : node.type === 'end' ? 'The flow ends here' : ''}
+                <p className="px-[10px] pb-2 text-[11.5px]" style={{ color: 'var(--cb-muted)' }}>
+                    {node.type === 'handoff' ? 'The chat goes to your team' : node.type === 'end' ? 'The conversation ends here' : ''}
+                </p>
+            )}
+            {isInput(node) && node.config.no_match === 'off' && (
+                <p className="px-[10px] pb-2 text-[10.5px]" style={{ color: 'var(--cb-warn-i)' }}>
+                    Unknown answers: no reply
                 </p>
             )}
         </div>

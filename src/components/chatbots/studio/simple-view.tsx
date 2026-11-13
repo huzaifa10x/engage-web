@@ -105,7 +105,7 @@ export function SimpleView({
     onAddOnPath: (from: string, output: string, type: NodeType) => void;
     onDuplicate: (id: string) => void;
     onDelete: (id: string) => void;
-    onTest: () => void;
+    onTest: (id: string) => void;
     onStartRules: () => void;
     onRenameSection: (id: string, name: string) => void;
 }) {
@@ -241,9 +241,11 @@ export function SimpleView({
                                     <article
                                         key={n.id}
                                         className={cn('cb-step', sel && 'sel', errs > 0 && !sel && 'bad')}
-                                        onClick={(e) =>
-                                            !(e.target as HTMLElement).closest('button, textarea, input, select, a, [role="dialog"]') && onSelect(n.id)
-                                        }
+                                        onClick={(e) => {
+                                            // Popovers render outside the card, but their clicks still bubble here: ignore them.
+                                            const t = e.target as HTMLElement;
+                                            if (e.currentTarget.contains(t) && !t.closest('button, textarea, input, select, a')) onSelect(n.id);
+                                        }}
                                         data-step={n.id}
                                     >
                                         <div className="cb-head">
@@ -261,9 +263,9 @@ export function SimpleView({
                                             <button
                                                 type="button"
                                                 className="cb-btn sm cb-iconbtn"
-                                                onClick={onTest}
-                                                aria-label="Test the flow"
-                                                title="Test the flow"
+                                                onClick={() => onTest(n.id)}
+                                                aria-label={`Test from ${n.title}`}
+                                                title="Test from this step"
                                             >
                                                 <PlayIcon className="size-3.5" />
                                             </button>

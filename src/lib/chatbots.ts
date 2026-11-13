@@ -531,8 +531,20 @@ export const exportChatbot = (id: string) => api<Record<string, unknown>>(`chatb
 export const importChatbot = (file: Record<string, unknown>, phoneNumberId: string | null) =>
     api<Data<ChatbotFlowDetail>>('chatbots/import', { method: 'POST', body: { ...file, phone_number_id: phoneNumberId } }).then((r) => r.data);
 
-export const restoreChatbotVersion = (id: string, version: number) =>
-    api<Data<ChatbotFlowDetail>>(`chatbots/${id}/versions/${version}/restore`, { method: 'POST', body: { publish: true } }).then((r) => r.data);
+export const restoreChatbotVersion = (id: string, version: number, publish = true) =>
+    api<Data<ChatbotFlowDetail>>(`chatbots/${id}/versions/${version}/restore`, { method: 'POST', body: { publish } }).then((r) => r.data);
+
+/** One published version's steps (Builder › History compares the draft with it). */
+export const useChatbotVersion = (id: string, version: number | null) =>
+    useQuery({
+        queryKey: ['chatbots', 'version', id, version],
+        queryFn: () =>
+            api<Data<{ version: number; graph: FlowGraph; settings: FlowSettings; published_at: string | null }>>(`chatbots/${id}/versions/${version}`).then(
+                (r) => r.data,
+            ),
+        enabled: version !== null,
+        staleTime: Infinity,
+    });
 
 export const setChatbotWebhook = (id: string, enabled: boolean) =>
     api<Data<ChatbotFlowDetail>>(`chatbots/${id}/webhook`, { method: 'POST', body: { enabled } }).then((r) => r.data);
@@ -557,6 +569,7 @@ export const testChatbot = (
         payload?: string;
         type?: string;
         action?: 'timeout';
+        from_node?: string;
         language?: string | null;
     } & TestOptions,
 ) => api<Data<TestTurn>>(`chatbots/${id}/test`, { method: 'POST', body }).then((r) => r.data);

@@ -24,15 +24,21 @@ export type Patch = (patch: NodeConfig) => void;
 export const textareaClass =
     'w-full rounded-lg border border-input bg-card px-3 py-2 text-[13px] leading-relaxed shadow-xs outline-none placeholder:text-faint focus-visible:border-brand-500 focus-visible:ring-[3px] focus-visible:ring-ring/30';
 
-export function Section({ title, children, aside }: { title: string; children: React.ReactNode; aside?: React.ReactNode }) {
+/** A group of step settings (approved design): a card that opens and closes, open by default. */
+export function Section({ title, children, aside, open = true }: { title: string; children: React.ReactNode; aside?: React.ReactNode; open?: boolean }) {
     return (
-        <section className="space-y-3">
-            <div className="flex items-center justify-between gap-2">
-                <p className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">{title}</p>
+        <details open={open} className="cb-card group/sec" style={{ padding: 0 }}>
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-[13.5px] font-semibold">
+                <span className="flex items-center gap-1.5">
+                    <span className="inline-block transition-transform group-open/sec:rotate-90" aria-hidden>
+                        ▸
+                    </span>
+                    {title}
+                </span>
                 {aside}
-            </div>
-            {children}
-        </section>
+            </summary>
+            <div className="grid gap-3 px-3 pb-3">{children}</div>
+        </details>
     );
 }
 
@@ -52,7 +58,7 @@ export function Row({
     return (
         <div className="grid gap-1.5">
             <div className="flex items-center justify-between gap-2">
-                <Label htmlFor={htmlFor} className="text-[12px] font-semibold">
+                <Label htmlFor={htmlFor} className="text-[12.5px] font-semibold" style={{ color: 'var(--cb-ink-2)' }}>
                     {label}
                 </Label>
                 {counter}
