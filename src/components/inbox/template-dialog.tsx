@@ -18,11 +18,14 @@ export function TemplateDialog({
     onOpenChange,
     wabaAccountId,
     onSend,
+    noMarketing = false,
 }: {
     open: boolean;
     onOpenChange: (o: boolean) => void;
     wabaAccountId: string | null;
     onSend: (payload: SendPayload) => Promise<void>;
+    /** The contact opted out (STOP) or stopped marketing: only utility and authentication templates. */
+    noMarketing?: boolean;
 }) {
     const [selection, setSelection] = useState<TemplateSelection>(emptySelection);
     const [error, setError] = useState<string | null>(null);
@@ -31,6 +34,8 @@ export function TemplateDialog({
     const submit = async () => {
         const problem = selectionError(selection);
         if (problem) return setError(problem);
+        if (noMarketing && selection.template?.category === 'MARKETING')
+            return setError('This contact does not receive marketing messages. Choose a utility or authentication template.');
 
         setPending(true);
         setError(null);
@@ -55,6 +60,11 @@ export function TemplateDialog({
                         can send normal messages again.
                     </DialogDescription>
                 </DialogHeader>
+                {noMarketing && (
+                    <p className="rounded-md border border-warn/30 bg-warn-bg px-3 py-2 text-[12.5px] text-ink-2">
+                        This contact does not receive marketing messages. Utility and authentication templates (order updates, codes) can still be sent.
+                    </p>
+                )}
                 <FormError message={error} />
                 <TemplatePicker wabaAccountId={wabaAccountId} value={selection} onChange={setSelection} />
                 <DialogFooter>

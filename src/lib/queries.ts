@@ -450,7 +450,6 @@ export const useCampaignAudience = (
         template_id: string | null;
         phone_number_id: string | null;
         filter?: string | null;
-        include_non_opted_in?: boolean;
     },
     enabled = true,
 ) =>

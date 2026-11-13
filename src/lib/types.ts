@@ -761,9 +761,6 @@ export type Campaign = {
     failure_reason: string | null;
     stats: CampaignStats;
     created_at: string | null;
-    /** Also goes to contacts with no recorded opt-in (never to opted-out ones), with where they agreed. */
-    include_non_opted_in?: boolean;
-    consent_basis?: string | null;
 };
 
 export type CampaignForm = {
@@ -776,17 +773,17 @@ export type CampaignForm = {
     filter?: { match: 'all' | 'any'; rules: SegmentRule[] } | null;
     notes: string | null;
     objective: CampaignObjective | null;
-    include_non_opted_in?: boolean;
-    /** Required with include_non_opted_in: where those contacts agreed to receive WhatsApp messages (10–190 characters). */
-    consent_basis?: string | null;
     variables: { header: string[]; body: string[]; buttons: Record<string, string> };
 };
 
 export type CampaignAudience = {
     matched: number;
     eligible: number;
-    /** Reachable contacts with no recorded opt-in (added when "include non-opted-in" is ticked). */
-    not_opted_in?: number;
+    /**
+     * Why the others won't receive it (each counted once, under the first reason). Marketing: opted out,
+     * stopped marketing in WhatsApp, weekly cap; every category: no WhatsApp number. Unknown consent receives marketing.
+     */
+    excluded: { no_number: number; opted_out: number; stopped_marketing: number; frequency_cap: number };
     category: string | null;
     reach_limit: number | null;
     reach_used: number;

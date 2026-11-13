@@ -161,3 +161,41 @@ test('chatbots builder: panels become drawers on smaller screens and nothing is 
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
     }
 });
+
+test('campaigns: before sending, the page says how many people won’t receive the marketing message and why', async ({ page }) => {
+    await signIn(page);
+    const tag = unique('Promo').replace(' ', '');
+    const ids = [] as string[];
+    for (const i of [1, 2, 3, 4]) {
+        const phone = `+97155${Math.floor(1_000_000 + Math.random() * 8_999_999)}`;
+        ids.push((await api<{ data: { id: string } }>(page, 'POST', 'contacts', { phone, name: `${tag} ${i}`, tags: [tag] })).data.id);
+    }
+    // One replied STOP, one stopped marketing in WhatsApp; the other two have Unknown consent.
+    await api(page, 'POST', `contacts/${ids[0]}/consent`, { state: 'opted_out', notify: false });
+    backendPhp(
+        `app(App\\Domain\\Tenancy\\TenantContext::class)->bypass(function () { App\\Domain\\Messaging\\Models\\Contact::query()->whereKey('${ids[1]}')->update(['marketing_opted_out' => true]); $t = App\\Domain\\Messaging\\Models\\Contact::query()->whereKey('${ids[1]}')->value('tenant_id'); $n = App\\Domain\\WhatsApp\\Models\\PhoneNumber::query()->where('tenant_id', $t)->first(); foreach (['e2e_offer' => 'MARKETING', 'e2e_order' => 'UTILITY'] as $name => $cat) { App\\Domain\\Templates\\Models\\MessageTemplate::query()->firstOrCreate(['waba_account_id' => $n->waba_account_id, 'name' => $name, 'language' => 'en'], ['tenant_id' => $n->tenant_id, 'status' => 'APPROVED', 'category' => $cat, 'components' => [['type' => 'BODY', 'text' => 'Hello there']]]); } });`,
+    );
+
+    await page.goto('/campaigns');
+    await page
+        .getByRole('button', { name: /New campaign/ })
+        .first()
+        .click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByLabel('Only contacts tagged').click();
+    await page.getByRole('option', { name: new RegExp(tag) }).click();
+    await dialog.getByLabel('Template').click();
+    await page.getByRole('option', { name: /e2e_offer/ }).click();
+
+    const notice = dialog.getByRole('alert').filter({ hasText: 'won’t receive this marketing message' });
+    await expect(notice).toContainText('2 people won’t receive this marketing message');
+    await expect(notice).toContainText('1 opted out');
+    await expect(notice).toContainText('1 stopped marketing messages');
+    await expect(dialog).toContainText(/4\s*match\s*·\s*2\s*eligible/);
+
+    // A utility template goes to all four.
+    await dialog.getByLabel('Template').click();
+    await page.getByRole('option', { name: /e2e_order/ }).click();
+    await expect(notice).toBeHidden();
+    await expect(dialog).toContainText(/4\s*match\s*·\s*4\s*eligible/);
+});

@@ -97,8 +97,6 @@ export function CampaignDialog({
     const [tag, setTag] = useState<string | null>(null);
     const [fieldFilter, setFieldFilter] = useState<FieldFilterValue | null>(null);
     // Marketing goes to opted-in contacts; the sender may also include those with no recorded opt-in.
-    const [includeNonOptedIn, setIncludeNonOptedIn] = useState(false);
-    const [consentBasis, setConsentBasis] = useState('');
     const fields = useContactFields(open).data ?? [];
     const [uploading, setUploading] = useState(false);
     const [uploadNote, setUploadNote] = useState<string | null>(null);
@@ -121,8 +119,6 @@ export function CampaignDialog({
         setSegmentId(campaign?.segment_id ?? null);
         setTag(campaign?.audience_tag ?? null);
         setFieldFilter(campaign?.audience_filter ?? null);
-        setIncludeNonOptedIn(campaign?.include_non_opted_in ?? false);
-        setConsentBasis(campaign?.consent_basis ?? '');
         setSelection(emptySelection);
         setRestore(campaign ?? null);
         setPreviews(null);
@@ -154,7 +150,6 @@ export function CampaignDialog({
             template_id: selection.template?.id ?? null,
             phone_number_id: from?.id ?? null,
             filter: fieldFilter ? JSON.stringify(fieldFilter) : null,
-            include_non_opted_in: includeNonOptedIn,
         },
         open,
     );
@@ -167,7 +162,6 @@ export function CampaignDialog({
     const dailyLeft = a && a.messaging_limit !== null ? (a.messaging_remaining ?? Math.max(0, a.messaging_limit - (a.messaging_used ?? 0))) : null;
     const overTier = Boolean(a && dailyLeft !== null && a.eligible > dailyLeft);
     const redQuality = marketing && a?.quality_rating === 'RED';
-    const basisMissing = includeNonOptedIn && consentBasis.trim().length < 10;
     const needsMedia = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(selection.template?.variables.header_format ?? '');
     const variables = () => ({
         header: (selection.template?.variables.header ?? []).map((_, i) => selection.header[i] ?? ''),
@@ -237,8 +231,6 @@ export function CampaignDialog({
             filter: fieldFilter,
             notes: notes.trim() || null,
             objective,
-            include_non_opted_in: includeNonOptedIn,
-            consent_basis: includeNonOptedIn ? consentBasis.trim() : null,
             media_id: selection.media?.id ?? campaign?.media_id ?? null,
             variables: variables(),
         };
@@ -404,48 +396,27 @@ export function CampaignDialog({
                         </p>
                     </div>
 
-                    {category && (includeNonOptedIn || (a?.not_opted_in ?? 0) > 0) && (
-                        <div className="grid gap-1.5">
-                            <div className="flex items-start gap-2">
-                                <Checkbox
-                                    id="cp-include-non-opted-in"
-                                    checked={includeNonOptedIn}
-                                    onCheckedChange={(v) => setIncludeNonOptedIn(v === true)}
-                                    className="mt-0.5"
-                                />
-                                <Label htmlFor="cp-include-non-opted-in" className="text-[13px] leading-snug font-normal">
-                                    Include contacts with no recorded opt-in
-                                    {a?.not_opted_in ? ` (${a.not_opted_in.toLocaleString()})` : ''}
-                                </Label>
-                            </div>
-                            {!includeNonOptedIn && (
-                                <p className="text-[12.5px] text-muted-foreground">
-                                    WhatsApp requires an opt-in before you message anyone first, whatever the template category. “Unknown” consent is not an
-                                    opt-in, so these contacts are left out.
-                                </p>
-                            )}
-                            {includeNonOptedIn && (
-                                <div className="grid gap-1.5 rounded-md border border-warn/30 bg-warn-bg px-3 py-2 text-[12.5px] leading-relaxed text-ink-2">
-                                    <p role="alert">
-                                        <span className="font-semibold">Only if they agreed somewhere else</span> (a form, a checkout box, in store). If many
-                                        block or report the message, Meta lowers the number’s quality rating and can restrict it. Opted-out contacts and those
-                                        who stopped marketing messages are never included.
-                                    </p>
-                                    <Label htmlFor="cp-consent-basis" className="text-[12.5px] font-medium">
-                                        Where did they agree to receive WhatsApp messages from you?
-                                    </Label>
-                                    <Input
-                                        id="cp-consent-basis"
-                                        value={consentBasis}
-                                        maxLength={190}
-                                        onChange={(e) => setConsentBasis(e.target.value)}
-                                        placeholder="e.g. Opt-in checkbox on our website checkout"
-                                        aria-invalid={consentBasis.trim().length > 0 && consentBasis.trim().length < 10}
-                                        className="bg-card"
-                                    />
-                                    <p className="text-muted-foreground">Kept with the campaign and in the audit log.</p>
-                                </div>
-                            )}
+                    {a && marketing && a.matched > a.eligible && (
+                        <div role="alert" className="rounded-md border border-warn/30 bg-warn-bg px-3 py-2.5 text-[13px] leading-relaxed text-ink-2">
+                            <p className="font-semibold">
+                                {(a.matched - a.eligible).toLocaleString()} {a.matched - a.eligible === 1 ? 'person' : 'people'} won’t receive this marketing
+                                message
+                            </p>
+                            <ul className="mt-1 grid gap-0.5 text-[12.5px]">
+                                {a.excluded.opted_out > 0 && (
+                                    <li>{a.excluded.opted_out.toLocaleString()} opted out (replied STOP or were opted out by your team)</li>
+                                )}
+                                {a.excluded.stopped_marketing > 0 && (
+                                    <li>{a.excluded.stopped_marketing.toLocaleString()} stopped marketing messages from you in WhatsApp</li>
+                                )}
+                                {a.excluded.frequency_cap > 0 && (
+                                    <li>{a.excluded.frequency_cap.toLocaleString()} already received the weekly maximum of marketing messages</li>
+                                )}
+                                {a.excluded.no_number > 0 && <li>{a.excluded.no_number.toLocaleString()} have no WhatsApp number</li>}
+                            </ul>
+                            <p className="mt-1 text-[12.5px] text-muted-foreground">
+                                Everyone else in the audience receives it, including contacts whose consent is Unknown.
+                            </p>
                         </div>
                     )}
 
@@ -464,8 +435,7 @@ export function CampaignDialog({
                                         <span className="text-muted-foreground">
                                             {' '}
                                             ({(a.matched - a.eligible).toLocaleString()} excluded:{' '}
-                                            {`${includeNonOptedIn ? '' : 'no recorded opt-in, '}opted out, no WhatsApp number${a.category === 'MARKETING' ? `, stopped marketing${a.frequency_cap ? ', or already at the weekly limit' : ''}` : ''}`}
-                                            )
+                                            {a.category === 'MARKETING' ? 'see the list above' : 'no WhatsApp number'})
                                         </span>
                                     )}
                                 </p>
@@ -612,13 +582,13 @@ export function CampaignDialog({
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
                         Cancel
                     </Button>
-                    <Button variant="outline" onClick={() => submit(false)} disabled={pending !== null || basisMissing}>
+                    <Button variant="outline" onClick={() => submit(false)} disabled={pending !== null}>
                         {pending === 'save' ? 'Saving…' : 'Save draft'}
                     </Button>
                     {canSend && (
                         <Button
                             onClick={() => submit(true)}
-                            disabled={pending !== null || !selection.template || !a || a.eligible === 0 || overPlan || redQuality || basisMissing}
+                            disabled={pending !== null || !selection.template || !a || a.eligible === 0 || overPlan || redQuality}
                         >
                             {pending === 'launch' ? 'Starting…' : when === 'later' ? 'Schedule' : `Send to ${a?.eligible.toLocaleString() ?? '…'}`}
                         </Button>

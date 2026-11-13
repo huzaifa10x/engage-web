@@ -101,9 +101,10 @@ export function NewConversationDialog({
         setError(null);
         if (!from) return setError('Connect a WhatsApp number first.');
         if (!recipient && !looksLikePhone(to)) return setError('Choose a contact, or enter a WhatsApp number in international format, e.g. +971501234567.');
-        if (recipient?.consent_state === 'opted_out') return setError('This contact opted out of messages and cannot be messaged.');
         const problem = selectionError(selection);
         if (problem) return setError(problem);
+        if ((recipient?.consent_state === 'opted_out' || recipient?.marketing_opted_out) && selection.template?.category === 'MARKETING')
+            return setError('This contact does not receive marketing messages. Choose a utility or authentication template.');
 
         setPending(true);
         try {
@@ -167,13 +168,12 @@ export function NewConversationDialog({
                                 </div>
                                 <ul className="max-h-[46vh] divide-y overflow-y-auto rounded-lg border">
                                     {people.map((c) => {
-                                        const blocked = c.consent_state === 'opted_out';
+                                        const noMarketing = c.consent_state === 'opted_out';
 
                                         return (
                                             <li key={c.id}>
                                                 <button
                                                     type="button"
-                                                    disabled={blocked}
                                                     onClick={() => setPicked(c)}
                                                     className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-muted disabled:cursor-not-allowed disabled:opacity-55"
                                                 >
@@ -186,7 +186,14 @@ export function NewConversationDialog({
                                                             {c.phone ?? 'No phone number'}
                                                         </span>
                                                     </span>
-                                                    {blocked && <span className="shrink-0 text-[12px] font-medium text-bad">Opted out</span>}
+                                                    {noMarketing && (
+                                                        <span
+                                                            className="shrink-0 text-[12px] font-medium text-bad"
+                                                            title="Utility and authentication templates only"
+                                                        >
+                                                            Opted out · no marketing
+                                                        </span>
+                                                    )}
                                                 </button>
                                             </li>
                                         );

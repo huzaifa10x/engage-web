@@ -491,7 +491,7 @@ export default function ContactsPage() {
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
-                                                {can(P.InboxReply) && c.consent_state !== 'opted_out' && (
+                                                {can(P.InboxReply) && (
                                                     <DropdownMenuItem onSelect={() => setMessaging(c)}>
                                                         <MessageSquareIcon /> Send message
                                                     </DropdownMenuItem>

@@ -149,7 +149,7 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
           : // Opted out: replies are allowed while a window the customer opened after opting out is open;
             // templates never are (they would be the business starting a conversation).
             contact?.consent_state === 'opted_out' && !(c.window.replies_allowed ?? false)
-            ? 'This contact opted out. You can reply as soon as they write to you again. Templates cannot be sent to them until they send START.'
+            ? 'This contact opted out (STOP). You can reply as soon as they write to you again. Until they send START, only utility and authentication templates can be sent.'
             : !(c.window.replies_allowed ?? c.window.open)
               ? 'The 24-hour window is closed, so normal messages cannot be sent. Send an approved template; when the customer replies, the window opens again.'
               : null;
@@ -407,17 +407,23 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                 <Composer
                     ref={composer}
                     conversationId={c.id}
-                    canSendTemplate={!numberGone && !optedOut}
+                    canSendTemplate={!numberGone}
                     disabledReason={disabledReason}
                     replyTo={replyTo}
                     onClearReply={() => setReplyTo(null)}
                     onSend={send}
-                    onTemplate={() => (optedOut || !can(P.InboxReply) ? toast.error(disabledReason ?? 'Not allowed') : setTemplateOpen(true))}
+                    onTemplate={() => (!can(P.InboxReply) ? toast.error(disabledReason ?? 'Not allowed') : setTemplateOpen(true))}
                 />
             </div>
 
             <ContactPanel conversation={c} open={panelFor === c.id} onClose={() => setPanelFor(null)} />
-            <TemplateDialog open={templateOpen} onOpenChange={setTemplateOpen} wabaAccountId={wabaAccountId} onSend={sendTemplate} />
+            <TemplateDialog
+                open={templateOpen}
+                onOpenChange={setTemplateOpen}
+                wabaAccountId={wabaAccountId}
+                onSend={sendTemplate}
+                noMarketing={optedOut || !!contact?.marketing_opted_out}
+            />
         </div>
     );
 }
