@@ -519,7 +519,7 @@ export const useConsentEvents = (filters: { action?: string; q?: string }, enabl
         enabled,
     });
 
-/** Sends the consent question with Subscribe / No thanks buttons into an open conversation. */
+/** Sends the consent question with Subscribe / Unsubscribe buttons into an open conversation (double opt-in). */
 export const requestConsent = (conversationId: string) =>
     api<Data<Message>>(`conversations/${conversationId}/consent-request`, { method: 'POST' }).then((r) => r.data);
 

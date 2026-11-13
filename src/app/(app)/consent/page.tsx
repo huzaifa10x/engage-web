@@ -30,6 +30,7 @@ const ACTION: Record<string, { label: string; tone: Tone }> = {
     marketing_opted_in: { label: 'Marketing resumed', tone: 'good' },
     marketing_opted_out: { label: 'Marketing stopped', tone: 'warn' },
     consent_declined: { label: 'Declined (No thanks)', tone: 'grey' },
+    consent_requested: { label: 'Consent asked', tone: 'info' },
 };
 
 const SOURCE: Record<string, string> = {
@@ -225,7 +226,7 @@ function SettingsForm({ initial, canManage }: { initial: ComplianceSettings; can
                 <Field
                     label="Consent request"
                     htmlFor="consent-text"
-                    hint="Sent with Subscribe / No thanks buttons when an agent presses “Ask for consent” in a conversation. Name your business and say the messages come on WhatsApp."
+                    hint="Sent with Subscribe / Unsubscribe buttons (your business name as the title) when an agent asks for marketing consent in a conversation. Say what kind of messages they will get on WhatsApp."
                 >
                     <textarea
                         id="consent-text"

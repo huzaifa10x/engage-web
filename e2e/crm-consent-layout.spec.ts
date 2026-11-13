@@ -1,6 +1,6 @@
 import { expect, type Page, test } from '@playwright/test';
 
-import { api, backendPhp, signIn, unique } from './helpers';
+import { api, backendPhp, customerSays, signIn, unique } from './helpers';
 
 /** Bulk edit in Contacts, the Leads date range, and the Chatbots layout at every width. */
 
@@ -16,12 +16,16 @@ async function makeContacts(page: Page, prefix: string, n: number): Promise<stri
 
 test('contacts: select several, edit them together after a review step', async ({ page }) => {
     await signIn(page);
-    const prefix = unique('Bulk');
+    // Letters only: a search with digits also matches phone numbers.
+    const prefix = `Bulk ${Array.from({ length: 6 }, () => String.fromCharCode(97 + Math.floor(Math.random() * 26))).join('')}`;
     await makeContacts(page, prefix, 3);
     await page.goto('/contacts');
-    await page.getByLabel('Search contacts').fill(prefix);
-    await page.getByLabel('Search contacts').press('Enter');
-    await expect(page.getByRole('row')).toHaveCount(4); // header + 3
+    await expect(page.getByRole('row').nth(1)).toBeVisible(); // loaded and interactive before searching
+    await expect(async () => {
+        await page.getByLabel('Search contacts').fill(prefix);
+        await page.getByLabel('Search contacts').press('Enter');
+        await expect(page.getByRole('row')).toHaveCount(4, { timeout: 3000 }); // header + 3
+    }).toPass({ timeout: 30_000 });
 
     await page.getByLabel(`Select ${prefix} 1`).check();
     await page.getByLabel(`Select ${prefix} 2`).check();
@@ -198,4 +202,32 @@ test('campaigns: before sending, the page says how many people won’t receive t
     await page.getByRole('option', { name: /e2e_order/ }).click();
     await expect(notice).toBeHidden();
     await expect(dialog).toContainText(/4\s*match\s*·\s*4\s*eligible/);
+});
+
+test('inbox: ask for marketing consent sends Subscribe / Unsubscribe; only the customer’s answer is recorded', async ({ page }) => {
+    await signIn(page);
+    const name = unique('Consent');
+    const from = `9715${Math.floor(10_000_000 + Math.random() * 89_999_999)}`;
+    customerSays('Hello, any offers?', from, name);
+    let conversationId = '';
+    await expect
+        .poll(async () => {
+            const list = await api<{ data: { id: string; contact: { display_name: string } }[] }>(page, 'GET', 'conversations?per_page=50');
+            conversationId = list.data.find((c) => c.contact.display_name === name)?.id ?? '';
+            return conversationId;
+        })
+        .not.toBe('');
+
+    await page.goto(`/inbox?c=${conversationId}`);
+    const panel = page.getByRole('complementary').filter({ hasText: 'Consent' }).last();
+    await panel.getByRole('button', { name: 'Ask for marketing consent' }).click();
+    await expect(page.getByText('Consent question sent.')).toBeVisible();
+    await expect(panel).toContainText('waiting for the customer to tap Subscribe or Unsubscribe');
+    await expect(panel).toContainText('Unknown'); // nothing recorded yet
+
+    // The customer agrees: recorded as an opt-in, and the waiting note goes away.
+    customerSays('Subscribe', from, name);
+    await expect(panel).toContainText('Opted in', { timeout: 20_000 });
+    await expect(panel).not.toContainText('waiting for the customer');
+    await expect(panel.getByRole('button', { name: 'Ask for marketing consent' })).toBeHidden();
 });

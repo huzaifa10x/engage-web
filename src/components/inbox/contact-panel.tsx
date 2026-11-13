@@ -15,12 +15,15 @@ import { useSession } from '@/components/app/session';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useStored } from '@/hooks/use-stored';
 import { api, errorMessage } from '@/lib/api';
-import { dateTime, humanize, timeLeft } from '@/lib/format';
+import { dateTime, humanize, relative, timeLeft } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { keys, useAssignees, useInboxTeams } from '@/lib/queries';
+import { keys, requestConsent, useAssignees, useInboxTeams } from '@/lib/queries';
 import type { Contact, Conversation } from '@/lib/types';
 
 const UNASSIGNED = '__none__';
@@ -51,14 +54,16 @@ export function ContactPanel({ conversation, open = false, onClose }: { conversa
         onError: (e) => toast.error(errorMessage(e)),
     });
 
+    // Opt-out (or an opt-in the customer gave outside WhatsApp: a form, a call, in store) recorded by a teammate.
     const consent = useMutation({
-        mutationFn: (state: 'opted_in' | 'opted_out') =>
+        mutationFn: (v: { state: 'opted_in' | 'opted_out'; note?: string }) =>
             api<{ data: Contact; meta?: { changed: boolean; confirmation: { status: string; message: string } | null } }>(`contacts/${contact?.id}/consent`, {
                 method: 'POST',
-                body: { state, note: 'Changed from the inbox', notify: true, conversation_id: conversation.id },
+                // An opt-in recorded here sends nothing: the customer agreed somewhere else.
+                body: { state: v.state, note: v.note ?? 'Changed from the inbox', notify: v.state === 'opted_out', conversation_id: conversation.id },
             }),
-        onSuccess: (r, state) => {
-            const what = state === 'opted_in' ? 'Opt-in recorded.' : 'Opt-out recorded.';
+        onSuccess: (r, v) => {
+            const what = v.state === 'opted_in' ? 'Opt-in recorded.' : 'Opt-out recorded.';
             const c = r.meta?.confirmation;
             if (!c || c.status === 'sent') {
                 toast.success(c ? `${what} ${c.message}` : what);
@@ -67,11 +72,26 @@ export function ContactPanel({ conversation, open = false, onClose }: { conversa
             } else {
                 toast.warning(`${what} ${c.message}`);
             }
+            setElsewhere(false);
+            setElsewhereNote('');
             refresh();
             void qc.invalidateQueries({ queryKey: keys.thread(conversation.id) });
         },
         onError: (e) => toast.error(`The consent could not be recorded: ${errorMessage(e)}`),
     });
+    // Double opt-in: the customer gets the question with Subscribe / Unsubscribe buttons; only their tap is recorded.
+    const ask = useMutation({
+        mutationFn: () => requestConsent(conversation.id),
+        onSuccess: () => {
+            toast.success('Consent question sent. Their answer (Subscribe or Unsubscribe) is recorded automatically.');
+            refresh();
+            void qc.invalidateQueries({ queryKey: keys.thread(conversation.id) });
+        },
+        onError: (e) => toast.error(errorMessage(e)),
+    });
+    const [elsewhere, setElsewhere] = useState(false);
+    const [elsewhereNote, setElsewhereNote] = useState('');
+    const canAsk = conversation.window.replies_allowed ?? conversation.window.open;
 
     // Escape closes the slide-over.
     useEffect(() => {
@@ -204,26 +224,69 @@ export function ContactPanel({ conversation, open = false, onClose }: { conversa
                     </Badge>
                 </div>
                 {contact.marketing_opted_out && <p className="rounded-md bg-warn-bg px-2.5 py-1.5 text-warn">Stopped marketing messages in WhatsApp.</p>}
+                {contact.consent_requested_at && contact.consent_state !== 'opted_in' && (
+                    <p className="rounded-md bg-info-bg px-2.5 py-1.5 text-info">
+                        Consent question sent {relative(contact.consent_requested_at)}, waiting for the customer to tap Subscribe or Unsubscribe.
+                    </p>
+                )}
+                {(contact.consent_state !== 'opted_in' || contact.marketing_opted_out) && can(P.InboxReply) && (
+                    <div className="grid gap-1">
+                        <Button size="sm" onClick={() => ask.mutate()} disabled={ask.isPending || !canAsk} className="w-fit">
+                            {ask.isPending ? 'Sending…' : contact.consent_requested_at ? 'Ask again' : 'Ask for marketing consent'}
+                        </Button>
+                        <p className="text-[12px] text-muted-foreground">
+                            {canAsk
+                                ? 'Sends your consent question with Subscribe and Unsubscribe buttons. Nothing is recorded until the customer taps one.'
+                                : 'Available within 24 hours of the customer’s last message (WhatsApp only allows buttons then).'}
+                        </p>
+                    </div>
+                )}
                 {can(P.ContactsUpdate) && (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         {contact.consent_state !== 'opted_in' && (
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => consent.mutate('opted_in')}
-                                disabled={consent.isPending}
-                                title="Record that the customer agreed to receive messages. If they wrote in the last 24 hours, they also get your opt-in confirmation (Consent & Privacy settings)."
-                            >
-                                Record opt-in
+                            <Button size="sm" variant="ghost" onClick={() => setElsewhere(true)} disabled={consent.isPending}>
+                                Consent given elsewhere…
                             </Button>
                         )}
                         {contact.consent_state !== 'opted_out' && (
-                            <Button size="sm" variant="outline" onClick={() => consent.mutate('opted_out')} disabled={consent.isPending}>
+                            <Button size="sm" variant="outline" onClick={() => consent.mutate({ state: 'opted_out' })} disabled={consent.isPending}>
                                 Opt out
                             </Button>
                         )}
                     </div>
                 )}
+                <Dialog open={elsewhere} onOpenChange={setElsewhere}>
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Record consent given elsewhere</DialogTitle>
+                            <DialogDescription>
+                                For a customer who agreed outside WhatsApp (a signed form, a website checkbox, in store). Nothing is sent to them. To ask in the
+                                chat, use “Ask for marketing consent” instead.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="consent-elsewhere">Where did they agree?</Label>
+                            <Input
+                                id="consent-elsewhere"
+                                value={elsewhereNote}
+                                maxLength={190}
+                                onChange={(e) => setElsewhereNote(e.target.value)}
+                                placeholder="e.g. Signed the opt-in form at the viewing"
+                            />
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setElsewhere(false)}>
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={() => consent.mutate({ state: 'opted_in', note: elsewhereNote.trim() })}
+                                disabled={consent.isPending || elsewhereNote.trim().length < 10}
+                            >
+                                Record opt-in
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
                 <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
                     {contact.email && (
                         <>

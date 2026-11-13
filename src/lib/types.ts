@@ -266,6 +266,8 @@ export type Contact = {
     synced_from?: { id: string; display_phone_number: string | null; verified_name: string | null; status: string } | null;
     consent_state: ConsentState;
     opted_out_at: string | null;
+    /** The Subscribe / Unsubscribe question was sent then and is waiting for an answer. */
+    consent_requested_at?: string | null;
     marketing_opted_out: boolean;
     last_inbound_at: string | null;
     created_at: string | null;

@@ -287,7 +287,7 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                                 variant="outline"
                                 size="sm"
                                 disabled={askingConsent}
-                                title="Sends a question with Subscribe / No thanks buttons. A tap on Subscribe is recorded as marketing consent."
+                                title="Sends your consent question with Subscribe / Unsubscribe buttons. Only the customer’s tap is recorded."
                                 onClick={async () => {
                                     setAskingConsent(true);
                                     try {
