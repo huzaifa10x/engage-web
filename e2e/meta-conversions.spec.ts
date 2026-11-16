@@ -74,3 +74,35 @@ test('channels: conversion reporting status per account, Reconnect to enable; no
     await expect(page.getByRole('button', { name: 'Account actions' }).first()).toBeVisible();
     await expect(page.getByTestId('conversion-reporting')).toHaveCount(0);
 });
+
+test('growth hub: leads, purchases and revenue per ad with a date filter; no tab without the flag', async ({ page }) => {
+    setup(true);
+    backendPhp(
+        `app(App\\Domain\\Tenancy\\TenantContext::class)->bypass(function () { $click = Illuminate\\Support\\Facades\\DB::table('ad_clicks')->where('ctwa_clid', 'E2E-CLICK-ID')->first(); Illuminate\\Support\\Facades\\DB::table('conversion_events')->where('conversation_id', $click->conversation_id)->where('is_test', false)->update(['ad_click_id' => $click->id, 'event_time' => now()->subHours(2)]); });`,
+    );
+    backendPhp(
+        "app(App\\Domain\\Tenancy\\TenantContext::class)->bypass(function () { foreach (App\\Domain\\Tenancy\\Models\\Tenant::all() as $t) { $s = (array) $t->settings; $s['growth'] = ['enabled' => true, 'started_at' => now()->subDay()->toIso8601String()]; $t->forceFill(['settings' => $s])->save(); } });",
+    );
+    await signIn(page);
+    await page.goto('/growth/leads');
+
+    await page.getByRole('tab', { name: 'Meta conversions' }).click();
+    const region = page.getByRole('region', { name: 'Meta conversions per ad' });
+    const row = region.getByRole('row').filter({ hasText: 'E2E free trial ad' });
+    await expect(row).toContainText('120210000000000001');
+    await expect(row.getByRole('cell').nth(2)).toHaveText('1');
+    await expect(row).toContainText('250');
+    await expect(region.getByText('Cost per result')).toHaveCount(0);
+
+    await page.getByRole('combobox', { name: 'Date range' }).click();
+    await page.getByRole('option', { name: 'Custom range…' }).click();
+    await page.getByLabel('From', { exact: true }).fill('2020-01-01');
+    await page.getByLabel('To', { exact: true }).fill('2020-01-31');
+    await page.getByRole('button', { name: 'Apply' }).click();
+    await expect(region.getByText('No conversions from ads in this period')).toBeVisible();
+
+    setup(false);
+    await page.reload();
+    await expect(page.getByRole('tab', { name: 'All leads' })).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Meta conversions' })).toHaveCount(0);
+});

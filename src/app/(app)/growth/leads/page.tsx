@@ -8,6 +8,7 @@ import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header'
 import { useSelectedNumber } from '@/components/app/number-switcher';
 import { useSession } from '@/components/app/session';
 import { StageBadge } from '@/components/contacts/stage-badge';
+import { type ConversionPeriod, ConversionsByAd, useConversionResults } from '@/components/growth/conversions-by-ad';
 import { LeadDetails } from '@/components/growth/lead-details';
 import { StatusChip } from '@/components/growth/source-chip';
 import { Badge } from '@/components/ui/badge';
@@ -25,7 +26,7 @@ import { cn } from '@/lib/utils';
 
 const ALL = '__all__';
 
-type Tab = 'all' | 'new' | 'returning' | 'clicks';
+type Tab = 'all' | 'new' | 'returning' | 'clicks' | 'conversions';
 
 // Leads are paid-advertising leads only: Meta Click-to-WhatsApp ads and boosted posts, and taps on
 // your website from Google Ads, Meta ads or another paid campaign. Ordinary chats stay in Chat and Contacts.
@@ -267,8 +268,12 @@ function LeadsPage() {
     // The number chosen in the top bar filters the leads and the counts (CN-02).
     const [selectedNumber] = useSelectedNumber();
     const numberId = filters.phone_number_id ?? selectedNumber ?? undefined;
-    const query: LeadFilters = { ...filters, phone_number_id: numberId, tab: tab === 'clicks' ? 'all' : tab };
-    const leads = useLeads(query, allowed && tab !== 'clicks');
+    const listTab = tab === 'clicks' || tab === 'conversions' ? 'all' : tab;
+    const query: LeadFilters = { ...filters, phone_number_id: numberId, tab: listTab };
+    const leads = useLeads(query, allowed && listTab === tab);
+    // Meta conversions per ad: only workspaces with Conversions to Meta (null otherwise, no tab).
+    const [period, setPeriod] = useState<ConversionPeriod>({ days: 30 });
+    const conversions = useConversionResults(period, allowed && seesAll);
     const summary = useLeadSummary(allowed, numberId ?? null);
     const stages = (useStages(allowed).data ?? []).filter((s) => !s.archived);
     const members = useMembers(allowed && seesAll && can(P.TeamView));
@@ -367,6 +372,9 @@ function LeadsPage() {
                             ['new', 'New', counts?.new],
                             ['returning', 'Returning', counts?.returning],
                             ...(seesAll && websites ? ([['clicks', 'Unmatched clicks', k?.unmatched_clicks?.total]] as const) : []),
+                            ...(seesAll && conversions.data !== null && conversions.data !== undefined
+                                ? ([['conversions', 'Meta conversions', undefined]] as const)
+                                : []),
                         ] as [Tab, string, number | undefined][]
                     ).map(([key, label, n]) => (
                         <button
@@ -388,6 +396,14 @@ function LeadsPage() {
 
                 {tab === 'clicks' ? (
                     <UnmatchedClicks />
+                ) : tab === 'conversions' ? (
+                    <>
+                        <div className="flex flex-wrap items-center gap-2 border-b p-3">
+                            <DateRange filters={period} onChange={(patch) => setPeriod((p) => ({ ...p, ...patch }))} />
+                            <p className="text-[12.5px] text-muted-foreground">Leads, purchases and revenue from chats that started on each Meta ad.</p>
+                        </div>
+                        <ConversionsByAd data={conversions.data} loading={conversions.isFetching && !conversions.data} />
+                    </>
                 ) : (
                     <>
                         <div className="flex flex-wrap items-center gap-2 border-b p-3">
