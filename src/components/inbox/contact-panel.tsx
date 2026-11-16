@@ -59,11 +59,11 @@ export function ContactPanel({ conversation, open = false, onClose }: { conversa
         mutationFn: (v: { state: 'opted_in' | 'opted_out'; note?: string }) =>
             api<{ data: Contact; meta?: { changed: boolean; confirmation: { status: string; message: string } | null } }>(`contacts/${contact?.id}/consent`, {
                 method: 'POST',
-                // An opt-in recorded here sends nothing: the customer agreed somewhere else.
-                body: { state: v.state, note: v.note ?? 'Changed from the inbox', notify: v.state === 'opted_out', conversation_id: conversation.id },
+                // Recorded by the team: nothing is sent to the customer (confirmations answer the customer's own STOP / START / buttons).
+                body: { state: v.state, note: v.note ?? 'Changed from the inbox', notify: false, conversation_id: conversation.id },
             }),
         onSuccess: (r, v) => {
-            const what = v.state === 'opted_in' ? 'Opt-in recorded.' : 'Opt-out recorded.';
+            const what = v.state === 'opted_in' ? 'Opt-in recorded. Nothing was sent to the customer.' : 'Opt-out recorded. Nothing was sent to the customer.';
             const c = r.meta?.confirmation;
             if (!c || c.status === 'sent') {
                 toast.success(c ? `${what} ${c.message}` : what);
@@ -237,7 +237,9 @@ export function ContactPanel({ conversation, open = false, onClose }: { conversa
                         <p className="text-[12px] text-muted-foreground">
                             {canAsk
                                 ? 'Sends your consent question with Subscribe and Unsubscribe buttons. Nothing is recorded until the customer taps one.'
-                                : 'Available within 24 hours of the customer’s last message (WhatsApp only allows buttons then).'}
+                                : contact.consent_state === 'opted_out' && conversation.window.open
+                                  ? 'This contact opted out after their last message. You can ask again once they write to you.'
+                                  : 'Available within 24 hours of the customer’s last message (WhatsApp only allows buttons then).'}
                         </p>
                     </div>
                 )}

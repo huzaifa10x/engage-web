@@ -230,4 +230,14 @@ test('inbox: ask for marketing consent sends Subscribe / Unsubscribe; only the c
     await expect(panel).toContainText('Opted in', { timeout: 20_000 });
     await expect(panel).not.toContainText('waiting for the customer');
     await expect(panel.getByRole('button', { name: 'Ask for marketing consent' })).toBeHidden();
+    // Its confirmation is labelled as the consent reply, not as the chatbot.
+    await expect(page.getByText('Consent reply ·').first()).toBeVisible();
+
+    // An opt-out recorded by the team sends nothing to the customer.
+    const before = (await api<{ data: unknown[] }>(page, 'GET', `conversations/${conversationId}/messages`)).data.length;
+    await panel.getByRole('button', { name: 'Opt out' }).click();
+    await expect(page.getByText('Opt-out recorded. Nothing was sent to the customer.')).toBeVisible();
+    await expect(panel).toContainText('Opted out');
+    expect((await api<{ data: unknown[] }>(page, 'GET', `conversations/${conversationId}/messages`)).data.length).toBe(before);
+    await expect(panel).toContainText('You can ask again once they write to you');
 });

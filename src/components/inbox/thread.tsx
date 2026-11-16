@@ -149,7 +149,7 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
           : // Opted out: replies are allowed while a window the customer opened after opting out is open;
             // templates never are (they would be the business starting a conversation).
             contact?.consent_state === 'opted_out' && !(c.window.replies_allowed ?? false)
-            ? 'This contact opted out (STOP). You can reply as soon as they write to you again. Until they send START, only utility and authentication templates can be sent.'
+            ? 'This contact opted out. You can reply as soon as they write to you again. Until they opt back in, only utility and authentication templates can be sent.'
             : !(c.window.replies_allowed ?? c.window.open)
               ? 'The 24-hour window is closed, so normal messages cannot be sent. Send an approved template; when the customer replies, the window opens again.'
               : null;
@@ -341,7 +341,7 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                                 ? m.sent_by_membership_id === membership.id
                                     ? 'You'
                                     : (names.get(m.sent_by_membership_id ?? '') ?? null)
-                                : m.direction === 'outbound' && m.origin === 'automation' && c.bot
+                                : m.direction === 'outbound' && m.origin === 'automation' && m.automation !== 'consent' && c.bot
                                   ? (c.bot.bot_name ?? c.bot.flow_name ?? 'Chatbot')
                                   : null;
 

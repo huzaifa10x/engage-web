@@ -1,6 +1,18 @@
 'use client';
 
-import { AlertCircleIcon, BotIcon, CheckCheckIcon, CheckIcon, ClockIcon, FileIcon, HistoryIcon, MapPinIcon, ReplyIcon, SmartphoneIcon } from 'lucide-react';
+import {
+    AlertCircleIcon,
+    BotIcon,
+    CheckCheckIcon,
+    CheckIcon,
+    ClockIcon,
+    FileIcon,
+    HistoryIcon,
+    MapPinIcon,
+    ReplyIcon,
+    ShieldCheckIcon,
+    SmartphoneIcon,
+} from 'lucide-react';
 import { useState } from 'react';
 
 import { clockTime, fileSize } from '@/lib/format';
@@ -271,7 +283,12 @@ export function MessageBubble({
                             <SmartphoneIcon className="size-3" /> App
                         </span>
                     )}
-                    {message.origin === 'automation' && (
+                    {message.origin === 'automation' && message.automation === 'consent' && (
+                        <span className="inline-flex items-center gap-0.5" title="Sent automatically when the customer’s consent changed (Consent & Privacy)">
+                            <ShieldCheckIcon className="size-3" /> Consent reply ·
+                        </span>
+                    )}
+                    {message.origin === 'automation' && message.automation !== 'consent' && (
                         <span className="inline-flex items-center gap-0.5" title="Sent automatically (chatbot or auto-reply)">
                             <BotIcon className="size-3" /> Bot ·
                         </span>

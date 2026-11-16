@@ -590,6 +590,8 @@ export type Message = {
     conversation_id: string;
     direction: 'inbound' | 'outbound';
     origin: 'customer' | 'agent' | 'api' | 'campaign' | 'automation' | 'app_echo' | 'history';
+    /** What sent an automatic message: 'consent' = the opt-in / opt-out confirmation (not the chatbot). */
+    automation?: 'consent' | null;
     type: string;
     status: MessageStatus;
     /** Inbound messages are shown without a Growth Hub website code. */
