@@ -139,6 +139,8 @@ export type PhoneNumber = {
     verified_name: string | null;
     name_status: string | null;
     status: 'pending' | 'connected' | 'disconnected';
+    /** Meta: a new number must be registered on the Cloud API within 14 days of Embedded Signup. Null when done or not needed. */
+    registration?: { deadline: string; days_left: number; overdue: boolean } | null;
     /** Why it is disconnected: the customer removed our access at Meta, took the number off the Business app, or did it here. */
     disconnect_reason?: DisconnectReason | null;
     disconnected_at?: string | null;

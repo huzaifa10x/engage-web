@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { MoreHorizontalIcon, RefreshCwIcon, UnplugIcon } from 'lucide-react';
+import { MoreHorizontalIcon, RefreshCwIcon, UnplugIcon, WebhookIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -64,6 +64,24 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
         onError: (e) => toast.error(errorMessage(e)),
     });
 
+    const reconnectWebhooks = useMutation({
+        mutationFn: () => api(`whatsapp/accounts/${waba.id}/webhooks`, { method: 'POST' }),
+        onSuccess: () => {
+            toast.success('Webhooks reconnected. Messages and updates from Meta reach 10X Engage again.');
+            invalidate();
+        },
+        onError: (e) => toast.error(errorMessage(e)),
+    });
+
+    const register = useMutation({
+        mutationFn: (numberId: string) => api(`whatsapp/accounts/${waba.id}/numbers/${numberId}/register`, { method: 'POST' }),
+        onSuccess: () => {
+            toast.success('Number registered with Meta');
+            invalidate();
+        },
+        onError: (e) => toast.error(errorMessage(e)),
+    });
+
     const disconnect = useMutation({
         mutationFn: () => api(`whatsapp/accounts/${waba.id}`, { method: 'DELETE', body: { reason: 'Disconnected from Channels' } }),
         onSuccess: () => {
@@ -96,6 +114,22 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                         WABA <span className="font-mono">{waba.waba_id}</span>
                         {waba.account_review_status ? ` · Review ${humanize(waba.account_review_status).toLowerCase()}` : ''}
                     </p>
+                    {!disconnected && !waba.is_subscribed_to_webhooks && (
+                        <div
+                            role="alert"
+                            className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warn/30 bg-warn-bg px-3 py-2 text-[13px] leading-relaxed text-ink-2"
+                        >
+                            <span>
+                                <span className="font-semibold text-warn">Meta isn’t sending this account’s messages to 10X Engage.</span> New messages,
+                                delivery updates and quality alerts won’t arrive until the webhooks are reconnected.
+                            </span>
+                            {canManage && (
+                                <Button size="sm" variant="outline" onClick={() => reconnectWebhooks.mutate()} disabled={reconnectWebhooks.isPending}>
+                                    <RefreshCwIcon /> {reconnectWebhooks.isPending ? 'Reconnecting…' : 'Reconnect webhooks'}
+                                </Button>
+                            )}
+                        </div>
+                    )}
                     {!disconnected && waba.needs_reconnect && (
                         <p role="alert" className="mt-2.5 rounded-lg border border-warn/30 bg-warn-bg px-3 py-2 text-[13px] leading-relaxed text-ink-2">
                             <span className="font-semibold text-warn">Meta hasn’t given 10X Engage permission to manage this account.</span> Reconnect it: sign
@@ -130,6 +164,9 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                         <DropdownMenuContent align="end">
                             <DropdownMenuItem onSelect={() => refresh.mutate()} disabled={refresh.isPending}>
                                 <RefreshCwIcon /> Refresh from Meta
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onSelect={() => reconnectWebhooks.mutate()} disabled={reconnectWebhooks.isPending}>
+                                <WebhookIcon /> Reconnect webhooks
                             </DropdownMenuItem>
                             <DropdownMenuItem destructive onSelect={() => setConfirm(true)}>
                                 <UnplugIcon className="!text-destructive" /> Disconnect
@@ -205,6 +242,30 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                             ))}
                         </TableBody>
                     </Table>
+                    {/* Meta's 14-day rule: a new number must be registered on the Cloud API after Embedded Signup. */}
+                    {numbers
+                        .filter((n) => n.registration)
+                        .map((n) => (
+                            <div
+                                key={`reg-${n.id}`}
+                                role="alert"
+                                className={`flex flex-wrap items-center justify-between gap-2 border-t px-5 py-3 text-[13px] ${n.registration!.overdue ? 'bg-bad-bg' : 'bg-warn-bg'}`}
+                            >
+                                <span>
+                                    <span className={`font-semibold ${n.registration!.overdue ? 'text-bad' : 'text-warn'}`}>
+                                        {phoneDisplay(n.display_phone_number) || n.phone_number_id} isn’t registered with Meta yet.
+                                    </span>{' '}
+                                    {n.registration!.overdue
+                                        ? 'Meta’s 14 days after connecting have passed. Register it now; if Meta refuses, connect the number again.'
+                                        : `Meta requires it within 14 days of connecting: ${n.registration!.days_left} ${n.registration!.days_left === 1 ? 'day' : 'days'} left. Until then it can’t send or receive messages.`}
+                                </span>
+                                {canManage && (
+                                    <Button size="sm" variant="outline" onClick={() => register.mutate(n.id)} disabled={register.isPending}>
+                                        {register.isPending ? 'Registering…' : 'Register now'}
+                                    </Button>
+                                )}
+                            </div>
+                        ))}
                     {/* Import from the WhatsApp Business app: exact counts, pace and time left, per number. */}
                     {numbers
                         .filter((n) => n.sync && n.sync.state !== 'complete')
