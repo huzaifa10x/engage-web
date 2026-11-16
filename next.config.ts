@@ -1,3 +1,4 @@
+import { withSentryConfig } from '@sentry/nextjs/config';
 import type { NextConfig } from 'next';
 
 /**
@@ -63,4 +64,21 @@ const nextConfig: NextConfig = {
     },
 };
 
-export default nextConfig;
+/**
+ * Sentry: error reporting itself is switched on by NEXT_PUBLIC_SENTRY_DSN (src/lib/sentry-options.ts).
+ * Readable stack traces need the build's source maps in Sentry: they are uploaded (and then deleted
+ * from the public files) only when SENTRY_AUTH_TOKEN, SENTRY_ORG and SENTRY_PROJECT are set for the
+ * build. Without them the build is exactly as before.
+ */
+const uploadSourceMaps = Boolean(process.env.SENTRY_AUTH_TOKEN && process.env.SENTRY_ORG && process.env.SENTRY_PROJECT);
+
+export default uploadSourceMaps
+    ? withSentryConfig(nextConfig, {
+          org: process.env.SENTRY_ORG,
+          project: process.env.SENTRY_PROJECT,
+          authToken: process.env.SENTRY_AUTH_TOKEN,
+          silent: true,
+          telemetry: false,
+          sourcemaps: { deleteSourcemapsAfterUpload: true },
+      })
+    : nextConfig;
