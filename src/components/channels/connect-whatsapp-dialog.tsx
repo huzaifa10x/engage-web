@@ -32,14 +32,29 @@ function stepsFor(flow: Flow, attempt: SignupAttempt | null): string[] {
     return flow === 'coexistence' ? [...base, 'fetch_number', 'coexistence_sync'] : [...base, 'register_number', 'fetch_number'];
 }
 
-export function ConnectWhatsappDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+/**
+ * `conversions` set: "Reconnect to enable" from an account's card. Same signup, with the configuration
+ * that also asks for permission to report conversions; the number type is the account's own.
+ */
+export function ConnectWhatsappDialog({
+    open,
+    onOpenChange,
+    conversions,
+}: {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    conversions?: { coexistence: boolean };
+}) {
     const qc = useQueryClient();
-    const [flow, setFlow] = useState<Flow>('standard');
+    const [chosen, setFlow] = useState<Flow>('standard');
+    const flow: Flow = conversions ? (conversions.coexistence ? 'coexistence' : 'standard') : chosen;
     const signup = useEmbeddedSignup(() => {
         void qc.invalidateQueries({ queryKey: keys.accounts });
         void qc.invalidateQueries({ queryKey: keys.numbers });
         void qc.invalidateQueries({ queryKey: keys.me });
     });
+
+    const start = () => signup.launch({ coexistence: flow === 'coexistence', conversions: !!conversions });
 
     const busy = ['starting', 'popup', 'completing', 'provisioning'].includes(signup.phase);
 
@@ -53,13 +68,21 @@ export function ConnectWhatsappDialog({ open, onOpenChange }: { open: boolean; o
         <Dialog open={open} onOpenChange={close}>
             <DialogContent className="sm:max-w-xl" onInteractOutside={(e) => busy && e.preventDefault()}>
                 <DialogHeader>
-                    <DialogTitle>Connect a WhatsApp number</DialogTitle>
+                    <DialogTitle>{conversions ? 'Reconnect to enable conversion reporting' : 'Connect a WhatsApp number'}</DialogTitle>
                     <DialogDescription>
-                        Meta opens a secure popup where you choose or create your business, WhatsApp account and phone number.
+                        {conversions
+                            ? 'Meta opens a secure popup. Choose the same business, WhatsApp account and number, and allow every permission it asks for, including conversion events. Your conversations, contacts and templates are kept.'
+                            : 'Meta opens a secure popup where you choose or create your business, WhatsApp account and phone number.'}
                     </DialogDescription>
                 </DialogHeader>
 
-                {signup.phase === 'idle' || signup.phase === 'cancelled' ? (
+                {conversions && (signup.phase === 'idle' || signup.phase === 'cancelled') ? (
+                    signup.phase === 'cancelled' ? (
+                        <p className="rounded-md bg-grey-bg px-3 py-2 text-[13px] text-muted-foreground">
+                            The popup was closed before finishing. Nothing was changed.
+                        </p>
+                    ) : null
+                ) : signup.phase === 'idle' || signup.phase === 'cancelled' ? (
                     <ChooseFlow flow={flow} setFlow={setFlow} cancelled={signup.phase === 'cancelled'} />
                 ) : signup.phase === 'failed' && signup.conflict ? (
                     <RegisteredElsewhere conflict={signup.conflict} />
@@ -79,16 +102,14 @@ export function ConnectWhatsappDialog({ open, onOpenChange }: { open: boolean; o
                             <Button variant="outline" onClick={() => close(false)}>
                                 Close
                             </Button>
-                            <Button onClick={() => signup.launch({ coexistence: flow === 'coexistence' })}>
-                                {signup.conflict ? 'I have disconnected it — check again' : 'Try again'}
-                            </Button>
+                            <Button onClick={() => start()}>{signup.conflict ? 'I have disconnected it — check again' : 'Try again'}</Button>
                         </>
                     ) : (
                         <>
                             <Button variant="outline" onClick={() => close(false)} disabled={busy && signup.phase !== 'popup'}>
                                 Cancel
                             </Button>
-                            <Button variant="whatsapp" onClick={() => signup.launch({ coexistence: flow === 'coexistence' })} disabled={busy}>
+                            <Button variant="whatsapp" onClick={() => start()} disabled={busy}>
                                 {busy ? <Loader2Icon className="animate-spin" /> : null}
                                 {signup.phase === 'popup' ? 'Waiting for Meta…' : busy ? 'Connecting…' : 'Continue with Facebook'}
                             </Button>

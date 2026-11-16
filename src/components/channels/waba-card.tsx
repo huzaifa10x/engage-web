@@ -16,6 +16,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { ConnectWhatsappDialog } from '@/components/channels/connect-whatsapp-dialog';
 import { MarketingMessagesPanel } from '@/components/channels/marketing-messages';
 import { SyncProgress, syncSummary } from '@/components/channels/sync-progress';
 import { Badge } from '@/components/ui/badge';
@@ -44,6 +45,7 @@ import {
 export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: boolean }) {
     const qc = useQueryClient();
     const [confirm, setConfirm] = useState(false);
+    const [reconnecting, setReconnecting] = useState(false);
     const numbers = waba.phone_numbers ?? [];
     const hasCoexistence = numbers.some((n) => n.onboarding_type === 'coexistence');
     const disconnected = waba.status === 'disconnected';
@@ -176,6 +178,17 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                 )}
             </CardHeader>
 
+            {!disconnected && waba.conversions && (
+                <ConversionReportingRow
+                    status={waba.conversions.status}
+                    canReconnect={canManage && waba.conversions.can_reconnect}
+                    onReconnect={() => setReconnecting(true)}
+                />
+            )}
+            {waba.conversions && (
+                <ConnectWhatsappDialog open={reconnecting} onOpenChange={setReconnecting} conversions={{ coexistence: waba.conversions.coexistence }} />
+            )}
+
             <MarketingMessagesPanel waba={waba} canManage={canManage} />
 
             {numbers.length === 0 ? (
@@ -306,5 +319,35 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                 </AlertDialogContent>
             </AlertDialog>
         </Card>
+    );
+}
+
+/** Conversions to Meta (flagged workspaces only): whether this account's token allows reporting conversions. */
+function ConversionReportingRow({
+    status,
+    canReconnect,
+    onReconnect,
+}: {
+    status: 'enabled' | 'not_enabled' | 'unknown';
+    canReconnect: boolean;
+    onReconnect: () => void;
+}) {
+    const enabled = status === 'enabled';
+
+    return (
+        <div data-testid="conversion-reporting" className="flex flex-wrap items-center justify-between gap-2 border-t px-5 py-3 text-[13px] text-ink-2">
+            <span className="flex items-center gap-2">
+                Conversion reporting:
+                <Badge tone={enabled ? 'good' : 'grey'} dot>
+                    {enabled ? 'Enabled' : 'Not enabled'}
+                </Badge>
+                {!enabled && <span className="text-muted-foreground">Meta hasn’t allowed 10X Engage to report conversions for this account.</span>}
+            </span>
+            {!enabled && canReconnect && (
+                <Button size="sm" variant="outline" onClick={onReconnect}>
+                    <RefreshCwIcon /> Reconnect to enable
+                </Button>
+            )}
+        </div>
     );
 }

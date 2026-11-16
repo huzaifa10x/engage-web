@@ -193,7 +193,7 @@ export function useEmbeddedSignup(onFinished?: (attempt: SignupAttempt) => void)
     }, [complete, fail]);
 
     const launch = useCallback(
-        async (options: { coexistence: boolean }) => {
+        async (options: { coexistence: boolean; conversions?: boolean }) => {
             clearTimers();
             setError(null);
             setConflict(null);
@@ -206,7 +206,7 @@ export function useEmbeddedSignup(onFinished?: (attempt: SignupAttempt) => void)
 
             let started: SignupLaunch;
             try {
-                started = await startSignup(options.coexistence);
+                started = await startSignup(options.coexistence, options.conversions ?? false);
             } catch (e) {
                 fail(errorMessage(e));
 

@@ -43,3 +43,34 @@ test('meta conversion reporting: on per account, rules, a test event and the log
     await expect(page.getByRole('heading', { name: 'Stores' })).toBeVisible();
     await expect(page.getByTestId('meta-conversions')).toHaveCount(0);
 });
+
+const permission = (value: 'true' | 'false') =>
+    backendPhp(
+        `app(App\\Domain\\Tenancy\\TenantContext::class)->bypass(fn () => App\\Domain\\WhatsApp\\Models\\WabaAccount::query()->where('status', 'connected')->update(['events_permission' => ${value}, 'events_permission_checked_at' => now()]));`,
+    );
+
+test('channels: conversion reporting status per account, Reconnect to enable; nothing without the flag', async ({ page }) => {
+    setup(true);
+    permission('false');
+    await signIn(page);
+    await page.goto('/channels');
+
+    const row = page.getByTestId('conversion-reporting').first();
+    await expect(row).toContainText('Conversion reporting:');
+    await expect(row).toContainText('Not enabled');
+    await row.getByRole('button', { name: 'Reconnect to enable' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('heading', { name: 'Reconnect to enable conversion reporting' })).toBeVisible();
+    await expect(dialog.getByRole('radiogroup', { name: 'Number type' })).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+
+    permission('true');
+    await page.reload();
+    await expect(page.getByTestId('conversion-reporting').first()).toContainText('Enabled');
+    await expect(page.getByRole('button', { name: 'Reconnect to enable' })).toHaveCount(0);
+
+    setup(false);
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Account actions' }).first()).toBeVisible();
+    await expect(page.getByTestId('conversion-reporting')).toHaveCount(0);
+});

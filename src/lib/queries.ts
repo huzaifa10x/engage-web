@@ -188,7 +188,8 @@ export const useSignupAttempt = (id: string | null, poll: boolean) =>
         refetchInterval: poll ? 2000 : false,
     });
 
-export const startSignup = (coexistence: boolean) => api<Data<SignupLaunch>>('whatsapp/signups', { method: 'POST', body: { coexistence } }).then((r) => r.data);
+export const startSignup = (coexistence: boolean, conversions = false) =>
+    api<Data<SignupLaunch>>('whatsapp/signups', { method: 'POST', body: conversions ? { coexistence, conversions } : { coexistence } }).then((r) => r.data);
 
 /** Invalidate everything tenant-scoped (after switching workspace). */
 export function useResetTenantData() {

@@ -205,6 +205,8 @@ export type WabaAccount = {
     connected_at: string | null;
     disconnected_at: string | null;
     marketing_messages?: MarketingMessagesInfo;
+    /** Conversions to Meta. Null for workspaces not switched on (nothing is shown). */
+    conversions?: { status: 'enabled' | 'not_enabled' | 'unknown'; checked_at: string | null; can_reconnect: boolean; coexistence: boolean } | null;
     phone_numbers?: PhoneNumber[];
 };
 
