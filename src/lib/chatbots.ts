@@ -129,6 +129,9 @@ export type ChatbotFlow = {
         note: string | null;
         reviewed_at: string | null;
         reviewer: string | null;
+        /** Who asked for the review, and when. */
+        requested_by?: string | null;
+        requested_at?: string | null;
     } | null;
     created_at: string | null;
     updated_at: string | null;
@@ -401,6 +404,10 @@ export const orderStartRules = (phoneNumberId: string, flowIds: string[]) =>
     api<Data<StartRulesNumber[]>>('chatbots/start-rules/order', { method: 'PUT', body: { phone_number_id: phoneNumberId, flow_ids: flowIds } }).then(
         (r) => r.data,
     );
+
+/** Deletes a start rule: the flow is switched off and taken off its number (kept in My Flows), or deleted with `deleteFlow`. */
+export const removeStartRule = (flowId: string, deleteFlow = false) =>
+    api<Data<StartRulesNumber[]>>(`chatbots/start-rules/${flowId}`, { method: 'DELETE', body: { delete_flow: deleteFlow } }).then((r) => r.data);
 
 export const testStartRules = (body: { phone_number_id: string; text: string; button?: boolean; from_ad?: boolean; first_message?: boolean }) =>
     api<Data<{ flow: { id: string; name: string } | null; reason: string | null; text: string }>>('chatbots/start-rules/test', { method: 'POST', body }).then(

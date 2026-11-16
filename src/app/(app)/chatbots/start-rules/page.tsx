@@ -1,13 +1,23 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowDownIcon, ArrowUpIcon, PencilIcon } from 'lucide-react';
+import { ArrowDownIcon, ArrowUpIcon, PencilIcon, Trash2Icon } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { Forbidden } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -15,7 +25,7 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { ApiError, errorMessage } from '@/lib/api';
-import { activateChatbot, orderStartRules, type StartRule, type StartRuleKind, testStartRules, useStartRules } from '@/lib/chatbots';
+import { activateChatbot, orderStartRules, removeStartRule, type StartRule, type StartRuleKind, testStartRules, useStartRules } from '@/lib/chatbots';
 import { P } from '@/lib/permissions';
 import { cn } from '@/lib/utils';
 
@@ -59,6 +69,8 @@ export default function StartRulesPage() {
     const rules = useStartRules(allowed);
     const [number, setNumber] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const [deleting, setDeleting] = useState<StartRule | null>(null);
+    const [deleteFlow, setDeleteFlow] = useState(false);
     if (!allowed) return <Forbidden />;
     const numbers = rules.data ?? [];
     const current = numbers.find((n) => n.phone_number_id === number) ?? numbers[0];
@@ -96,8 +108,68 @@ export default function StartRulesPage() {
         }
     };
 
+    const remove = async () => {
+        if (!deleting) return;
+        setBusy(true);
+        try {
+            qc.setQueryData(['chatbots', 'start-rules'], await removeStartRule(deleting.flow_id, deleteFlow));
+            toast.success(
+                deleteFlow ? `“${deleting.name}” and its start rule were deleted` : `Start rule deleted. “${deleting.name}” is kept in My Flows, switched off.`,
+            );
+            setDeleting(null);
+            await qc.invalidateQueries({ queryKey: ['chatbots'] });
+        } catch (e) {
+            toast.error(errorMessage(e));
+        } finally {
+            setBusy(false);
+        }
+    };
+
     return (
         <>
+            <AlertDialog
+                open={deleting !== null}
+                onOpenChange={(o) => {
+                    if (!o) setDeleting(null);
+                }}
+            >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete the start rule of “{deleting?.name}”?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            The flow stops starting on {current ? label(current) : 'this number'}
+                            {deleting?.status === 'live' ? ' right away, and chats it is running now end' : ''}. It is kept in My Flows, switched off and
+                            without a number, so you can assign it again later.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    {canManage && (
+                        <label className="flex items-start gap-2 text-[13px]">
+                            <Checkbox
+                                checked={deleteFlow}
+                                onCheckedChange={(v) => setDeleteFlow(v === true)}
+                                className="mt-0.5"
+                                aria-label="Also delete the flow"
+                            />
+                            <span>
+                                Also delete the flow itself. <span className="text-muted-foreground">Its history and runs can no longer be opened.</span>
+                            </span>
+                        </label>
+                    )}
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            destructive
+                            disabled={busy}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                void remove();
+                            }}
+                        >
+                            {deleteFlow ? 'Delete rule and flow' : 'Delete rule'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
             <div className="cb-pagehead">
                 <div>
                     <h1>Start rules</h1>
@@ -245,13 +317,29 @@ export default function StartRulesPage() {
                                             <Link href={`/chatbots/builder?id=${r.flow_id}&step=start`} className="cb-btn xs">
                                                 <PencilIcon className="size-3" /> Edit
                                             </Link>
+                                            {canOrder && (
+                                                <button
+                                                    type="button"
+                                                    className="cb-btn xs danger"
+                                                    disabled={busy}
+                                                    aria-label={`Delete the start rule of ${r.name}`}
+                                                    onClick={() => {
+                                                        setDeleteFlow(false);
+                                                        setDeleting(r);
+                                                    }}
+                                                >
+                                                    <Trash2Icon className="size-3" /> Delete
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 );
                             })}
                         </div>
                     )}
-                    {!canOrder && <p className="cb-small cb-muted">Only people who can publish flows can change the order or switch rules on and off.</p>}
+                    {!canOrder && (
+                        <p className="cb-small cb-muted">Only people who can publish flows can change the order, switch rules on and off, or delete them.</p>
+                    )}
                     {current && <Tester numberId={current.phone_number_id} />}
                 </>
             )}

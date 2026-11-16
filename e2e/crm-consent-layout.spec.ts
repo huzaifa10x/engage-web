@@ -177,7 +177,7 @@ test('campaigns: before sending, the page says how many people won’t receive t
     // One replied STOP, one stopped marketing in WhatsApp; the other two have Unknown consent.
     await api(page, 'POST', `contacts/${ids[0]}/consent`, { state: 'opted_out', notify: false });
     backendPhp(
-        `app(App\\Domain\\Tenancy\\TenantContext::class)->bypass(function () { App\\Domain\\Messaging\\Models\\Contact::query()->whereKey('${ids[1]}')->update(['marketing_opted_out' => true]); $t = App\\Domain\\Messaging\\Models\\Contact::query()->whereKey('${ids[1]}')->value('tenant_id'); $n = App\\Domain\\WhatsApp\\Models\\PhoneNumber::query()->where('tenant_id', $t)->first(); foreach (['e2e_offer' => 'MARKETING', 'e2e_order' => 'UTILITY'] as $name => $cat) { App\\Domain\\Templates\\Models\\MessageTemplate::query()->firstOrCreate(['waba_account_id' => $n->waba_account_id, 'name' => $name, 'language' => 'en'], ['tenant_id' => $n->tenant_id, 'status' => 'APPROVED', 'category' => $cat, 'components' => [['type' => 'BODY', 'text' => 'Hello there']]]); } });`,
+        `app(App\\Domain\\Tenancy\\TenantContext::class)->bypass(function () { App\\Domain\\Messaging\\Models\\Contact::query()->whereKey('${ids[1]}')->update(['marketing_opted_out' => true]); $t = App\\Domain\\Messaging\\Models\\Contact::query()->whereKey('${ids[1]}')->value('tenant_id'); foreach (App\\Domain\\WhatsApp\\Models\\PhoneNumber::query()->where('tenant_id', $t)->get() as $n) { foreach (['e2e_offer' => 'MARKETING', 'e2e_order' => 'UTILITY'] as $name => $cat) { App\\Domain\\Templates\\Models\\MessageTemplate::query()->firstOrCreate(['waba_account_id' => $n->waba_account_id, 'name' => $name, 'language' => 'en'], ['tenant_id' => $n->tenant_id, 'status' => 'APPROVED', 'category' => $cat, 'components' => [['type' => 'BODY', 'text' => 'Hello there']]]); } } });`,
     );
 
     await page.goto('/campaigns');
@@ -240,4 +240,55 @@ test('inbox: ask for marketing consent sends Subscribe / Unsubscribe; only the c
     await expect(panel).toContainText('Opted out');
     expect((await api<{ data: unknown[] }>(page, 'GET', `conversations/${conversationId}/messages`)).data.length).toBe(before);
     await expect(panel).toContainText('You can ask again once they write to you');
+});
+
+test('start rules: a rule can be deleted, keeping or deleting its flow; reviews show where they wait', async ({ page }) => {
+    await signIn(page);
+    const numberId = (await api<{ data: { numbers: { id: string }[] } }>(page, 'GET', 'chatbots/options')).data.numbers[0].id;
+    const make = async (name: string, keyword: string) => {
+        const id = (await api<{ data: { id: string } }>(page, 'POST', 'chatbots', { name, phone_number_id: numberId, template: 'blank' })).data.id;
+        await api(page, 'PATCH', `chatbots/${id}`, {
+            draft: {
+                nodes: [
+                    {
+                        id: 'start',
+                        type: 'start',
+                        title: 'Start',
+                        x: 0,
+                        y: 80,
+                        config: { any_message: false, keywords: [keyword], keyword_match: 'exact' },
+                        outputs: [{ id: 'next', to: 'person' }],
+                    },
+                    { id: 'person', type: 'handoff', title: 'Person', x: 320, y: 80, config: { text: 'A person will reply.' }, outputs: [] },
+                ],
+            },
+        });
+        return id;
+    };
+    const keep = unique('Keep me');
+    const gone = unique('Gone');
+    const keepId = await make(keep, `k${Date.now()}`);
+    await make(gone, `g${Date.now()}`);
+
+    await page.goto('/chatbots/start-rules');
+    await page.getByRole('button', { name: `Delete the start rule of ${keep}` }).click();
+    await page.getByRole('button', { name: 'Delete rule', exact: true }).click();
+    await expect(page.getByText(`Start rule deleted. “${keep}” is kept in My Flows, switched off.`)).toBeVisible();
+    await expect(page.getByRole('button', { name: `Delete the start rule of ${keep}` })).toBeHidden();
+    expect((await api<{ data: { phone_number_id: string | null } }>(page, 'GET', `chatbots/${keepId}`)).data.phone_number_id).toBeNull();
+
+    await page.getByRole('button', { name: `Delete the start rule of ${gone}` }).click();
+    await page.getByLabel('Also delete the flow').check();
+    await page.getByRole('button', { name: 'Delete rule and flow' }).click();
+    await expect(page.getByText(`“${gone}” and its start rule were deleted`)).toBeVisible();
+
+    // A review request: My Flows tells publishers which flows wait, and the link opens the review.
+    await api(page, 'PUT', 'chatbots/workspace', { approvals: true });
+    await api(page, 'POST', `chatbots/${keepId}/review`, { action: 'request', note: 'Ready' });
+    await page.goto('/chatbots');
+    const banner = page.getByRole('status').filter({ hasText: 'waiting for your review' });
+    await expect(banner).toContainText(keep);
+    await banner.getByRole('link', { name: new RegExp(keep) }).click();
+    await expect(page.getByRole('dialog', { name: 'Review before publishing' })).toContainText('asked for a review');
+    await api(page, 'PUT', 'chatbots/workspace', { approvals: false });
 });

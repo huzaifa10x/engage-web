@@ -16,7 +16,7 @@ function Builder() {
     if (!can(P.ChatbotsView)) return <Forbidden />;
     if (!id) return <Forbidden />;
 
-    return <FlowBuilder key={id} flowId={id} initialStep={params.get('step')} />;
+    return <FlowBuilder key={id} flowId={id} initialStep={params.get('step')} initialReview={params.get('review') === '1'} />;
 }
 
 /** Full-screen flow builder (/chatbots/builder?id=…). */

@@ -76,6 +76,7 @@ import {
 } from '@/lib/chatbots';
 import { useStored } from '@/hooks/use-stored';
 import { mergeDrafts } from '@/lib/flow-merge';
+import { relative } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 import { type CanvasApi, FlowCanvas } from './flow-canvas';
@@ -91,7 +92,7 @@ type RightTab = 'step' | 'test' | 'settings' | 'history';
 const CLIPBOARD = 'engage.chatbot.clipboard';
 
 /** The full-screen flow builder: canvas · block settings, with test, review and publish. Blocks are added with "Add block", the "+" on a branch, or paste. */
-export function FlowBuilder({ flowId, initialStep = null }: { flowId: string; initialStep?: string | null }) {
+export function FlowBuilder({ flowId, initialStep = null, initialReview = false }: { flowId: string; initialStep?: string | null; initialReview?: boolean }) {
     const qc = useQueryClient();
     const flow = useChatbot(flowId);
     const options = useChatbotOptions();
@@ -127,7 +128,8 @@ export function FlowBuilder({ flowId, initialStep = null }: { flowId: string; in
     const [publishing, setPublishing] = useState(false);
     const [replace, setReplace] = useState<{ name: string } | null>(null);
     const [restore, setRestore] = useState<number | null>(null);
-    const [reviewOpen, setReviewOpen] = useState(false);
+    // Opened from a review notification (…&review=1): straight to the review.
+    const [reviewOpen, setReviewOpen] = useState(initialReview);
     const lastKey = useRef<{ key: string; at: number } | null>(null);
     const clock = useRef(Date.now); // read only in event handlers (undo grouping)
     const canvas = useRef<CanvasApi | null>(null);
@@ -1576,7 +1578,7 @@ function ReviewDialog({
                         {r === null
                             ? 'Not reviewed yet.'
                             : r.status === 'requested'
-                              ? `Waiting for a reviewer${r.note ? ` — “${r.note}”` : ''}.`
+                              ? `${r.requested_by ? `${r.requested_by} asked for a review` : 'Waiting for a reviewer'}${r.requested_at ? ` ${relative(r.requested_at)}` : ''}${r.note ? `: “${r.note}”` : '.'} Everyone who can publish flows was notified.`
                               : r.status === 'approved'
                                 ? r.current
                                     ? `Approved by ${r.reviewer ?? 'a reviewer'}.`

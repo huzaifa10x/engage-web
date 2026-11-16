@@ -18,6 +18,7 @@ import {
     TriangleAlertIcon,
     UploadIcon,
     UsersIcon,
+    ClipboardCheckIcon,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -136,6 +137,7 @@ function ChatbotsList() {
             (purpose === 'all' || f.folder === purpose),
     );
     const total = all.filter((f) => inTab(f, tab)).length;
+    const waiting = canPublish ? all.filter((f) => f.status !== 'archived' && f.review?.status === 'requested') : [];
 
     // KPIs: the same calculation as Flow insights (sessions of the last 30 days).
     const activeBots = live.filter((f) => f.status !== 'archived');
@@ -260,6 +262,9 @@ function ChatbotsList() {
                         : 'Draft'}
             </span>
             {f.published_version !== null && f.has_unpublished_changes && <span className="cb-chip warn">Unpublished changes</span>}
+            {f.review?.status === 'requested' && <span className="cb-chip warn">Waiting for review</span>}
+            {f.review?.status === 'changes_requested' && <span className="cb-chip bad">Changes requested</span>}
+            {f.review?.status === 'approved' && f.review.current && <span className="cb-chip live">Approved</span>}
             {runPeriodLabel(f) && (
                 <span className="cb-chip info">
                     <CalendarClockIcon className="size-3" /> {runPeriodLabel(f)}
@@ -360,6 +365,25 @@ function ChatbotsList() {
                     }}
                 />
             </div>
+            {waiting.length > 0 && (
+                <div className="cb-banner warn" role="status" style={{ marginBottom: 14 }}>
+                    <ClipboardCheckIcon className="size-4" />
+                    <span>
+                        <b>
+                            {waiting.length} flow{waiting.length === 1 ? ' is' : 's are'} waiting for your review:
+                        </b>{' '}
+                        {waiting.map((f, i) => (
+                            <span key={f.id}>
+                                {i > 0 ? ', ' : ''}
+                                <Link href={`/chatbots/builder?id=${f.id}&review=1`}>
+                                    {f.name}
+                                    {f.review?.requested_by ? ` (from ${f.review.requested_by})` : ''}
+                                </Link>
+                            </span>
+                        ))}
+                    </span>
+                </div>
+            )}
 
             {loading ? (
                 <Skeleton className="h-64 w-full" />
