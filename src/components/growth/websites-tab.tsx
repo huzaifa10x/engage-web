@@ -100,8 +100,23 @@ function SiteCard({ site, editable, onOpen, onMessage }: { site: GrowthSite; edi
                 Mode: {site.consent_mode === 'consent' ? 'waits for cookie consent' : 'click-only, no cookies'} · multi-page memory{' '}
                 {site.session_landing_mode ? 'on' : 'off'}
                 {h.filtered_24h > 0 && ` · ${h.filtered_24h} bot or preview taps left out`}
+                {(h.refused_today_total ?? 0) > 0 && (
+                    <>
+                        {' · '}
+                        <span title="Refused before they counted towards this website’s limit, so real taps were not affected.">
+                            {h.refused_today_total} junk {h.refused_today_total === 1 ? 'request' : 'requests'} refused today (
+                            {[
+                                h.refused_today?.origin_not_allowed ? `${h.refused_today.origin_not_allowed} from another domain` : null,
+                                h.refused_today?.invalid_payload ? `${h.refused_today.invalid_payload} unreadable` : null,
+                            ]
+                                .filter(Boolean)
+                                .join(', ')}
+                            )
+                        </span>
+                    </>
+                )}
             </p>
-            {h.last_error_code && h.errors_24h > 0 && (
+            {h.last_error_code && (h.errors_24h > 0 || (h.refused_today_total ?? 0) > 0) && (
                 <p className="rounded-md bg-warn-bg px-3 py-2 text-[12.5px] text-warn">{ERRORS[h.last_error_code] ?? h.last_error_code}</p>
             )}
         </Card>

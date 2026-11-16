@@ -511,6 +511,9 @@ export type SiteHealth = {
     matched_24h: number;
     filtered_24h: number;
     errors_24h: number;
+    /** Junk refused before it counted towards the site's limit, today: wrong domain or not the tracker's format. */
+    refused_today?: Partial<Record<'origin_not_allowed' | 'invalid_payload', number>>;
+    refused_today_total?: number;
     last_error_code: string | null;
     last_error_at: string | null;
     config_version: number;
