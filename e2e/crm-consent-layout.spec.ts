@@ -174,10 +174,12 @@ test('campaigns: before sending, the page says how many people won’t receive t
         const phone = `+97155${Math.floor(1_000_000 + Math.random() * 8_999_999)}`;
         ids.push((await api<{ data: { id: string } }>(page, 'POST', 'contacts', { phone, name: `${tag} ${i}`, tags: [tag] })).data.id);
     }
-    // One replied STOP, one stopped marketing in WhatsApp; the other two have Unknown consent.
+    // One replied STOP, one stopped marketing in WhatsApp; the other two have Unknown consent. The two test
+    // templates exist only here, so the templates are marked freshly synced: a background sync with the
+    // Meta stand-in would otherwise mark them deleted halfway through the test.
     await api(page, 'POST', `contacts/${ids[0]}/consent`, { state: 'opted_out', notify: false });
     backendPhp(
-        `app(App\\Domain\\Tenancy\\TenantContext::class)->bypass(function () { App\\Domain\\Messaging\\Models\\Contact::query()->whereKey('${ids[1]}')->update(['marketing_opted_out' => true]); $t = App\\Domain\\Messaging\\Models\\Contact::query()->whereKey('${ids[1]}')->value('tenant_id'); foreach (App\\Domain\\WhatsApp\\Models\\PhoneNumber::query()->where('tenant_id', $t)->get() as $n) { foreach (['e2e_offer' => 'MARKETING', 'e2e_order' => 'UTILITY'] as $name => $cat) { App\\Domain\\Templates\\Models\\MessageTemplate::query()->firstOrCreate(['waba_account_id' => $n->waba_account_id, 'name' => $name, 'language' => 'en'], ['tenant_id' => $n->tenant_id, 'status' => 'APPROVED', 'category' => $cat, 'components' => [['type' => 'BODY', 'text' => 'Hello there']]]); } } });`,
+        `app(App\\Domain\\Tenancy\\TenantContext::class)->bypass(function () { App\\Domain\\Messaging\\Models\\Contact::query()->whereKey('${ids[1]}')->update(['marketing_opted_out' => true]); $t = App\\Domain\\Messaging\\Models\\Contact::query()->whereKey('${ids[1]}')->value('tenant_id'); foreach (App\\Domain\\WhatsApp\\Models\\PhoneNumber::query()->where('tenant_id', $t)->get() as $n) { Illuminate\\Support\\Facades\\Cache::put('templates:synced:' . $n->waba_account_id, now()->toIso8601String(), 600); foreach (['e2e_offer' => 'MARKETING', 'e2e_order' => 'UTILITY'] as $name => $cat) { App\\Domain\\Templates\\Models\\MessageTemplate::query()->firstOrCreate(['waba_account_id' => $n->waba_account_id, 'name' => $name, 'language' => 'en'], ['tenant_id' => $n->tenant_id, 'status' => 'APPROVED', 'category' => $cat, 'components' => [['type' => 'BODY', 'text' => 'Hello there']]]); } } });`,
     );
 
     await page.goto('/campaigns');
