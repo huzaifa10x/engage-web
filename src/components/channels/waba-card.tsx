@@ -96,6 +96,18 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                         WABA <span className="font-mono">{waba.waba_id}</span>
                         {waba.account_review_status ? ` · Review ${humanize(waba.account_review_status).toLowerCase()}` : ''}
                     </p>
+                    {!disconnected && waba.needs_reconnect && (
+                        <p role="alert" className="mt-2.5 rounded-lg border border-warn/30 bg-warn-bg px-3 py-2 text-[13px] leading-relaxed text-ink-2">
+                            <span className="font-semibold text-warn">Meta hasn’t given 10X Engage permission to manage this account.</span> Reconnect it: sign
+                            in with the Facebook account that manages this business, choose the same business and WhatsApp account, and allow every permission
+                            it asks for. Your conversations, contacts and templates are kept.{' '}
+                            {canManage && (
+                                <Link href="/channels?connect=1" className="font-semibold text-warn underline underline-offset-2">
+                                    Reconnect
+                                </Link>
+                            )}
+                        </p>
+                    )}
                     {lostAccess && (
                         <p role="alert" className="mt-2.5 rounded-lg border border-bad/30 bg-bad-bg px-3 py-2 text-[13px] leading-relaxed text-ink-2">
                             <span className="font-semibold text-bad">Messages cannot be sent or received.</span> {lostAccess} Your conversations and contacts

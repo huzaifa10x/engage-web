@@ -197,6 +197,8 @@ export type WabaAccount = {
     ban_state: string | null;
     status: 'connected' | 'disconnected';
     disconnect_reason?: DisconnectReason | null;
+    /** Meta refused this account for a missing permission (error 200): reconnect to grant it again. */
+    needs_reconnect?: { reason: 'permission_missing'; since: string; meta_code: number | null } | null;
     is_subscribed_to_webhooks: boolean;
     connected_at: string | null;
     disconnected_at: string | null;
