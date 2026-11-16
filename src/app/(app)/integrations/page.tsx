@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { Field, FormError } from '@/components/app/field';
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
+import { MetaConversionsSection } from '@/components/integrations/meta-conversions';
 import { PluginConnectDialog, StoreSalesSettings, StoreViaBadge } from '@/components/integrations/woo-plugin';
 import {
     AlertDialog,
@@ -1016,6 +1017,9 @@ export default function IntegrationsPage() {
                     </CardContent>
                 </Card>
             )}
+
+            {/* Conversions to Meta: only for workspaces with the conversions flag (renders nothing otherwise). */}
+            <MetaConversionsSection canManage={canManage} />
 
             <h2 className="mb-3 text-[15px] font-semibold">Stores</h2>
             <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
