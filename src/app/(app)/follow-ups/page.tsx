@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
 import { AutoReplyCard } from '@/components/settings/auto-reply-card';
+import { FeedbackCard } from '@/components/settings/feedback-card';
 import { FollowUpsCard } from '@/components/settings/followups-card';
 import { Button } from '@/components/ui/button';
 import { P } from '@/lib/permissions';
@@ -23,7 +24,7 @@ export default function FollowUpsPage() {
         <>
             <PageHeader
                 title="Follow-ups & Alerts"
-                description="What answers when you are closed, who is alerted when a chat waits, and the nudges sent when a customer goes quiet."
+                description="What answers when you are closed, who is alerted when a chat waits, the nudges sent when a customer goes quiet, and the ratings and feedback requests."
                 actions={
                     <Button asChild variant="outline">
                         <Link href="/settings?tab=hours">
@@ -35,6 +36,7 @@ export default function FollowUpsPage() {
             <div className="grid gap-4">
                 <AutoReplyCard canManage={canManage} />
                 <FollowUpsCard canManage={canManage} />
+                <FeedbackCard canManage={canManage} />
             </div>
         </>
     );
