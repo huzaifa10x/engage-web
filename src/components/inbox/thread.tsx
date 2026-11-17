@@ -37,7 +37,18 @@ import { TemplateDialog } from './template-dialog';
 /** True while something that contains files is being dragged (not text or a link). */
 const hasFiles = (e: React.DragEvent) => [...e.dataTransfer.types].includes('Files');
 
-export function Thread({ conversationId, polling, onBack }: { conversationId: string; polling: boolean; onBack: () => void }) {
+export function Thread({
+    conversationId,
+    polling,
+    onBack,
+    focusMessageId = null,
+}: {
+    conversationId: string;
+    polling: boolean;
+    onBack: () => void;
+    /** Opened from a contact's history: scroll to this message and mark it for a moment. */
+    focusMessageId?: string | null;
+}) {
     const { can, membership } = useSession();
     const qc = useQueryClient();
     const conversation = useConversation(conversationId, polling ? 15_000 : false);
@@ -66,6 +77,24 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
         const el = scroller.current;
         if (el && pinnedToBottom.current) el.scrollTop = el.scrollHeight;
     }, [messages.length, conversationId]);
+
+    // A link to one message (/inbox?c=…&m=…): load earlier pages until it is there, then show it.
+    const focusDone = useRef<string | null>(null);
+    useEffect(() => {
+        if (!focusMessageId || focusDone.current === focusMessageId || !thread.data) return;
+        if (!messages.some((m) => m.id === focusMessageId)) {
+            if (thread.hasNextPage && !thread.isFetchingNextPage && thread.data.pages.length < 30) void thread.fetchNextPage();
+            return;
+        }
+        focusDone.current = focusMessageId;
+        pinnedToBottom.current = false;
+        const el = document.getElementById(`msg-${focusMessageId}`);
+        if (!el) return;
+        el.scrollIntoView({ block: 'center' });
+        el.dataset.focused = 'true';
+        const t = setTimeout(() => delete el.dataset.focused, 4000);
+        return () => clearTimeout(t);
+    }, [focusMessageId, messages, thread]);
 
     const read = useMutation({
         mutationFn: () => api(`conversations/${conversationId}/read`, { method: 'POST' }),
@@ -354,12 +383,14 @@ export function Thread({ conversationId, polling, onBack }: { conversationId: st
                                         </span>
                                     </div>
                                 )}
-                                <MessageBubble
-                                    message={m}
-                                    quoted={m.reply_to_wamid ? (byWamid.get(m.reply_to_wamid) ?? null) : undefined}
-                                    authorLabel={author}
-                                    onReply={disabledReason ? undefined : setReplyTo}
-                                />
+                                <div id={`msg-${m.id}`} className="rounded-md data-focused:ring-2 data-focused:ring-primary/60 data-focused:ring-offset-2">
+                                    <MessageBubble
+                                        message={m}
+                                        quoted={m.reply_to_wamid ? (byWamid.get(m.reply_to_wamid) ?? null) : undefined}
+                                        authorLabel={author}
+                                        onReply={disabledReason ? undefined : setReplyTo}
+                                    />
+                                </div>
                             </Fragment>
                         );
                     })}

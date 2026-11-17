@@ -2,6 +2,7 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PlusIcon } from 'lucide-react';
+import Link from 'next/link';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -20,7 +21,8 @@ export type Enquiry = {
     current: boolean;
     started_at: string;
     started_by: 'customer' | 'agent' | 'system';
-    start_reason: 'first_message' | 'quiet_period' | 'ad_click' | 'manual' | 'backfill';
+    start_reason: 'first_message' | 'quiet_period' | 'ad_click' | 'manual' | 'backfill' | 'imported';
+    imported: boolean;
     source: 'ad' | 'link' | 'website' | 'direct';
     source_label: string;
     source_confidence: 'verified' | 'partial' | 'unknown';
@@ -65,7 +67,24 @@ const REASONS: Record<Enquiry['start_reason'], string> = {
     ad_click: 'new ad click',
     manual: 'started by hand',
     backfill: 'from earlier messages',
+    imported: 'from the imported WhatsApp Business app history',
 };
+
+const BULK: Record<string, string> = { 'bulk update': 'in a bulk update', import: 'in an import', 'tag deleted': 'because the tag was deleted' };
+
+/** "… in a bulk update by Sara" when the change was made to many contacts at once. */
+function bulkSuffix(e: TimelineEntry): string {
+    const how = BULK[s(e.data.bulk)];
+    if (!how) return '';
+    const by = s(e.data.bulk_by) || (e.actor === 'agent' ? s(e.actor_name) : '');
+    return ` ${how}${by ? ` by ${by}` : ''}`;
+}
+
+/** The chat link for a message event: opens the conversation at that message. */
+const messageHref = (e: TimelineEntry) =>
+    (e.type === 'message.received' || e.type === 'message.sent') && e.data.message_id && e.data.conversation_id
+        ? `/inbox?c=${s(e.data.conversation_id)}&m=${s(e.data.message_id)}`
+        : null;
 
 export const confidenceTone = (c: string): Tone => (c === 'verified' ? 'good' : c === 'partial' ? 'warn' : 'grey');
 
@@ -73,6 +92,10 @@ const s = (v: unknown) => (v === null || v === undefined ? '' : String(v));
 
 /** One line in plain words for a timeline event (message text is never shown here). */
 export function describe(e: TimelineEntry): string {
+    return describeOnly(e) + bulkSuffix(e);
+}
+
+function describeOnly(e: TimelineEntry): string {
     const d = e.data;
     switch (e.type) {
         case 'message.received':
@@ -206,6 +229,7 @@ export function ContactTimeline({ contactId }: { contactId: string }) {
                                     </button>
                                     <span>{q.source_label}</span>
                                     <Badge tone={confidenceTone(q.source_confidence)}>{q.confidence_label}</Badge>
+                                    {q.imported && <Badge tone="grey">Imported</Badge>}
                                     {q.stage?.name && <Badge tone="info">{q.stage.name}</Badge>}
                                 </div>
                                 <p className="text-muted-foreground">
@@ -250,6 +274,14 @@ export function ContactTimeline({ contactId }: { contactId: string }) {
                                 <span className="text-muted-foreground tabular-nums">{dateTime(e.occurred_at)}</span>
                                 <span className="min-w-0 break-words">
                                     {describe(e)}
+                                    {messageHref(e) && can(P.InboxView) && (
+                                        <>
+                                            {' '}
+                                            <Link href={messageHref(e) as string} className="text-primary underline-offset-2 hover:underline">
+                                                Open message
+                                            </Link>
+                                        </>
+                                    )}
                                     <span className="text-muted-foreground">
                                         {' '}
                                         · {who(e)}

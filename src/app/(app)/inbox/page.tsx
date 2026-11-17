@@ -110,7 +110,7 @@ function Inbox() {
 
             <div className={cn('min-h-0 min-w-0 flex-1', selected ? 'flex' : 'hidden md:flex')}>
                 {selected ? (
-                    <Thread key={selected} conversationId={selected} polling={polling} onBack={() => open(null)} />
+                    <Thread key={selected} conversationId={selected} polling={polling} onBack={() => open(null)} focusMessageId={params.get('m')} />
                 ) : (
                     <div className="flex flex-1 items-center justify-center bg-[#efeae2]">
                         <EmptyState

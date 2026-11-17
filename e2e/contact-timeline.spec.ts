@@ -25,7 +25,7 @@ test('contacts: the enquiries and the whole history of a contact, with filters, 
     await expect(enquiries.getByRole('listitem', { name: 'Enquiry 1' })).toContainText('Unknown');
 
     const history = section.getByRole('region', { name: 'History' });
-    await expect(history.getByRole('list', { name: 'Events' })).toContainText('Wrote a message · Customer · enquiry 1');
+    await expect(history.getByRole('list', { name: 'Events' })).toContainText('Wrote a message Open message · Customer · enquiry 1');
     await expect(history.getByRole('list', { name: 'Events' })).toContainText('Enquiry 1 started (first message) · Direct, unknown');
     await history.getByRole('button', { name: 'Tags' }).click();
     await expect(history).toContainText('Nothing here yet.');
@@ -39,4 +39,11 @@ test('contacts: the enquiries and the whole history of a contact, with filters, 
     await expect(enquiries.getByRole('listitem', { name: 'Enquiry 2' })).toContainText('started by hand');
     await history.getByRole('button', { name: 'Enquiries' }).click();
     await expect(history.getByRole('list', { name: 'Events' })).toContainText(/Enquiry 2 started \(started by hand\) · Direct, unknown · Demo/);
+
+    // "Wrote a message" opens the chat at that exact message.
+    await history.getByRole('button', { name: 'Messages' }).click();
+    await history.getByRole('link', { name: 'Open message' }).click();
+    await expect(page).toHaveURL(/\/inbox\?c=[0-9a-f-]+&m=[0-9a-f-]+/);
+    const focused = page.locator('[id^="msg-"][data-focused="true"]');
+    await expect(focused).toContainText('Hi, I need an SUV next week');
 });
