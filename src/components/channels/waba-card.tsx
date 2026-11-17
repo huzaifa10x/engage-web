@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ConnectWhatsappDialog } from '@/components/channels/connect-whatsapp-dialog';
 import { MarketingMessagesPanel } from '@/components/channels/marketing-messages';
+import { ProfileChecklist } from '@/components/channels/profile-checklist';
 import { QualityPanel } from '@/components/channels/quality-panel';
 import { SyncProgress, syncSummary } from '@/components/channels/sync-progress';
 import { Badge } from '@/components/ui/badge';
@@ -48,6 +49,7 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
     const [confirm, setConfirm] = useState(false);
     const [reconnecting, setReconnecting] = useState(false);
     const [qualityOpen, setQualityOpen] = useState<string | null>(null);
+    const [profileOpen, setProfileOpen] = useState<string | null>(null);
     const numbers = waba.phone_numbers ?? [];
     const hasCoexistence = numbers.some((n) => n.onboarding_type === 'coexistence');
     const disconnected = waba.status === 'disconnected';
@@ -216,6 +218,16 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                                             {n.verified_name ?? 'Display name pending'}
                                             {nameStatusLabel(n.name_status) ? ` · ${nameStatusLabel(n.name_status)}` : ''}
                                         </div>
+                                        {n.status === 'connected' && (
+                                            <button
+                                                type="button"
+                                                className="mt-1 block text-[12px] text-info underline-offset-2 hover:underline"
+                                                aria-expanded={profileOpen === n.id}
+                                                onClick={() => setProfileOpen(profileOpen === n.id ? null : n.id)}
+                                            >
+                                                {profileOpen === n.id ? 'Hide profile checklist' : 'Profile checklist'}
+                                            </button>
+                                        )}
                                     </TableCell>
                                     <TableCell>
                                         <Badge tone={qualityTone(n.quality_rating)} dot>
@@ -275,6 +287,16 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                                     Quality and limits · {phoneDisplay(n.display_phone_number) || n.phone_number_id}
                                 </p>
                                 <QualityPanel numberId={n.id} />
+                            </div>
+                        ))}
+                    {numbers
+                        .filter((n) => n.id === profileOpen)
+                        .map((n) => (
+                            <div key={`profile-${n.id}`} className="border-t px-5 py-4">
+                                <p className="mb-3 text-[12.5px] font-semibold text-muted-foreground">
+                                    Business profile checklist · {phoneDisplay(n.display_phone_number) || n.phone_number_id}
+                                </p>
+                                <ProfileChecklist numberId={n.id} />
                             </div>
                         ))}
                     {/* Meta's 14-day rule: a new number must be registered on the Cloud API after Embedded Signup. */}
