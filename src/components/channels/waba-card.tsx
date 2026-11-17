@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { ConnectWhatsappDialog } from '@/components/channels/connect-whatsapp-dialog';
 import { MarketingMessagesPanel } from '@/components/channels/marketing-messages';
+import { QualityPanel } from '@/components/channels/quality-panel';
 import { SyncProgress, syncSummary } from '@/components/channels/sync-progress';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,7 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
     const qc = useQueryClient();
     const [confirm, setConfirm] = useState(false);
     const [reconnecting, setReconnecting] = useState(false);
+    const [qualityOpen, setQualityOpen] = useState<string | null>(null);
     const numbers = waba.phone_numbers ?? [];
     const hasCoexistence = numbers.some((n) => n.onboarding_type === 'coexistence');
     const disconnected = waba.status === 'disconnected';
@@ -219,6 +221,16 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                                         <Badge tone={qualityTone(n.quality_rating)} dot>
                                             {qualityLabel(n.quality_rating)}
                                         </Badge>
+                                        {n.status === 'connected' && (
+                                            <button
+                                                type="button"
+                                                className="mt-1 block text-[12px] text-info underline-offset-2 hover:underline"
+                                                aria-expanded={qualityOpen === n.id}
+                                                onClick={() => setQualityOpen(qualityOpen === n.id ? null : n.id)}
+                                            >
+                                                {qualityOpen === n.id ? 'Hide quality and limits' : 'Quality and limits'}
+                                            </button>
+                                        )}
                                     </TableCell>
                                     <TableCell className="text-[13px] tabular-nums">
                                         {tierLabel(n.messaging_limit_tier)}
@@ -255,6 +267,16 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                             ))}
                         </TableBody>
                     </Table>
+                    {numbers
+                        .filter((n) => n.id === qualityOpen)
+                        .map((n) => (
+                            <div key={`quality-${n.id}`} className="border-t px-5 py-4">
+                                <p className="mb-3 text-[12.5px] font-semibold text-muted-foreground">
+                                    Quality and limits · {phoneDisplay(n.display_phone_number) || n.phone_number_id}
+                                </p>
+                                <QualityPanel numberId={n.id} />
+                            </div>
+                        ))}
                     {/* Meta's 14-day rule: a new number must be registered on the Cloud API after Embedded Signup. */}
                     {numbers
                         .filter((n) => n.registration)

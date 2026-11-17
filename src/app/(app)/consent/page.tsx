@@ -153,6 +153,7 @@ function SettingsForm({ initial, canManage }: { initial: ComplianceSettings; can
                 quiet_hours_enabled: s.quiet_hours_enabled,
                 quiet_hours_start: s.quiet_hours_start,
                 quiet_hours_end: s.quiet_hours_end,
+                campaign_hourly_share: s.campaign_hourly_share,
             });
             setS(saved);
             void qc.invalidateQueries({ queryKey: ['compliance'] });
@@ -260,6 +261,22 @@ function SettingsForm({ initial, canManage }: { initial: ComplianceSettings; can
                         disabled={!canManage}
                         value={s.marketing_frequency_cap}
                         onChange={(e) => set({ marketing_frequency_cap: Math.max(0, Number(e.target.value)) })}
+                    />
+                </Field>
+                <Field
+                    label="Most of the daily messaging limit one campaign may use per hour (%)"
+                    htmlFor="hourly-share"
+                    hint="A large campaign is spread out over the day instead of using all of Meta’s daily limit at once. Default 25%."
+                >
+                    <Input
+                        id="hourly-share"
+                        type="number"
+                        min={5}
+                        max={100}
+                        className="sm:w-32"
+                        disabled={!canManage}
+                        value={s.campaign_hourly_share}
+                        onChange={(e) => set({ campaign_hourly_share: Math.min(100, Math.max(5, Number(e.target.value))) })}
                     />
                 </Field>
                 <div className="grid gap-2">

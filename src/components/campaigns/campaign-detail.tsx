@@ -105,7 +105,7 @@ export function CampaignDetailDialog({ campaign, onOpenChange }: { campaign: Cam
                             : campaign.wait_reason === 'quiet_hours'
                               ? '(quiet hours).'
                               : campaign.wait_reason === 'drip'
-                                ? '(drip sending).'
+                                ? '(sent in hourly portions, so one campaign never uses the whole daily limit at once).'
                                 : '(quiet hours or drip sending).'}
                     </p>
                 )}
@@ -129,6 +129,16 @@ export function CampaignDetailDialog({ campaign, onOpenChange }: { campaign: Cam
                             ))}
                         </div>
                         <Funnel sent={s.sent} delivered={s.delivered} read={s.read} failed={s.failed} />
+                        {(s.marketing_limit ?? 0) > 0 && (
+                            <p className="rounded-md border px-3 py-2 text-[13px]">
+                                <span className="font-semibold">Not delivered: Meta’s per-person marketing limit</span>{' '}
+                                <span className="tabular-nums">{(s.marketing_limit ?? 0).toLocaleString()}</span>
+                                <span className="block text-[12.5px] text-muted-foreground">
+                                    Meta limits how many marketing messages one person receives from all businesses. These are not failures, are not retried and
+                                    don’t affect your number’s quality.
+                                </span>
+                            </p>
+                        )}
                         {s.routes && s.routes.mm_api + s.routes.cloud_api > 0 && (
                             <p className="text-[12.5px] text-muted-foreground">
                                 Delivered through:{' '}
@@ -147,9 +157,11 @@ export function CampaignDetailDialog({ campaign, onOpenChange }: { campaign: Cam
                                                 {r.code ? ` (${r.code})` : ''} ·{' '}
                                                 {r.stage === 'skipped'
                                                     ? 'skipped before sending'
-                                                    : r.stage === 'failed'
-                                                      ? 'rejected by WhatsApp'
-                                                      : 'could not be sent'}
+                                                    : r.stage === 'marketing_limit'
+                                                      ? 'Meta’s limit, not retried'
+                                                      : r.stage === 'failed'
+                                                        ? 'rejected by WhatsApp'
+                                                        : 'could not be sent'}
                                             </span>
                                             <span className="font-medium tabular-nums">{r.count.toLocaleString()}</span>
                                         </li>

@@ -739,6 +739,8 @@ export type CampaignStats = {
     delivered: number;
     read: number;
     failed: number;
+    /** Not delivered because of Meta's per-person marketing limit (131049): not a failure, not retried. */
+    marketing_limit?: number;
     replied: number;
     /** Which API delivered the campaign's messages. */
     routes?: { mm_api: number; cloud_api: number };
@@ -823,7 +825,7 @@ export type CampaignPreview = {
     skipped: boolean;
 };
 
-export type CampaignFailureReason = { reason: string; code: string | null; count: number; stage: 'skipped' | 'not_sent' | 'failed' };
+export type CampaignFailureReason = { reason: string; code: string | null; count: number; stage: 'skipped' | 'not_sent' | 'failed' | 'marketing_limit' };
 
 export type CampaignRecipient = {
     id: string;
@@ -875,6 +877,8 @@ export type ComplianceSettings = {
     quiet_hours_enabled: boolean;
     quiet_hours_start: string;
     quiet_hours_end: string;
+    /** One campaign may use at most this share (%) of the daily messaging limit per hour. */
+    campaign_hourly_share: number;
 };
 
 export type ConsentEvent = {
