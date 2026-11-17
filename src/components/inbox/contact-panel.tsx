@@ -21,7 +21,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useStored } from '@/hooks/use-stored';
 import { api, errorMessage } from '@/lib/api';
-import { dateTime, humanize, relative, timeLeft } from '@/lib/format';
+import { contactSource, dateTime, humanize, relative, timeLeft } from '@/lib/format';
 import { P } from '@/lib/permissions';
 import { keys, requestConsent, useAssignees, useInboxTeams } from '@/lib/queries';
 import type { Contact, Conversation } from '@/lib/types';
@@ -297,7 +297,7 @@ export function ContactPanel({ conversation, open = false, onClose }: { conversa
                         </>
                     )}
                     <dt className="text-muted-foreground">{contact.acquisition ? 'Added via' : 'Source'}</dt>
-                    <dd>{humanize(contact.source)}</dd>
+                    <dd>{contactSource(contact.source, contact.source_detail)}</dd>
                     <dt className="text-muted-foreground">Last message</dt>
                     <dd>{dateTime(contact.last_inbound_at)}</dd>
                     <dt className="text-muted-foreground">Via</dt>

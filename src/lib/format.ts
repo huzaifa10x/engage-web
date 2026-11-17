@@ -42,6 +42,13 @@ export function humanize(value: string | null | undefined): string {
     return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+/** How a contact was added: "Inbound", "Import", or "WhatsApp link · Shop window" for one of the workspace's links. */
+export function contactSource(source: string | null | undefined, detail?: string | null): string {
+    if (source === 'wa_link') return detail ? `WhatsApp link · ${detail}` : 'WhatsApp link or QR code';
+
+    return humanize(source);
+}
+
 export function number(n: number | null | undefined): string {
     return n === null || n === undefined ? '—' : new Intl.NumberFormat().format(n);
 }

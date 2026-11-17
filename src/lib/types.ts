@@ -268,6 +268,8 @@ export type Contact = {
     attributes: Record<string, unknown>;
     tags: string[];
     source: string;
+    /** The link, QR code or website button that brought the contact in (source "wa_link"). */
+    source_detail?: string | null;
     /** The number this contact was synced from (WhatsApp Business app); null when it did not come from a sync. */
     synced_from?: { id: string; display_phone_number: string | null; verified_name: string | null; status: string } | null;
     consent_state: ConsentState;

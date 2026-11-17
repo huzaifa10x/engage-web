@@ -60,7 +60,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { api, errorMessage } from '@/lib/api';
-import { humanize, number, relative } from '@/lib/format';
+import { contactSource, humanize, number, relative } from '@/lib/format';
 import { P } from '@/lib/permissions';
 import { useStored } from '@/hooks/use-stored';
 import { type ContactFilters, keys, useContactCounts, useContactFields, useContacts, usePhoneNumbers, useSegments, useStages, useTags } from '@/lib/queries';
@@ -218,7 +218,7 @@ export default function ContactsPage() {
                             <SelectItem value={ALL}>Any source</SelectItem>
                             {(counts?.sources ?? []).map((src) => (
                                 <SelectItem key={src.value} value={`source:${src.value}`}>
-                                    {humanize(src.value)} · {number(src.count)}
+                                    {contactSource(src.value)} · {number(src.count)}
                                 </SelectItem>
                             ))}
                             {syncNumbers.map((n) => (
@@ -470,7 +470,7 @@ export default function ContactsPage() {
                                                 )}
                                             </span>
                                         ) : (
-                                            humanize(c.source)
+                                            contactSource(c.source, c.source_detail)
                                         )}
                                         {c.acquisition && <SourceChip acquisition={c.acquisition} compact className="mt-1 block w-fit max-w-52" />}
                                     </TableCell>
