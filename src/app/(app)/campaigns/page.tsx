@@ -114,7 +114,14 @@ export default function CampaignsPage() {
                                 return (
                                     <TableRow key={c.id} className="cursor-pointer" onClick={() => setViewingId(c.id)}>
                                         <TableCell>
-                                            <p className="font-medium">{c.name}</p>
+                                            <p className="font-medium">
+                                                {c.name}
+                                                {c.ab_test && (
+                                                    <Badge tone="info" className="ml-2 align-middle">
+                                                        A/B
+                                                    </Badge>
+                                                )}
+                                            </p>
                                             <p className="text-[12.5px] text-muted-foreground">
                                                 {c.template.name} ·{' '}
                                                 {[
@@ -134,7 +141,9 @@ export default function CampaignsPage() {
                                                 {c.status === 'sending' && c.next_batch_at
                                                     ? c.wait_reason === 'daily_limit'
                                                         ? 'Waiting · daily limit'
-                                                        : 'Waiting'
+                                                        : c.wait_reason === 'send_time'
+                                                          ? 'Waiting · variant B'
+                                                          : 'Waiting'
                                                     : CAMPAIGN_STATUS[c.status].label}
                                             </Badge>
                                         </TableCell>
@@ -226,7 +235,7 @@ export default function CampaignsPage() {
                 campaign={editing ?? null}
                 canSend={can(P.CampaignsSend)}
             />
-            <CampaignDetailDialog campaign={viewing} onOpenChange={(o) => !o && setViewingId(null)} />
+            <CampaignDetailDialog campaign={viewing} canSend={can(P.CampaignsSend)} onOpenChange={(o) => !o && setViewingId(null)} />
         </div>
     );
 }

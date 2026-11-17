@@ -494,6 +494,10 @@ export const pauseCampaign = (id: string) => api<Data<Campaign>>(`campaigns/${id
 
 export const resumeCampaign = (id: string) => api<Data<Campaign>>(`campaigns/${id}/resume`, { method: 'POST' }).then((r) => r.data);
 
+/** A/B test on 20%: send variant A or B to the rest of the list. */
+export const sendCampaignRest = (id: string, variant: 'A' | 'B') =>
+    api<Data<Campaign>>(`campaigns/${id}/send-rest`, { method: 'POST', body: { variant } }).then((r) => r.data);
+
 export const duplicateCampaign = (id: string) => api<Data<Campaign>>(`campaigns/${id}/duplicate`, { method: 'POST' }).then((r) => r.data);
 
 export const useCampaignRecipients = (id: string | null, status?: string) =>

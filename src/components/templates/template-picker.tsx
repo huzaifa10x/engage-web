@@ -70,12 +70,15 @@ export function TemplatePicker({
     value,
     onChange,
     category = null,
+    idPrefix = 'tpl',
 }: {
     wabaAccountId: string | null;
     value: TemplateSelection;
     onChange: (v: TemplateSelection) => void;
     /** Only offer templates Meta approved in this category (MARKETING | UTILITY | AUTHENTICATION). */
     category?: string | null;
+    /** Unique ids when two pickers are on one page (A/B test). */
+    idPrefix?: string;
 }) {
     const { me } = useSession();
     // Statuses follow Meta automatically: live updates, with a slow poll as a safety net.
@@ -132,7 +135,7 @@ export function TemplatePicker({
         <div className="grid gap-4">
             <Field
                 label="Template"
-                htmlFor="tpl-pick"
+                htmlFor={`${idPrefix}-pick`}
                 hint={
                     templates.isLoading
                         ? 'Loading templates…'
@@ -149,7 +152,7 @@ export function TemplatePicker({
                         onValueChange={(id) => onChange({ ...emptySelection, template: approved.find((x) => x.id === id) ?? null })}
                         disabled={approved.length === 0}
                     >
-                        <SelectTrigger id="tpl-pick" className="min-w-0 flex-1">
+                        <SelectTrigger id={`${idPrefix}-pick`} className="min-w-0 flex-1">
                             <SelectValue placeholder={approved.length === 0 ? 'No approved templates' : 'Choose an approved template'} />
                         </SelectTrigger>
                         <SelectContent>
@@ -172,9 +175,9 @@ export function TemplatePicker({
             {t && (
                 <>
                     {t.variables.header.map((name, i) => (
-                        <Field key={`h${name}`} label={`Header variable {{${name}}}`} htmlFor={`tpl-h-${i}`}>
+                        <Field key={`h${name}`} label={`Header variable {{${name}}}`} htmlFor={`${idPrefix}-h-${i}`}>
                             <Input
-                                id={`tpl-h-${i}`}
+                                id={`${idPrefix}-h-${i}`}
                                 value={value.header[i] ?? ''}
                                 maxLength={60}
                                 onChange={(e) => set({ header: t.variables.header.map((_, j) => (j === i ? e.target.value : (value.header[j] ?? ''))) })}
@@ -182,9 +185,9 @@ export function TemplatePicker({
                         </Field>
                     ))}
                     {t.variables.header_format && MEDIA_HEADERS.includes(t.variables.header_format) && (
-                        <Field label={`Header ${t.variables.header_format.toLowerCase()}`} htmlFor="tpl-media" error={uploadError ?? undefined}>
+                        <Field label={`Header ${t.variables.header_format.toLowerCase()}`} htmlFor={`${idPrefix}-media`} error={uploadError ?? undefined}>
                             <div className="flex items-center gap-2">
-                                <input id="tpl-media" ref={fileRef} type="file" className="hidden" onChange={(e) => pickFile(e.target.files?.[0])} />
+                                <input id={`${idPrefix}-media`} ref={fileRef} type="file" className="hidden" onChange={(e) => pickFile(e.target.files?.[0])} />
                                 <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
                                     {uploading ? <Loader2Icon className="animate-spin" /> : <PaperclipIcon />} {value.media ? 'Replace file' : 'Choose file'}
                                 </Button>
@@ -214,11 +217,11 @@ export function TemplatePicker({
                             <Field
                                 key={b.index}
                                 label={`Link value for "${b.text}"`}
-                                htmlFor={`tpl-b-${b.index}`}
+                                htmlFor={`${idPrefix}-b-${b.index}`}
                                 hint="The part that replaces {{1}} at the end of the link."
                             >
                                 <Input
-                                    id={`tpl-b-${b.index}`}
+                                    id={`${idPrefix}-b-${b.index}`}
                                     value={value.buttons[String(b.index)] ?? ''}
                                     onChange={(e) => set({ buttons: { ...value.buttons, [String(b.index)]: e.target.value } })}
                                 />

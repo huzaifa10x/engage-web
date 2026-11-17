@@ -749,6 +749,71 @@ export type CampaignStats = {
     replied: number;
     /** Which API delivered the campaign's messages. */
     routes?: { mm_api: number; cloud_api: number };
+    /** A/B test on 20%: the rest of the list, waiting for the winner. */
+    held?: number;
+    /** A/B test results (test recipients only) and the verdict. */
+    ab?: AbResults | null;
+};
+
+export type AbKind = 'template' | 'button' | 'send_time';
+export type AbGoal = 'reply' | 'click' | 'lead' | 'purchase';
+
+export type AbVariantResult = {
+    variant: 'A' | 'B';
+    recipients: number;
+    waiting: number;
+    sent: number;
+    delivered: number;
+    read: number;
+    replied: number;
+    clicked: number;
+    leads: number;
+    purchases: number;
+    /** Goal count ÷ sent, or null before anything was sent. */
+    rate: number | null;
+};
+
+export type AbResults = {
+    goal: AbGoal;
+    metric: 'replied' | 'clicked' | 'leads' | 'purchases';
+    min_sample: number;
+    variants: AbVariantResult[];
+    /** B minus A, in percentage points of the goal rate. */
+    difference: number | null;
+    state: 'not_enough_data' | 'winner';
+    winner: 'A' | 'B' | null;
+    message: string;
+};
+
+export type AbTestSettings = {
+    kind: AbKind;
+    goal: AbGoal;
+    min_sample: number;
+    test_percent: 20 | 100;
+    auto_send_winner: boolean;
+    b: {
+        message_template_id: string;
+        template_name: string;
+        template_language: string;
+        template_category: string | null;
+        variables: { header: string[]; body: string[]; buttons: Record<string, string> };
+        media_id: string | null;
+    } | null;
+    b_delay_hours: number | null;
+    rest: { variant: 'A' | 'B' | null; at: string; recipients?: number; winner?: 'A' | 'B' | null; auto?: boolean; stopped?: boolean } | null;
+};
+
+export type AbTestForm = {
+    enabled: boolean;
+    kind: AbKind;
+    goal: AbGoal;
+    min_sample: number;
+    test_percent: 20 | 100;
+    auto_send_winner: boolean;
+    template_id?: string | null;
+    media_id?: string | null;
+    variables?: { header: string[]; body: string[]; buttons: Record<string, string> };
+    b_delay_hours?: number | null;
 };
 
 export type Campaign = {
@@ -770,7 +835,7 @@ export type Campaign = {
     batch_per_hour: number | null;
     next_batch_at: string | null;
     /** Why a sending campaign is waiting until next_batch_at. */
-    wait_reason?: 'quiet_hours' | 'drip' | 'daily_limit' | null;
+    wait_reason?: 'quiet_hours' | 'drip' | 'daily_limit' | 'send_time' | null;
     paused_at: string | null;
     pause_reason: string | null;
     failure_reasons?: CampaignFailureReason[];
@@ -779,6 +844,7 @@ export type Campaign = {
     /** Marketing goes only to contacts with a recorded opt-in. */
     opted_in_only?: boolean;
     consent_confirmation?: { membership_id: string | null; at: string; unknown: number } | null;
+    ab_test?: AbTestSettings | null;
     audience_name: string | null;
     scheduled_at: string | null;
     started_at: string | null;
@@ -800,6 +866,7 @@ export type CampaignForm = {
     objective: CampaignObjective | null;
     variables: { header: string[]; body: string[]; buttons: Record<string, string> };
     opted_in_only?: boolean;
+    ab_test?: AbTestForm | null;
 };
 
 /** Meta's cost for a send, estimated before sending (USD, paid by the client directly to Meta). */

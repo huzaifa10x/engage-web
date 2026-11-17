@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+import { AbResultsPanel } from '@/components/campaigns/ab-results';
 import { CostEstimateBox } from '@/components/campaigns/cost-estimate';
 import { Badge, type Tone } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -62,7 +63,15 @@ export function Funnel({ sent, delivered, read, failed }: { sent: number; delive
     );
 }
 
-export function CampaignDetailDialog({ campaign, onOpenChange }: { campaign: Campaign | null; onOpenChange: (o: boolean) => void }) {
+export function CampaignDetailDialog({
+    campaign,
+    onOpenChange,
+    canSend = false,
+}: {
+    campaign: Campaign | null;
+    onOpenChange: (o: boolean) => void;
+    canSend?: boolean;
+}) {
     const [status, setStatus] = useState('all');
     const recipients = useCampaignRecipients(campaign?.id ?? null, status === 'all' ? undefined : status);
     const detail = useCampaign(campaign?.id ?? null); // adds the failure reasons to what the list already has
@@ -107,7 +116,9 @@ export function CampaignDetailDialog({ campaign, onOpenChange }: { campaign: Cam
                               ? '(quiet hours).'
                               : campaign.wait_reason === 'drip'
                                 ? '(sent in hourly portions, so one campaign never uses the whole daily limit at once).'
-                                : '(quiet hours or drip sending).'}
+                                : campaign.wait_reason === 'send_time'
+                                  ? '(A/B send-time test: variant B goes out then).'
+                                  : '(quiet hours or drip sending).'}
                     </p>
                 )}
                 {campaign?.notes && <p className="rounded-md bg-muted px-3 py-2 text-[13px] whitespace-pre-wrap text-ink-2">{campaign.notes}</p>}
@@ -131,6 +142,7 @@ export function CampaignDetailDialog({ campaign, onOpenChange }: { campaign: Cam
                         </div>
                         {detail.data?.cost_estimate && <CostEstimateBox estimate={detail.data.cost_estimate} />}
                         <Funnel sent={s.sent} delivered={s.delivered} read={s.read} failed={s.failed} />
+                        {campaign && s.ab && <AbResultsPanel campaign={campaign} canSend={canSend} />}
                         {s.by_consent && (
                             <div className="rounded-md border p-3 text-[13px]" role="region" aria-label="Results by consent">
                                 <p className="mb-1.5 font-semibold">By consent</p>

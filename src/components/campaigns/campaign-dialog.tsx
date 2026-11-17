@@ -6,6 +6,7 @@ import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Field, FormError } from '@/components/app/field';
+import { abForm, AbTestSettings, emptyAb, type AbState } from '@/components/campaigns/ab-test-settings';
 import { CategoryChangeWarning, CostEstimateBox } from '@/components/campaigns/cost-estimate';
 import { describeRule, FieldFilter, type FieldFilterValue } from '@/components/contacts/field-filter';
 import { emptySelection, selectionError, TemplatePicker, type TemplateSelection } from '@/components/templates/template-picker';
@@ -108,6 +109,7 @@ export function CampaignDialog({
     const [consentConfirmed, setConsentConfirmed] = useState(false);
     const [selection, setSelection] = useState<TemplateSelection>(emptySelection);
     const [restore, setRestore] = useState<Campaign | null>(null); // draft whose template still has to be looked up
+    const [ab, setAb] = useState<AbState>(emptyAb);
     const [previews, setPreviews] = useState<CampaignPreview[] | null>(null);
     const [previewing, setPreviewing] = useState(false);
     const [when, setWhen] = useState<'now' | 'later'>('now');
@@ -131,6 +133,20 @@ export function CampaignDialog({
         setCsvConsent(false);
         setOptedInOnly(campaign?.opted_in_only ?? false);
         setConsentConfirmed(false);
+        setAb(
+            campaign?.ab_test
+                ? {
+                      ...emptyAb,
+                      enabled: true,
+                      kind: campaign.ab_test.kind,
+                      goal: campaign.ab_test.goal,
+                      minSample: campaign.ab_test.min_sample,
+                      testPercent: campaign.ab_test.test_percent,
+                      autoSendWinner: campaign.ab_test.auto_send_winner,
+                      delayHours: campaign.ab_test.b_delay_hours ?? emptyAb.delayHours,
+                  }
+                : emptyAb,
+        );
         setWhen('now');
         setError(null);
     }
@@ -147,6 +163,15 @@ export function CampaignDialog({
                 ? { template, header: restore.variables.header, body: restore.variables.body, buttons: restore.variables.buttons ?? {}, media: null }
                 : emptySelection,
         );
+        // Variant B of an A/B test, with its values.
+        const b = restore.ab_test?.b;
+        const templateB = b ? (templates.data.data.find((t) => t.id === b.message_template_id) ?? null) : null;
+        if (b && templateB) {
+            setAb((prev) => ({
+                ...prev,
+                selection: { template: templateB, header: b.variables.header, body: b.variables.body, buttons: b.variables.buttons ?? {}, media: null },
+            }));
+        }
         setRestore(null);
     }
 
@@ -231,6 +256,16 @@ export function CampaignDialog({
         if (problem) return setError(problem);
         const t = selection.template;
         if (!t) return;
+        if (ab.enabled && ab.kind !== 'send_time') {
+            const bNeedsMedia = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(ab.selection.template?.variables.header_format ?? '');
+            const storedB = campaign?.ab_test?.b?.media_id;
+            const bProblem = selectionError(
+                bNeedsMedia && storedB && !ab.selection.media ? { ...ab.selection, media: { id: storedB } as never } : ab.selection,
+            );
+            if (bProblem) return setError(`Variant B: ${bProblem}`);
+        }
+        const abTest = abForm(ab);
+        if (abTest && abTest.media_id === null && ab.kind !== 'send_time') abTest.media_id = campaign?.ab_test?.b?.media_id ?? null;
 
         const form: CampaignForm = {
             name: name.trim(),
@@ -244,6 +279,7 @@ export function CampaignDialog({
             media_id: selection.media?.id ?? campaign?.media_id ?? null,
             variables: variables(),
             opted_in_only: optedInOnly,
+            ab_test: abTest,
         };
 
         setPending(launch ? 'launch' : 'save');
@@ -594,8 +630,19 @@ export function CampaignDialog({
                     )}
                 </Section>
 
+                <Section step="D" title="A/B test">
+                    <AbTestSettings
+                        value={ab}
+                        onChange={setAb}
+                        wabaAccountId={from?.waba_account_id ?? null}
+                        category={category}
+                        audience={a}
+                        optedInOnly={optedInOnly}
+                    />
+                </Section>
+
                 {canSend && (
-                    <Section step="D" title="Timing and pacing">
+                    <Section step="E" title="Timing and pacing">
                         <div className="grid gap-4 sm:grid-cols-2">
                             <Field label="When" htmlFor="cp-when">
                                 <Select value={when} onValueChange={(v) => setWhen(v as 'now' | 'later')}>
@@ -646,7 +693,13 @@ export function CampaignDialog({
                                 (needsConfirmation && !consentConfirmed)
                             }
                         >
-                            {pending === 'launch' ? 'Starting…' : when === 'later' ? 'Schedule' : `Send to ${a?.eligible.toLocaleString() ?? '…'}`}
+                            {pending === 'launch'
+                                ? 'Starting…'
+                                : when === 'later'
+                                  ? 'Schedule'
+                                  : ab.enabled && ab.testPercent === 20
+                                    ? 'Start the test'
+                                    : `Send to ${a?.eligible.toLocaleString() ?? '…'}`}
                         </Button>
                     )}
                 </DialogFooter>
