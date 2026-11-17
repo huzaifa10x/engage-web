@@ -5,11 +5,13 @@ import { useState } from 'react';
 
 import { Forbidden } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
+import { WelcomeSettings } from '@/components/chatbots/welcome-settings';
 import { Agency, Business, Keys, Snippets, TestEndpoints } from '@/components/chatbots/workspace-dialog';
 import { P } from '@/lib/permissions';
 
 const TABS = [
     ['business', 'Business details'],
+    ['welcome', 'Welcome & ice breakers'],
     ['snippets', 'Saved replies'],
     ['keys', 'API keys'],
     ['testing', 'Test endpoints'],
@@ -56,7 +58,10 @@ export default function BotSettingsPage() {
                                 <b>Workspace</b>
                             </td>
                             <td>This page</td>
-                            <td>Business details used as {'{{business.…}}'}, saved replies, API keys, test endpoints, the review rule</td>
+                            <td>
+                                Business details used as {'{{business.…}}'}, the welcome message and ice breakers of each number, saved replies, API keys, test
+                                endpoints, the review rule
+                            </td>
                         </tr>
                         <tr>
                             <td>
@@ -88,6 +93,7 @@ export default function BotSettingsPage() {
             </div>
             <div className="cb-card" style={{ padding: 16, maxWidth: 760 }}>
                 {tab === 'business' && <Business canManage={canManage} />}
+                {tab === 'welcome' && <WelcomeSettings canPublish={canPublish} />}
                 {tab === 'snippets' && <Snippets canManage={canManage} />}
                 {tab === 'keys' && <Keys canManage={canManage} />}
                 {tab === 'agency' && <Agency canPublish={canPublish} />}

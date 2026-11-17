@@ -202,6 +202,8 @@ function Body({ message }: { message: Message }) {
             return <p className="text-2xl leading-none">{String(c.emoji ?? '')}</p>;
         case 'unsupported':
             return <p className="text-[13px] italic opacity-70">Unsupported message — check the WhatsApp app</p>;
+        case 'request_welcome':
+            return <p className="text-[13px] italic opacity-70">👋 Opened the chat for the first time</p>;
         default:
             return <p className="text-[13px] italic opacity-70">{message.body ?? `${message.type} message`}</p>;
     }
