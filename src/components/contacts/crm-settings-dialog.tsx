@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { EnquirySettings } from '@/components/contacts/enquiry-settings';
 import { errorMessage } from '@/lib/api';
 import { deleteContactField, deleteSegment, deleteTag, keys, useContactFieldsInfo, useSegments, useTags } from '@/lib/queries';
 import type { ContactField, Segment } from '@/lib/types';
@@ -107,6 +108,7 @@ export function CrmSettingsDialog({
 
                     <TabsContent value="stages">
                         <StagesTab open={open} />
+                        <EnquirySettings />
                     </TabsContent>
 
                     <TabsContent value="tags" className="grid gap-2">

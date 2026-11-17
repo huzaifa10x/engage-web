@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { z } from 'zod';
 
 import { Field, FormError } from '@/components/app/field';
+import { ContactTimeline } from '@/components/contacts/contact-timeline';
 import { AcquisitionCard } from '@/components/growth/acquisition-card';
 import { ConsentHistory } from '@/components/contacts/consent-history';
 import { StageHistory } from './stage-history';
@@ -220,6 +221,11 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
                     </section>
                 )}
                 {editing && contact && <AcquisitionCard contact={contact} />}
+                {editing && contact && (
+                    <section className="rounded-lg border p-3.5" aria-label="Enquiries and history">
+                        <ContactTimeline contactId={contact.id} />
+                    </section>
+                )}
                 <form id="contact-form" onSubmit={onSubmit} className="grid gap-4" noValidate>
                     <FormError message={formError} />
                     <Field
