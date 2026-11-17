@@ -41,6 +41,11 @@ const SOURCE: Record<string, string> = {
     import: 'CSV import',
     api: 'API',
     meta_preference: 'WhatsApp setting (by the customer)',
+    flow_step: 'Flow step',
+    website_form: 'Website form',
+    ad: 'Ad',
+    qr_link: 'QR code or link',
+    integration: 'Store checkout',
 };
 
 const textarea =
@@ -441,8 +446,8 @@ function Ledger() {
                                         <Badge tone={ACTION[e.action]?.tone ?? 'grey'}>{ACTION[e.action]?.label ?? e.action}</Badge>
                                     </TableCell>
                                     <TableCell className="text-muted-foreground">{SOURCE[e.source] ?? e.source}</TableCell>
-                                    <TableCell className="max-w-64 truncate text-muted-foreground" title={e.detail ?? undefined}>
-                                        {e.detail ?? ''}
+                                    <TableCell className="max-w-64 truncate text-muted-foreground" title={e.wording ?? e.detail ?? undefined}>
+                                        {e.wording ? `“${e.wording}”` : (e.detail ?? '')}
                                     </TableCell>
                                 </TableRow>
                             ))}

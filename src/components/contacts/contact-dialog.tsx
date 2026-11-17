@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import { Field, FormError } from '@/components/app/field';
 import { AcquisitionCard } from '@/components/growth/acquisition-card';
+import { ConsentHistory } from '@/components/contacts/consent-history';
 import { StageHistory } from './stage-history';
 import { StageBadge } from './stage-badge';
 import { Button } from '@/components/ui/button';
@@ -210,6 +211,12 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
                             <StageBadge stage={contact.stage} />
                         </div>
                         <StageHistory contactId={contact.id} />
+                    </section>
+                )}
+                {editing && contact && (
+                    <section className="grid gap-2 rounded-lg border p-3.5" aria-label="Consent">
+                        <h3 className="text-[13.5px] font-semibold">Consent history</h3>
+                        <ConsentHistory contactId={contact.id} />
                     </section>
                 )}
                 {editing && contact && <AcquisitionCard contact={contact} />}

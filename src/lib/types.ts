@@ -744,6 +744,8 @@ export type CampaignStats = {
     failed: number;
     /** Not delivered because of Meta's per-person marketing limit (131049): not a failure, not retried. */
     marketing_limit?: number;
+    /** Marketing: delivery, blocks and replies by the contact's consent when the campaign was prepared. */
+    by_consent?: Record<'opted_in' | 'unknown' | 'opted_out', { sent: number; delivered: number; blocked: number; replied: number }> | null;
     replied: number;
     /** Which API delivered the campaign's messages. */
     routes?: { mm_api: number; cloud_api: number };
@@ -774,6 +776,9 @@ export type Campaign = {
     failure_reasons?: CampaignFailureReason[];
     /** The estimate shown at launch, with the date of Meta's rates it used. */
     cost_estimate?: CostEstimate | null;
+    /** Marketing goes only to contacts with a recorded opt-in. */
+    opted_in_only?: boolean;
+    consent_confirmation?: { membership_id: string | null; at: string; unknown: number } | null;
     audience_name: string | null;
     scheduled_at: string | null;
     started_at: string | null;
@@ -794,6 +799,7 @@ export type CampaignForm = {
     notes: string | null;
     objective: CampaignObjective | null;
     variables: { header: string[]; body: string[]; buttons: Record<string, string> };
+    opted_in_only?: boolean;
 };
 
 /** Meta's cost for a send, estimated before sending (USD, paid by the client directly to Meta). */
@@ -820,7 +826,7 @@ export type CampaignAudience = {
      * Why the others won't receive it (each counted once, under the first reason). Marketing: opted out,
      * stopped marketing in WhatsApp, weekly cap; every category: no WhatsApp number. Unknown consent receives marketing.
      */
-    excluded: { no_number: number; opted_out: number; stopped_marketing: number; frequency_cap: number };
+    excluded: { no_number: number; opted_out: number; stopped_marketing: number; frequency_cap: number; no_consent_record?: number };
     category: string | null;
     reach_limit: number | null;
     reach_used: number;
@@ -839,6 +845,19 @@ export type CampaignAudience = {
     quiet_hours: { start: string; end: string; timezone: string } | null;
     cost_estimate: CostEstimate | null;
     category_change: CategoryChange | null;
+    /** Marketing: consent of everyone with a number (opted out are always excluded). */
+    consent: { opted_in: number; unknown: number; opted_out: number } | null;
+};
+
+export type ConsentHistoryEntry = {
+    id: string;
+    action: string;
+    source: string;
+    source_label: string;
+    channel: string;
+    detail: string | null;
+    wording: string | null;
+    created_at: string;
 };
 
 export type CampaignPreview = {
@@ -910,6 +929,9 @@ export type ConsentEvent = {
     action: 'opted_in' | 'opted_out' | 'marketing_opted_in' | 'marketing_opted_out' | 'consent_declined' | (string & {});
     source: string;
     detail: string | null;
+    /** The exact words the customer was shown, when known. */
+    wording?: string | null;
+    channel?: string;
     created_at: string | null;
     contact: { id: string; display_name: string; phone: string | null } | null;
 };

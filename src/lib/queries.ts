@@ -4,6 +4,7 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api, upload } from './api';
 import type {
+    ConsentHistoryEntry,
     FollowUps,
     FollowUpSettings,
     ConversationCounts,
@@ -413,11 +414,12 @@ export const deleteSegment = (id: string) => api(`segments/${id}`, { method: 'DE
 export const previewSegment = (body: { match: 'all' | 'any'; rules: SegmentRule[] }) =>
     api<Data<SegmentCounts>>('segments/preview', { method: 'POST', body }).then((r) => r.data);
 
-export const importContacts = (file: File, tags: string[], optedIn: boolean) => {
+export const importContacts = (file: File, tags: string[], optedIn: boolean, consentSource: string | null = null) => {
     const form = new FormData();
     form.append('file', file);
     tags.forEach((t) => form.append('tags[]', t));
     if (optedIn) form.append('opted_in', '1');
+    if (consentSource) form.append('consent_source', consentSource);
 
     return upload<Data<ImportResult>>('contacts/import', form).then((r) => r.data);
 };
@@ -437,8 +439,19 @@ export const useCampaigns = (enabled = true, phoneNumberId: string | null = null
 export const saveCampaign = (id: string | null, body: CampaignForm) =>
     api<Data<Campaign>>(id ? `campaigns/${id}` : 'campaigns', { method: id ? 'PATCH' : 'POST', body }).then((r) => r.data);
 
-export const launchCampaign = (id: string, scheduledAt?: string | null) =>
-    api<Data<Campaign>>(`campaigns/${id}/launch`, { method: 'POST', body: scheduledAt ? { scheduled_at: scheduledAt } : {} }).then((r) => r.data);
+export const launchCampaign = (id: string, scheduledAt?: string | null, consentConfirmed = false) =>
+    api<Data<Campaign>>(`campaigns/${id}/launch`, {
+        method: 'POST',
+        body: { ...(scheduledAt ? { scheduled_at: scheduledAt } : {}), ...(consentConfirmed ? { consent_confirmed: true } : {}) },
+    }).then((r) => r.data);
+
+/** A contact's consent history, newest first. */
+export const useConsentHistory = (contactId: string | null) =>
+    useQuery({
+        queryKey: ['contacts', contactId, 'consent-history'],
+        queryFn: () => api<Data<ConsentHistoryEntry[]>>(`contacts/${contactId}/consent-history`).then((r) => r.data),
+        enabled: contactId !== null,
+    });
 
 export const cancelCampaign = (id: string) => api<Data<Campaign>>(`campaigns/${id}/cancel`, { method: 'POST' }).then((r) => r.data);
 
@@ -451,6 +464,7 @@ export const useCampaignAudience = (
         template_id: string | null;
         phone_number_id: string | null;
         filter?: string | null;
+        opted_in_only?: number | null;
     },
     enabled = true,
 ) =>

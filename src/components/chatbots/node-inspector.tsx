@@ -1043,6 +1043,36 @@ function Editor({ ctx, onWebhook }: { ctx: Ctx; onWebhook: (enabled: boolean) =>
                     )}
                 </>
             );
+        case 'consent':
+            return (
+                <>
+                    <Hint>
+                        Asks the customer with two buttons. “Yes” records an opt-in for marketing; “No” opts them out of marketing (they still get order updates
+                        and other utility messages). Both are saved in Consent & Privacy › Consent ledger with the exact words shown and the time.
+                    </Hint>
+                    {text(
+                        'Question',
+                        LIMITS.body,
+                        'Leave empty to ask with your consent question from Consent & Privacy.',
+                        'Can we send you offers and updates on WhatsApp?',
+                        3,
+                    )}
+                    <LimitedInput
+                        label="“Yes” button"
+                        value={c.yes_label}
+                        onChange={(yes_label) => set({ yes_label: yes_label || 'Yes' })}
+                        max={20}
+                        placeholder="Yes"
+                    />
+                    <LimitedInput
+                        label="“No” button"
+                        value={c.no_label}
+                        onChange={(no_label) => set({ no_label: no_label || 'No' })}
+                        max={20}
+                        placeholder="No"
+                    />
+                </>
+            );
         case 'optout':
             return (
                 <>

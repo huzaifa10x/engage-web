@@ -16,6 +16,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { ApiError, errorMessage } from '@/lib/api';
 import {
     importContacts,
@@ -102,6 +103,9 @@ export function CampaignDialog({
     const [uploading, setUploading] = useState(false);
     const [uploadNote, setUploadNote] = useState<string | null>(null);
     const [csvConsent, setCsvConsent] = useState(false);
+    // Marketing guardrails: send only to recorded opt-ins (saved on the campaign), and the sender's confirmation.
+    const [optedInOnly, setOptedInOnly] = useState(false);
+    const [consentConfirmed, setConsentConfirmed] = useState(false);
     const [selection, setSelection] = useState<TemplateSelection>(emptySelection);
     const [restore, setRestore] = useState<Campaign | null>(null); // draft whose template still has to be looked up
     const [previews, setPreviews] = useState<CampaignPreview[] | null>(null);
@@ -125,6 +129,8 @@ export function CampaignDialog({
         setPreviews(null);
         setUploadNote(null);
         setCsvConsent(false);
+        setOptedInOnly(campaign?.opted_in_only ?? false);
+        setConsentConfirmed(false);
         setWhen('now');
         setError(null);
     }
@@ -151,6 +157,7 @@ export function CampaignDialog({
             template_id: selection.template?.id ?? null,
             phone_number_id: from?.id ?? null,
             filter: fieldFilter ? JSON.stringify(fieldFilter) : null,
+            opted_in_only: optedInOnly ? 1 : null,
         },
         open,
     );
@@ -163,6 +170,8 @@ export function CampaignDialog({
     const dailyLeft = a && a.messaging_limit !== null ? (a.messaging_remaining ?? Math.max(0, a.messaging_limit - (a.messaging_used ?? 0))) : null;
     const overTier = Boolean(a && dailyLeft !== null && a.eligible > dailyLeft);
     const redQuality = marketing && a?.quality_rating === 'RED';
+    const unknownConsent = marketing && !optedInOnly ? (a?.consent?.unknown ?? 0) : 0;
+    const needsConfirmation = unknownConsent > 0;
     const needsMedia = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(selection.template?.variables.header_format ?? '');
     const variables = () => ({
         header: (selection.template?.variables.header ?? []).map((_, i) => selection.header[i] ?? ''),
@@ -234,13 +243,14 @@ export function CampaignDialog({
             objective,
             media_id: selection.media?.id ?? campaign?.media_id ?? null,
             variables: variables(),
+            opted_in_only: optedInOnly,
         };
 
         setPending(launch ? 'launch' : 'save');
         try {
             const saved = await saveCampaign(campaign?.id ?? null, form);
             if (launch) {
-                await launchCampaign(saved.id, when === 'later' ? new Date(at).toISOString() : null);
+                await launchCampaign(saved.id, when === 'later' ? new Date(at).toISOString() : null, needsConfirmation && consentConfirmed);
                 toast.success(
                     when === 'later' ? 'Campaign scheduled' : a?.quiet_until ? 'Campaign queued; it starts when quiet hours end' : 'Campaign started',
                 );
@@ -480,6 +490,41 @@ export function CampaignDialog({
                             </div>
                         )}
                     </div>
+                    {a && marketing && a.consent && (
+                        <div className="grid gap-2 rounded-md border px-3 py-2.5 text-[13px]" role="region" aria-label="Marketing consent">
+                            <p>
+                                <span className="font-semibold">{a.consent.opted_in.toLocaleString()} opted in</span> ·{' '}
+                                <span className={a.consent.unknown > 0 ? 'font-semibold text-warn' : ''}>
+                                    {a.consent.unknown.toLocaleString()} unknown consent
+                                </span>{' '}
+                                · {a.consent.opted_out.toLocaleString()} opted out (excluded)
+                            </p>
+                            <label className="flex items-center justify-between gap-3">
+                                <span>
+                                    Send only to opted-in contacts
+                                    <span className="block text-[12px] text-muted-foreground">Contacts with no consent record are left out.</span>
+                                </span>
+                                <Switch checked={optedInOnly} onCheckedChange={(v) => setOptedInOnly(v)} aria-label="Send only to opted-in contacts" />
+                            </label>
+                            {needsConfirmation && (
+                                <div role="alert" className="grid gap-2 rounded-md border border-warn/30 bg-warn-bg px-3 py-2 text-ink-2">
+                                    <p>
+                                        {unknownConsent.toLocaleString()} contacts have no consent record. Meta’s policy requires opt-in before you send
+                                        marketing messages. Sending without it can lead to blocks and a lower quality rating.
+                                    </p>
+                                    <label className="flex items-start gap-2 font-medium">
+                                        <input
+                                            type="checkbox"
+                                            className="mt-0.5"
+                                            checked={consentConfirmed}
+                                            onChange={(e) => setConsentConfirmed(e.target.checked)}
+                                        />
+                                        I confirm these contacts agreed to receive messages from my business
+                                    </label>
+                                </div>
+                            )}
+                        </div>
+                    )}
                     {a?.category_change && <CategoryChangeWarning change={a.category_change} />}
                     {a?.cost_estimate && <CostEstimateBox estimate={a.cost_estimate} excludedOptedOut={a.excluded.opted_out + a.excluded.stopped_marketing} />}
                 </Section>
@@ -591,7 +636,15 @@ export function CampaignDialog({
                     {canSend && (
                         <Button
                             onClick={() => submit(true)}
-                            disabled={pending !== null || !selection.template || !a || a.eligible === 0 || overPlan || redQuality}
+                            disabled={
+                                pending !== null ||
+                                !selection.template ||
+                                !a ||
+                                a.eligible === 0 ||
+                                overPlan ||
+                                redQuality ||
+                                (needsConfirmation && !consentConfirmed)
+                            }
                         >
                             {pending === 'launch' ? 'Starting…' : when === 'later' ? 'Schedule' : `Send to ${a?.eligible.toLocaleString() ?? '…'}`}
                         </Button>

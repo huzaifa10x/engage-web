@@ -8,6 +8,7 @@ import { Field, FormError } from '@/components/app/field';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { errorMessage } from '@/lib/api';
 import { fileSize } from '@/lib/format';
@@ -26,6 +27,7 @@ export function ImportContactsDialog({ open, onOpenChange }: { open: boolean; on
     const [file, setFile] = useState<File | null>(null);
     const [tags, setTags] = useState<string[]>([]);
     const [optedIn, setOptedIn] = useState(false);
+    const [consentSource, setConsentSource] = useState('');
     const [pending, setPending] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [result, setResult] = useState<ImportResult | null>(null);
@@ -46,7 +48,7 @@ export function ImportContactsDialog({ open, onOpenChange }: { open: boolean; on
         setPending(true);
         setError(null);
         try {
-            setResult(await importContacts(file, tags, optedIn));
+            setResult(await importContacts(file, tags, optedIn, consentSource.trim() || null));
             void qc.invalidateQueries({ queryKey: keys.contactsAll });
             void qc.invalidateQueries({ queryKey: keys.tags });
             void qc.invalidateQueries({ queryKey: keys.segments });
@@ -57,8 +59,8 @@ export function ImportContactsDialog({ open, onOpenChange }: { open: boolean; on
         }
     };
 
-    const columns = ['phone', 'name', 'email', 'tags', 'opted_in', ...(fields.data ?? []).map((f) => f.key)];
-    const sample = `data:text/csv;charset=utf-8,${encodeURIComponent(`${columns.join(',')}\n+971501234567,Sara Ahmed,sara@example.com,VIP;Member,yes${','.repeat(Math.max(0, columns.length - 5))}\n`)}`;
+    const columns = ['phone', 'name', 'email', 'tags', 'consent status', ...(fields.data ?? []).map((f) => f.key)];
+    const sample = `data:text/csv;charset=utf-8,${encodeURIComponent(`${columns.join(',')}\n+971501234567,Sara Ahmed,sara@example.com,VIP;Member,opted in${','.repeat(Math.max(0, columns.length - 5))}\n`)}`;
 
     return (
         <Dialog open={open} onOpenChange={close}>
@@ -140,6 +142,19 @@ export function ImportContactsDialog({ open, onOpenChange }: { open: boolean; on
                                 history. Leave unticked if you are not sure: marketing campaigns only go to contacts with consent.
                             </Label>
                         </div>
+                        <Field
+                            label="Where was consent collected?"
+                            htmlFor="imp-consent-source"
+                            hint="Saved with each consent this import records, e.g. “collected at store”. The file’s “consent status” column (opted in / opted out) is read per contact."
+                        >
+                            <Input
+                                id="imp-consent-source"
+                                value={consentSource}
+                                maxLength={120}
+                                onChange={(e) => setConsentSource(e.target.value)}
+                                placeholder="collected at store"
+                            />
+                        </Field>
                     </div>
                 )}
 

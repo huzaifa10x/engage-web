@@ -52,6 +52,7 @@ export type NodeType =
     | 'ask_media'
     | 'location'
     | 'rating'
+    | 'consent'
     | 'condition'
     | 'setfield'
     | 'calculate'
@@ -644,6 +645,14 @@ export const BLOCKS: BlockKind[] = [
     { type: 'ask_media', label: 'Ask for a file', group: 'capture', icon: ImagePlusIcon, blurb: 'Photo or document upload', keywords: 'photo image upload' },
     { type: 'location', label: 'Ask for location', group: 'capture', icon: MapPinIcon, blurb: 'Location pin or typed area', keywords: 'address pin map' },
     { type: 'rating', label: 'Rating', group: 'capture', icon: StarIcon, blurb: '1 to 5 stars', keywords: 'feedback csat stars' },
+    {
+        type: 'consent',
+        label: 'Ask for marketing consent',
+        group: 'capture',
+        icon: UserCheckIcon,
+        blurb: 'Yes / No, recorded as an opt-in or opt-out',
+        keywords: 'consent opt in subscribe marketing permission gdpr',
+    },
     { type: 'condition', label: 'Condition', group: 'logic', icon: GitBranchIcon, blurb: 'Branch on data: yes / no', keywords: 'if branch rule' },
     { type: 'setfield', label: 'Set field', group: 'logic', icon: BracesIcon, blurb: 'Save a value', keywords: 'variable field save' },
     { type: 'calculate', label: 'Calculate', group: 'logic', icon: CalculatorIcon, blurb: 'Price, days, totals', keywords: 'math formula price' },
@@ -682,7 +691,7 @@ export const START_BLOCK: BlockKind = { type: 'start', label: 'Start', group: 'c
 export const blockOf = (type: NodeType): BlockKind => BLOCKS.find((k) => k.type === type) ?? START_BLOCK;
 export const groupOf = (type: NodeType) => GROUPS.find((g) => g.key === blockOf(type).group) ?? GROUPS[4];
 
-export const INPUT_TYPES: NodeType[] = ['buttons', 'list', 'question', 'product', 'form', 'ask_media', 'location', 'rating'];
+export const INPUT_TYPES: NodeType[] = ['buttons', 'list', 'question', 'product', 'form', 'ask_media', 'location', 'rating', 'consent'];
 export const EXIT_TYPES: NodeType[] = ['handoff', 'end', 'goto'];
 export const isInput = (n: { type: NodeType; config: NodeConfig }) =>
     INPUT_TYPES.includes(n.type) && !(n.type === 'product' && (n.config.mode ?? 'cards') === 'cards');
@@ -781,6 +790,8 @@ export function defaultConfig(type: NodeType): NodeConfig {
             return { text: 'Please share your location 📍 or type your area.', save_to: 'location', error_text: null, ...input };
         case 'rating':
             return { text: 'How would you rate us?', button_label: 'Rate us', save_to: 'var:rating', ...input };
+        case 'consent':
+            return { text: '', yes_label: 'Yes', no_label: 'No', ...input };
         case 'condition':
             return { match: 'all', rules: [{ field: 'name', op: 'is_set', value: null }] };
         case 'setfield':
@@ -865,6 +876,8 @@ export function outputsFor(type: NodeType, config: NodeConfig): { id: string; la
             return [{ id: 'next', label: 'Answered' }, ...extra];
         case 'form':
             return [{ id: 'next', label: 'Submitted' }, ...extra];
+        case 'consent':
+            return [{ id: 'yes', label: config.yes_label || 'Yes' }, { id: 'no', label: config.no_label || 'No' }, ...extra];
         case 'product':
             return (config.mode ?? 'cards') === 'cards' ? [{ id: 'next', label: 'Next' }] : [{ id: 'next', label: 'Product chosen' }, ...extra];
         case 'condition':
@@ -964,6 +977,8 @@ export function autoTitle(node: FlowNode): string {
             return 'Ask for location';
         case 'rating':
             return 'Ask for a rating';
+        case 'consent':
+            return 'Ask for marketing consent';
         case 'product':
             return named('Products', `${(c.items ?? []).length} item${(c.items ?? []).length === 1 ? '' : 's'}`);
         case 'media':
@@ -1131,6 +1146,7 @@ export const BUBBLE_TYPES: NodeType[] = [
     'ask_media',
     'location',
     'rating',
+    'consent',
     'note',
     'handoff',
     'end',

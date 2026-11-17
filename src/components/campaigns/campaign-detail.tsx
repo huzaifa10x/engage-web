@@ -131,6 +131,43 @@ export function CampaignDetailDialog({ campaign, onOpenChange }: { campaign: Cam
                         </div>
                         {detail.data?.cost_estimate && <CostEstimateBox estimate={detail.data.cost_estimate} />}
                         <Funnel sent={s.sent} delivered={s.delivered} read={s.read} failed={s.failed} />
+                        {s.by_consent && (
+                            <div className="rounded-md border p-3 text-[13px]" role="region" aria-label="Results by consent">
+                                <p className="mb-1.5 font-semibold">By consent</p>
+                                <table className="w-full text-[12.5px] tabular-nums">
+                                    <thead className="text-muted-foreground">
+                                        <tr>
+                                            <th className="text-left font-normal">Consent</th>
+                                            <th className="text-right font-normal">Sent</th>
+                                            <th className="text-right font-normal">Delivered</th>
+                                            <th className="text-right font-normal">Blocked</th>
+                                            <th className="text-right font-normal">Replied</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {(
+                                            [
+                                                ['opted_in', 'Opted in'],
+                                                ['unknown', 'Unknown'],
+                                            ] as const
+                                        ).map(([key, label]) => (
+                                            <tr key={key}>
+                                                <td>{label}</td>
+                                                <td className="text-right">{s.by_consent![key].sent.toLocaleString()}</td>
+                                                <td className="text-right">{s.by_consent![key].delivered.toLocaleString()}</td>
+                                                <td className="text-right">{s.by_consent![key].blocked.toLocaleString()}</td>
+                                                <td className="text-right">{s.by_consent![key].replied.toLocaleString()}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                <p className="mt-1.5 text-[12px] text-muted-foreground">
+                                    Blocked: opted out or stopped marketing within 72 hours. Replied: wrote back within 72 hours.
+                                    {campaign?.consent_confirmation &&
+                                        ` The sender confirmed ${campaign.consent_confirmation.unknown.toLocaleString()} contacts with no consent record had agreed.`}
+                                </p>
+                            </div>
+                        )}
                         {(s.marketing_limit ?? 0) > 0 && (
                             <p className="rounded-md border px-3 py-2 text-[13px]">
                                 <span className="font-semibold">Not delivered: Meta’s per-person marketing limit</span>{' '}

@@ -223,7 +223,7 @@ export function ContactPanel({ conversation, open = false, onClose }: { conversa
                         {humanize(contact.consent_state)}
                     </Badge>
                 </div>
-                {contact.marketing_opted_out && <p className="rounded-md bg-warn-bg px-2.5 py-1.5 text-warn">Stopped marketing messages in WhatsApp.</p>}
+                {contact.marketing_opted_out && <p className="rounded-md bg-warn-bg px-2.5 py-1.5 text-warn">Opted out of marketing messages.</p>}
                 {contact.consent_requested_at && contact.consent_state !== 'opted_in' && (
                     <p className="rounded-md bg-info-bg px-2.5 py-1.5 text-info">
                         Consent question sent {relative(contact.consent_requested_at)}, waiting for the customer to tap Subscribe or Unsubscribe.

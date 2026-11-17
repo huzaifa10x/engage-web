@@ -39,6 +39,7 @@ const TEXT_TYPES: NodeType[] = [
     'ask_media',
     'location',
     'rating',
+    'consent',
     'optin',
     'optout',
     'handoff',

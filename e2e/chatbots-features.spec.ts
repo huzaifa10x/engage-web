@@ -206,3 +206,30 @@ test('test endpoints are set in the workspace and unsafe addresses are refused',
         'https://sandbox.example.com/',
     ]);
 });
+
+test('the “Ask for marketing consent” step: its buttons, branches and settings in the builder', async ({ page }) => {
+    await signIn(page);
+    const id = await makeFlow(page, unique('Consent'), [
+        node('start', 'start', { any_message: true }, { next: 'ask' }),
+        node('ask', 'consent', { text: '', yes_label: 'Yes', no_label: 'No' }, { yes: 'yes', no: 'no' }, 320),
+        node('yes', 'handoff', { text: 'Welcome aboard!' }, {}, 640),
+        node('no', 'handoff', { text: 'No problem.' }, {}, 640),
+    ]);
+    await page.goto(`/chatbots/builder?id=${id}`);
+    await page.getByRole('button', { name: 'Ask', exact: true }).last().click();
+    await expect(page.getByText('“Yes” records an opt-in for marketing', { exact: false })).toBeVisible();
+    await page.getByLabel('“Yes” button').fill('Yes please');
+    await page.getByLabel('“No” button').fill('No thanks');
+    await expect(page.getByText('All changes saved')).toBeVisible({ timeout: 20_000 });
+
+    type Node = { id: string; config: Record<string, unknown>; outputs: { id: string; to: string | null }[] };
+    const detail = (await api<{ data: { draft: { nodes: Node[] } } }>(page, 'GET', `chatbots/${id}`)).data;
+    const ask = detail.draft.nodes.find((n) => n.id === 'ask')!;
+    expect(ask.config).toMatchObject({ yes_label: 'Yes please', no_label: 'No thanks' });
+    expect(ask.outputs.map((o) => [o.id, o.to])).toEqual([
+        ['yes', 'yes'],
+        ['no', 'no'],
+    ]);
+    // It publishes: the consent question comes from Consent & Privacy when the step has none.
+    await api(page, 'POST', `chatbots/${id}/publish`);
+});

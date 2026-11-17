@@ -116,6 +116,8 @@ export function messageOf(node: FlowNode): WaMessage | null {
                 text: c.text,
                 list: { button: c.button_label || 'Rate us', sections: [{ rows: [5, 4, 3, 2, 1].map((n) => ({ title: '⭐'.repeat(n) })) }] },
             };
+        case 'consent':
+            return { text: c.text || 'Your consent question from Consent & Privacy', buttons: [c.yes_label || 'Yes', c.no_label || 'No'] };
         case 'url':
             return { header: c.header, text: c.text, footer: c.footer, cta: c.cta || 'Open' };
         case 'form':
