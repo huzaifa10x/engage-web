@@ -5,6 +5,7 @@ import { useState } from 'react';
 
 import { Forbidden } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
+import { FormsSettings } from '@/components/chatbots/forms-settings';
 import { WelcomeSettings } from '@/components/chatbots/welcome-settings';
 import { Agency, Business, Keys, Snippets, TestEndpoints } from '@/components/chatbots/workspace-dialog';
 import { P } from '@/lib/permissions';
@@ -12,6 +13,7 @@ import { P } from '@/lib/permissions';
 const TABS = [
     ['business', 'Business details'],
     ['welcome', 'Welcome & ice breakers'],
+    ['forms', 'WhatsApp forms'],
     ['snippets', 'Saved replies'],
     ['keys', 'API keys'],
     ['testing', 'Test endpoints'],
@@ -94,6 +96,7 @@ export default function BotSettingsPage() {
             <div className="cb-card" style={{ padding: 16, maxWidth: 760 }}>
                 {tab === 'business' && <Business canManage={canManage} />}
                 {tab === 'welcome' && <WelcomeSettings canPublish={canPublish} />}
+                {tab === 'forms' && <FormsSettings canManage={canManage} canPublish={canPublish} />}
                 {tab === 'snippets' && <Snippets canManage={canManage} />}
                 {tab === 'keys' && <Keys canManage={canManage} />}
                 {tab === 'agency' && <Agency canPublish={canPublish} />}

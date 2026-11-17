@@ -47,6 +47,7 @@ import {
     resolveChatbotComment,
     RTL,
     useChatbotComments,
+    useWhatsappForms,
     type Variable,
     variablesFor,
 } from '@/lib/chatbots';
@@ -1846,11 +1847,53 @@ function FormEditor({ ctx, text, headerFooter }: { ctx: Ctx; text: React.ReactNo
     const { node, set, options } = ctx;
     const c = node.config;
     const fields = (c.fields ?? []) as { key: string; to: string }[];
+    const forms = useWhatsappForms();
+    const own = (forms.data ?? []).find((f) => f.id === c.form_id) ?? null;
+    const RAW = '__flow_id__';
+    const NONE_FORM = '__none__';
 
     return (
         <>
             {text}
             {headerFooter}
+            <SelectRow
+                label="Form"
+                value={c.form_id ?? (c.flow_id ? RAW : NONE_FORM)}
+                onChange={(v) =>
+                    set(
+                        v === RAW
+                            ? { form_id: null, flow_id: c.flow_id ?? '' }
+                            : { form_id: v === NONE_FORM ? null : v, flow_id: null, screen: null, draft: false },
+                    )
+                }
+                options={[
+                    [NONE_FORM, 'Choose a form'],
+                    ...(forms.data ?? []).map((f): [string, string] => [f.id, `${f.name}${f.live_version ? '' : ' (not published)'}`]),
+                    [RAW, 'A form from WhatsApp Manager (Flow ID)'],
+                ]}
+                hint={
+                    own
+                        ? own.live_version
+                            ? `Sends version ${own.live_version}. Answers are saved where the form says (Bot settings › WhatsApp forms).`
+                            : 'Publish this form in Bot settings › WhatsApp forms before the flow goes live.'
+                        : 'Make forms in Bot settings › WhatsApp forms.'
+                }
+            />
+            {c.form_id ? (
+                <LimitedInput label="Button" value={c.cta} onChange={(cta) => set({ cta: cta ?? 'Open form' })} max={20} placeholder="Open form" />
+            ) : (
+                <RawFormFields ctx={ctx} fields={fields} options={options} />
+            )}
+        </>
+    );
+}
+
+function RawFormFields({ ctx, fields, options }: { ctx: Ctx; fields: { key: string; to: string }[]; options: Ctx['options'] }) {
+    const { node, set } = ctx;
+    const c = node.config;
+
+    return (
+        <>
             <div className="grid grid-cols-2 gap-2">
                 <LimitedInput
                     label="Flow ID"

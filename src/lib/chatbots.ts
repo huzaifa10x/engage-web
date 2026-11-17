@@ -781,7 +781,7 @@ export function defaultConfig(type: NodeType): NodeConfig {
         case 'url':
             return { header: null, text: '', footer: null, cta: 'Open', url: 'https://' };
         case 'form':
-            return { header: null, text: '', footer: null, flow_id: null, cta: 'Open form', screen: null, draft: false, fields: [], ...input };
+            return { header: null, text: '', footer: null, flow_id: null, form_id: null, cta: 'Open form', screen: null, draft: false, fields: [], ...input };
         case 'question':
             return { text: '', save_to: 'var:answer', validate: 'any', pattern: null, error_text: null, ...input };
         case 'ask_media':
@@ -1288,3 +1288,53 @@ export function tidy(graph: FlowGraph, heights: Map<string, number>): FlowGraph 
 }
 
 export const snap = (v: number, on: boolean) => (on ? Math.round(v / GRID) * GRID : Math.round(v));
+
+// ── WhatsApp forms (Bot settings › WhatsApp forms) ──────────────────────────────────────────
+
+export type FormFieldType = 'text' | 'textarea' | 'email' | 'phone' | 'number' | 'dropdown' | 'radio' | 'date' | 'optin';
+
+export type FormField = {
+    name?: string;
+    type: FormFieldType;
+    label: string;
+    required: boolean;
+    options: { id?: string; title: string }[];
+    /** name | email | field:<key> | null */
+    save_to: string | null;
+    consent: boolean;
+};
+
+export type FormDefinitionData = { title: string; intro: string; submit_label: string; fields: FormField[] };
+
+export type WhatsappForm = {
+    id: string;
+    name: string;
+    kind: 'booking' | 'lead' | 'custom';
+    waba_account_id: string;
+    version: number | null;
+    status: string | null;
+    status_text: string | null;
+    live_version: number | null;
+    errors: string[];
+    checked_at: string | null;
+    updated_at: string | null;
+    submissions?: number;
+    definition?: FormDefinitionData;
+    editing_creates_version?: boolean;
+    versions?: { version: number; status: string; status_text: string; meta_flow_id: string | null; published_at: string | null }[];
+};
+
+export type FormSubmissionRow = {
+    id: string;
+    version: number | null;
+    contact: { id: string; display_name: string; phone: string | null } | null;
+    conversation_id: string | null;
+    answers: { label: string; value: string; saved_to: string | null }[];
+    consent: boolean | null;
+    received_at: string | null;
+};
+
+export const formKeys = { all: ['chatbots', 'forms'] as const, one: (id: string) => ['chatbots', 'forms', id] as const };
+
+export const useWhatsappForms = (enabled = true) =>
+    useQuery({ queryKey: formKeys.all, queryFn: () => api<Data<WhatsappForm[]>>('chatbots/forms').then((r) => r.data), enabled, staleTime: 30_000 });
