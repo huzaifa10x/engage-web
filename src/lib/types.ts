@@ -680,6 +680,9 @@ export type MessageTemplate = {
     last_synced_at: string | null;
     created_at: string | null;
     updated_at: string | null;
+    category_change?: CategoryChange | null;
+    /** Template page only: Meta's price per message for this category in every market. */
+    pricing?: { label: string; currency: 'USD'; rates_effective_from: string | null; markets: { market: string; rate: number; countries: string[] }[] };
 };
 
 export type TemplateForm = {
@@ -769,6 +772,8 @@ export type Campaign = {
     paused_at: string | null;
     pause_reason: string | null;
     failure_reasons?: CampaignFailureReason[];
+    /** The estimate shown at launch, with the date of Meta's rates it used. */
+    cost_estimate?: CostEstimate | null;
     audience_name: string | null;
     scheduled_at: string | null;
     started_at: string | null;
@@ -790,6 +795,23 @@ export type CampaignForm = {
     objective: CampaignObjective | null;
     variables: { header: string[]; body: string[]; buttons: Record<string, string> };
 };
+
+/** Meta's cost for a send, estimated before sending (USD, paid by the client directly to Meta). */
+export type CostEstimate = {
+    label: string;
+    currency: 'USD';
+    rates_effective_from: string | null;
+    category: string;
+    recipients: number;
+    free_in_window: number;
+    excluded_invalid: number;
+    total: number;
+    by_country: { country: string | null; market: string; recipients: number; rate: number; cost: number }[];
+    computed_at: string;
+};
+
+/** Meta re-categorised a template in the last 30 days. */
+export type CategoryChange = { from: string | null; to: string | null; at: string };
 
 export type CampaignAudience = {
     matched: number;
@@ -815,6 +837,8 @@ export type CampaignAudience = {
     frequency_cap: number;
     quiet_until: string | null;
     quiet_hours: { start: string; end: string; timezone: string } | null;
+    cost_estimate: CostEstimate | null;
+    category_change: CategoryChange | null;
 };
 
 export type CampaignPreview = {

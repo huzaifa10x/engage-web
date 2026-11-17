@@ -6,6 +6,7 @@ import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Field, FormError } from '@/components/app/field';
+import { CategoryChangeWarning, CostEstimateBox } from '@/components/campaigns/cost-estimate';
 import { describeRule, FieldFilter, type FieldFilterValue } from '@/components/contacts/field-filter';
 import { emptySelection, selectionError, TemplatePicker, type TemplateSelection } from '@/components/templates/template-picker';
 import { Badge } from '@/components/ui/badge';
@@ -479,6 +480,8 @@ export function CampaignDialog({
                             </div>
                         )}
                     </div>
+                    {a?.category_change && <CategoryChangeWarning change={a.category_change} />}
+                    {a?.cost_estimate && <CostEstimateBox estimate={a.cost_estimate} excludedOptedOut={a.excluded.opted_out + a.excluded.stopped_marketing} />}
                 </Section>
 
                 <Section step="C" title="Message">

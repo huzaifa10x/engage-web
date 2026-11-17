@@ -7,7 +7,9 @@ import { toast } from 'sonner';
 
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
+import { CategoryChangeWarning } from '@/components/campaigns/cost-estimate';
 import { CreateTemplateDialog } from '@/components/templates/create-template-dialog';
+import { TemplatePricing } from '@/components/templates/template-pricing';
 import { rejectionReason, TemplatePreview, TemplateStatusBadge, templateStatus } from '@/components/templates/template-status';
 import {
     AlertDialog,
@@ -199,7 +201,10 @@ export default function TemplatesPage() {
                                                 {t.components.find((c) => c.type?.toUpperCase() === 'BODY')?.text}
                                             </p>
                                         </TableCell>
-                                        <TableCell>{humanize(t.category?.toLowerCase())}</TableCell>
+                                        <TableCell>
+                                            {humanize(t.category?.toLowerCase())}
+                                            {t.category_change && <div className="text-[12px] font-medium text-warn">Changed by Meta</div>}
+                                        </TableCell>
                                         <TableCell>{t.language}</TableCell>
                                         <TableCell>
                                             <div className="flex flex-wrap items-center gap-1.5">
@@ -251,7 +256,9 @@ export default function TemplatesPage() {
                     {viewing?.status === 'REJECTED' && viewing.rejected_reason && (
                         <p className="rounded-md border border-bad/20 bg-bad-bg px-3 py-2 text-[13px] text-bad">{rejectionReason(viewing.rejected_reason)}</p>
                     )}
+                    {viewing && <CategoryChangeWarning change={viewing.category_change} />}
                     {viewing && <TemplatePreview template={viewing} />}
+                    {viewing && <TemplatePricing templateId={viewing.id} />}
                 </DialogContent>
             </Dialog>
 

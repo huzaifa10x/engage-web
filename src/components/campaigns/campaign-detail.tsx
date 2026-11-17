@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+import { CostEstimateBox } from '@/components/campaigns/cost-estimate';
 import { Badge, type Tone } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -128,6 +129,7 @@ export function CampaignDetailDialog({ campaign, onOpenChange }: { campaign: Cam
                                 </div>
                             ))}
                         </div>
+                        {detail.data?.cost_estimate && <CostEstimateBox estimate={detail.data.cost_estimate} />}
                         <Funnel sent={s.sent} delivered={s.delivered} read={s.read} failed={s.failed} />
                         {(s.marketing_limit ?? 0) > 0 && (
                             <p className="rounded-md border px-3 py-2 text-[13px]">
