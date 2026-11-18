@@ -28,6 +28,9 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { DataExportsCard } from '@/components/settings/data-exports-card';
+import { RetentionCard } from '@/components/settings/retention-card';
+import { WorkspaceDeletionCard } from '@/components/settings/workspace-deletion-card';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { COUNTRIES } from '@/lib/countries';
 import { date, DATE_FORMAT_LABELS, type DateFormat, dayText } from '@/lib/format';
@@ -367,13 +370,14 @@ function WorkspaceForm({ tenant, canManage, section }: { tenant: Tenant; canMana
     );
 }
 
-type Tab = 'workspace' | 'company' | 'hours' | 'inbox' | 'notifications' | 'security';
+type Tab = 'workspace' | 'company' | 'hours' | 'inbox' | 'data' | 'notifications' | 'security';
 
 const TABS: [Tab, string][] = [
     ['workspace', 'Workspace'],
     ['company', 'Company'],
     ['hours', 'Business hours'],
     ['inbox', 'Inbox'],
+    ['data', 'Data'],
     ['notifications', 'Email notifications'],
     ['security', 'Security'],
 ];
@@ -387,13 +391,15 @@ const PERSONAL: Tab[] = ['notifications', 'security'];
  * Follow-ups & Alerts. The tab is in the address (?tab=hours), so links can open it directly.
  */
 export default function SettingsPage() {
-    const { can, feature, me } = useSession();
+    const { can, feature, me, membership } = useSession();
     const tenant = useTenant();
     const router = useRouter();
     const params = useSearchParams();
     const full = can(P.SettingsView);
     // Everyone may choose their own emails and protect their own sign-in, even without access to the workspace settings.
-    const tabs = full ? TABS : TABS.filter(([t]) => PERSONAL.includes(t));
+    // Data (exports, retention, deleting the workspace) is the Owner's.
+    const owner = membership.role?.key === 'owner' && membership.role.is_system;
+    const tabs = (full ? TABS : TABS.filter(([t]) => PERSONAL.includes(t))).filter(([t]) => t !== 'data' || owner);
     const asked = params.get('tab') as Tab | null;
     const tab: Tab = asked && tabs.some(([t]) => t === asked) ? asked : (tabs[0]?.[0] ?? 'security');
     const open = (t: Tab) => {
@@ -429,6 +435,12 @@ export default function SettingsPage() {
                 <Skeleton className="h-96" />
             ) : tab === 'workspace' || tab === 'company' ? (
                 <WorkspaceForm key={`${tenant.data.id}-${tab}`} tenant={tenant.data} canManage={can(P.SettingsManage)} section={tab} />
+            ) : tab === 'data' ? (
+                <div className="grid gap-4">
+                    <DataExportsCard />
+                    <RetentionCard canManage={can(P.ComplianceManage)} />
+                    <WorkspaceDeletionCard workspaceName={tenant.data.name} />
+                </div>
             ) : tab === 'hours' ? (
                 <div className="grid gap-4">
                     <BusinessHoursCard canManage={can(P.SettingsManage)} />

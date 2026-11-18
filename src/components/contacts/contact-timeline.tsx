@@ -106,7 +106,8 @@ const s = (v: unknown) => (v === null || v === undefined ? '' : String(v));
 
 /** One line in plain words for a timeline event (message text is never shown here). */
 export function describe(e: TimelineEntry): string {
-    return describeOnly(e) + bulkSuffix(e);
+    // Message text removed by the workspace's retention setting: the line stays, marked.
+    return describeOnly(e) + (e.data.removed ? ' · message removed' : '') + bulkSuffix(e);
 }
 
 function describeOnly(e: TimelineEntry): string {

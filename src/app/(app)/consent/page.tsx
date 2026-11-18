@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangleIcon, CheckCircle2Icon, DownloadIcon, InfoIcon, LockIcon, SearchIcon, XCircleIcon, XIcon } from 'lucide-react';
 import { useState } from 'react';
@@ -135,12 +136,6 @@ function SettingsForm({ initial, canManage }: { initial: ComplianceSettings; can
     const dirty = JSON.stringify(s) !== JSON.stringify(initial);
 
     const save = async () => {
-        if (s.retention_enabled && !initial.retention_enabled) {
-            const ok = window.confirm(
-                `Turn on retention? Every night, message content older than ${s.message_retention_days} days will be permanently removed and files older than ${s.media_retention_days} days deleted. This cannot be undone.`,
-            );
-            if (!ok) return;
-        }
         setSaving(true);
         try {
             const saved = await updateComplianceSettings({
@@ -151,9 +146,6 @@ function SettingsForm({ initial, canManage }: { initial: ComplianceSettings; can
                 confirm_opt_in: s.confirm_opt_in,
                 opt_in_reply: s.opt_in_reply,
                 consent_request_text: s.consent_request_text,
-                retention_enabled: s.retention_enabled,
-                message_retention_days: s.message_retention_days,
-                media_retention_days: s.media_retention_days,
                 marketing_frequency_cap: s.marketing_frequency_cap,
                 quiet_hours_enabled: s.quiet_hours_enabled,
                 quiet_hours_start: s.quiet_hours_start,
@@ -313,47 +305,13 @@ function SettingsForm({ initial, canManage }: { initial: ComplianceSettings; can
                 </div>
             </Card>
 
-            <Card className="gap-4 p-5">
-                <div className="flex items-start justify-between gap-3">
-                    <div>
-                        <p className="text-sm font-semibold">Data retention</p>
-                        <p className="text-[13px] text-muted-foreground">
-                            When on, old message content is removed every night and old files are deleted. Delivery records, the consent ledger and the audit
-                            log are kept. Removed content cannot be restored.
-                        </p>
-                    </div>
-                    <Switch
-                        checked={s.retention_enabled}
-                        disabled={!canManage}
-                        onCheckedChange={(v) => set({ retention_enabled: v })}
-                        aria-label="Enable retention"
-                    />
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Remove message content after (days)" htmlFor="ret-msg" hint={`At least ${s.min_message_retention_days} days`}>
-                        <Input
-                            id="ret-msg"
-                            type="number"
-                            min={s.min_message_retention_days}
-                            max={3650}
-                            disabled={!canManage || !s.retention_enabled}
-                            value={s.message_retention_days}
-                            onChange={(e) => set({ message_retention_days: Number(e.target.value) })}
-                        />
-                    </Field>
-                    <Field label="Delete photos, videos and files after (days)" htmlFor="ret-media" hint={`At least ${s.min_media_retention_days} days`}>
-                        <Input
-                            id="ret-media"
-                            type="number"
-                            min={s.min_media_retention_days}
-                            max={3650}
-                            disabled={!canManage || !s.retention_enabled}
-                            value={s.media_retention_days}
-                            onChange={(e) => set({ media_retention_days: Number(e.target.value) })}
-                        />
-                    </Field>
-                </div>
-            </Card>
+            <p className="text-[13px] text-muted-foreground">
+                How long message text is kept is set in{' '}
+                <Link href="/settings?tab=data" className="font-medium text-foreground underline-offset-2 hover:underline">
+                    Settings › Data
+                </Link>
+                .
+            </p>
 
             {canManage && (
                 <div className="flex justify-end">

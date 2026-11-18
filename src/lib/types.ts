@@ -26,6 +26,23 @@ export type RoleCatalog = {
     custom_roles: boolean;
 };
 
+/** Settings › Data: one CSV export made in the background. */
+export type DataExport = {
+    id: string;
+    kind: string;
+    status: 'queued' | 'running' | 'ready' | 'failed';
+    rows: number | null;
+    error: string | null;
+    requested_by: string | null;
+    created_at: string;
+    finished_at: string | null;
+    expires_at: string | null;
+};
+export type DataExportKind = { key: string; label: string };
+
+/** A workspace deletion the Owner asked for: it happens on scheduled_for unless cancelled. */
+export type WorkspaceDeletion = { requested_at: string | null; scheduled_for: string | null; requested_by: string | null; waiting_days: number };
+
 export type Tenant = {
     id: string;
     name: string;
