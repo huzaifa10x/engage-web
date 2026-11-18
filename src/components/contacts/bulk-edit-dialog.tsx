@@ -54,6 +54,9 @@ export function BulkEditDialog({
     const [fieldMode, setFieldMode] = useState<'set' | 'clear'>('set');
     const [fieldValue, setFieldValue] = useState<AttributeValue>(undefined);
     const [stage, setStage] = useState<string>(KEEP);
+    // Lost needs a reason; Won without verified payments needs an approval reference (item 4).
+    const [stageReason, setStageReason] = useState('');
+    const stageGroup = stages.find((s) => s.id === stage)?.group;
     const [consent, setConsent] = useState<'keep' | 'opted_in' | 'opted_out'>('keep');
     const [note, setNote] = useState('');
     const [step, setStep] = useState<'edit' | 'review'>('edit');
@@ -99,7 +102,8 @@ export function BulkEditDialog({
             (fieldMode === 'clear'
                 ? `Clear ${field.label}`
                 : `Set ${field.label} to “${typeof fieldValue === 'boolean' ? (fieldValue ? 'Yes' : 'No') : Array.isArray(fieldValue) ? fieldValue.join(', ') : fieldValue}”`),
-        stage !== KEEP && `Move to the stage ${stage === NONE ? '“No stage”' : `“${stages.find((s) => s.id === stage)?.name ?? ''}”`}`,
+        stage !== KEEP &&
+            `Move to the stage ${stage === NONE ? '“No stage”' : `“${stages.find((s) => s.id === stage)?.name ?? ''}”`}${stageReason.trim() ? ` (${stageReason.trim()})` : ''}`,
         consent === 'opted_out' && 'Opt out of all WhatsApp messages (recorded in the consent ledger; running chatbots stop)',
         consent === 'opted_in' &&
             `Record an opt-in: “${note.trim()}”${optedOut > 0 ? ` — ${number(optedOut)} who opted out stay opted out (only they can subscribe again)` : ''}`,
@@ -113,7 +117,7 @@ export function BulkEditDialog({
             if (add.length) body.tags_add = add;
             if (remove.length) body.tags_remove = remove;
             if (field) body.field = { key: field.key, value: fieldMode === 'clear' ? null : fieldValue };
-            if (stage !== KEEP) body.stage = { id: stage === NONE ? null : stage };
+            if (stage !== KEEP) body.stage = { id: stage === NONE ? null : stage, reason: stageReason.trim() || null };
             if (consent !== 'keep') body.consent = { state: consent, note: note.trim() || null };
             const r = await api<{ data: Result }>('contacts/bulk-edit', { method: 'POST', body });
             const skipped = r.data.skipped.opted_out ?? 0;
@@ -218,6 +222,17 @@ export function BulkEditDialog({
                                         ))}
                                     </SelectContent>
                                 </Select>
+                                {(stageGroup === 'lost' || stageGroup === 'won') && (
+                                    <>
+                                        <Label htmlFor="bulk-stage-reason">{stageGroup === 'lost' ? 'Why were they lost?' : 'Reference'}</Label>
+                                        <Input id="bulk-stage-reason" value={stageReason} maxLength={200} onChange={(e) => setStageReason(e.target.value)} />
+                                        <p className="text-[12px] text-muted-foreground">
+                                            {stageGroup === 'won'
+                                                ? 'Leads without a verified payment need an invoice or receipt reference to be marked Won.'
+                                                : 'Saved with each lead’s stage change.'}
+                                        </p>
+                                    </>
+                                )}
                             </div>
                         )}
 

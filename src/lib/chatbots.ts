@@ -161,6 +161,8 @@ export type ChatbotOptions = {
     numbers: { id: string; display_phone_number: string | null; verified_name: string | null; status: string; waba_account_id: string }[];
     fields: { key: string; label: string; type: string }[];
     tags: string[];
+    /** Lead stages a "Tag / assign" step can set (item 4). */
+    stages?: { id: string; name: string; group: 'open' | 'won' | 'lost' }[];
     segments: { id: string; name: string }[];
     members: { id: string; name: string }[];
     teams: { id: string; name: string }[];
@@ -801,7 +803,7 @@ export function defaultConfig(type: NodeType): NodeConfig {
         case 'delay':
             return { mode: 'duration', minutes: 10, until: null, offset_minutes: 0 };
         case 'tag':
-            return { add: [], remove: [], assign: 'none', member_id: null };
+            return { add: [], remove: [], stage_id: null, assign: 'none', member_id: null };
         case 'optin':
             return { text: 'Thank you! You’re subscribed to our updates. Reply STOP at any time to unsubscribe.' };
         case 'optout':

@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { api, errorMessage } from '@/lib/api';
 import { P } from '@/lib/permissions';
 import { keys, useStages } from '@/lib/queries';
-import type { StageColor } from '@/lib/types';
+import type { CrmStage, StageColor, StageGroup } from '@/lib/types';
 
 const COLORS: { value: StageColor; label: string }[] = [
     { value: 'grey', label: 'Grey' },
@@ -25,6 +25,30 @@ const COLORS: { value: StageColor; label: string }[] = [
 ];
 
 /** Contacts › Segments, tags & fields › Stages: the workspace's pipeline. Owners and Admins edit it. */
+/** Reports count by group, so a stage can be renamed freely (item 4). */
+const GROUPS: { value: StageGroup; label: string }[] = [
+    { value: 'open', label: 'Open' },
+    { value: 'won', label: 'Won' },
+    { value: 'lost', label: 'Lost' },
+];
+
+function GroupSelect({ value, onChange, label, disabled }: { value: StageGroup; onChange: (g: StageGroup) => void; label: string; disabled?: boolean }) {
+    return (
+        <Select value={value} onValueChange={(v) => onChange(v as StageGroup)} disabled={disabled}>
+            <SelectTrigger className="h-8 w-24" aria-label={label}>
+                <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+                {GROUPS.map((g) => (
+                    <SelectItem key={g.value} value={g.value}>
+                        {g.label}
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    );
+}
+
 export function StagesTab({ open }: { open: boolean }) {
     const { can } = useSession();
     const editable = can(P.SettingsManage);
@@ -33,6 +57,8 @@ export function StagesTab({ open }: { open: boolean }) {
     const list = stages.data ?? [];
     const [name, setName] = useState('');
     const [color, setColor] = useState<StageColor>('grey');
+    const [group, setGroup] = useState<StageGroup>('open');
+    const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
 
     const run = useMutation({
         mutationFn: (action: () => Promise<unknown>) => action(),
@@ -45,8 +71,9 @@ export function StagesTab({ open }: { open: boolean }) {
 
     const add = () => {
         if (!name.trim()) return;
-        run.mutate(() => api('crm/stages', { method: 'POST', body: { name: name.trim(), color } }).then(() => setName('')));
+        run.mutate(() => api('crm/stages', { method: 'POST', body: { name: name.trim(), color, group } }).then(() => setName('')));
     };
+    const patch = (s: CrmStage, body: { name?: string; group?: StageGroup }) => run.mutate(() => api(`crm/stages/${s.id}`, { method: 'PATCH', body }));
     const moveBy = (index: number, by: -1 | 1) => {
         const ids = list.map((s) => s.id);
         const [id] = ids.splice(index, 1);
@@ -57,15 +84,15 @@ export function StagesTab({ open }: { open: boolean }) {
     return (
         <div className="grid gap-3">
             <p className="text-[12.5px] text-muted-foreground">
-                Stages show where each contact is in your sales process. Every change is kept in the contact’s history, so reports can count how many leads
-                qualified.
+                Stages show where each enquiry is in your sales process. Each stage is Open, Won or Lost, so reports keep working when you rename it. Won needs
+                a verified payment, or approval with a reference.
             </p>
             {list.length === 0 && !stages.isLoading && (
                 <div className="grid justify-items-center gap-2 rounded-lg border border-dashed p-5 text-center text-[13px] text-muted-foreground">
                     No stages yet.
                     {editable && (
                         <Button size="sm" onClick={() => run.mutate(() => api('crm/stages/suggested', { method: 'POST' }))} disabled={run.isPending}>
-                            Use suggested stages (New, Contacted, Qualified, Won, Lost)
+                            Use the default stages (New, Qualified, Quote sent, Booked, Won, Lost)
                         </Button>
                     )}
                 </div>
@@ -73,10 +100,45 @@ export function StagesTab({ open }: { open: boolean }) {
             <ol className="grid gap-1.5">
                 {list.map((s, i) => (
                     <li key={s.id} className="flex items-center gap-2 rounded-md border px-2.5 py-1.5">
-                        <Badge tone={s.color} dot>
-                            {s.name}
-                        </Badge>
+                        {renaming?.id === s.id ? (
+                            <form
+                                className="flex gap-1"
+                                onSubmit={(e) => {
+                                    e.preventDefault();
+                                    if (renaming.name.trim()) patch(s, { name: renaming.name.trim() });
+                                    setRenaming(null);
+                                }}
+                            >
+                                <Input
+                                    autoFocus
+                                    className="h-8 w-36"
+                                    value={renaming.name}
+                                    maxLength={40}
+                                    aria-label={`New name for ${s.name}`}
+                                    onChange={(e) => setRenaming({ id: s.id, name: e.target.value })}
+                                />
+                                <Button type="submit" size="sm" variant="outline">
+                                    Save
+                                </Button>
+                            </form>
+                        ) : (
+                            <button type="button" disabled={!editable} onClick={() => setRenaming({ id: s.id, name: s.name })} aria-label={`Rename ${s.name}`}>
+                                <Badge tone={s.color} dot>
+                                    {s.name}
+                                </Badge>
+                            </button>
+                        )}
                         <span className="text-[12px] text-muted-foreground">{s.contacts ?? 0} contact(s)</span>
+                        {editable ? (
+                            <GroupSelect
+                                value={s.group ?? 'open'}
+                                onChange={(g) => patch(s, { group: g })}
+                                label={`Group of ${s.name}`}
+                                disabled={run.isPending}
+                            />
+                        ) : (
+                            <span className="text-[12px] text-muted-foreground">{GROUPS.find((g) => g.value === (s.group ?? 'open'))?.label}</span>
+                        )}
                         {editable && (
                             <span className="ml-auto flex gap-0.5">
                                 <Button
@@ -135,6 +197,7 @@ export function StagesTab({ open }: { open: boolean }) {
                             ))}
                         </SelectContent>
                     </Select>
+                    <GroupSelect value={group} onChange={setGroup} label="Group" />
                     <Button type="submit" disabled={!name.trim() || run.isPending}>
                         <PlusIcon /> Add
                     </Button>

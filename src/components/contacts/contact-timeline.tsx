@@ -28,7 +28,12 @@ export type Enquiry = {
     source_confidence: 'verified' | 'partial' | 'unknown';
     confidence_label: string;
     owner: { id: string; name: string } | null;
-    stage: { id: string; name: string | null } | null;
+    stage: { id: string; name: string | null; group?: 'open' | 'won' | 'lost' } | null;
+    /** Sent back with a stage change, so two people can't overwrite each other. */
+    stage_version: number;
+    lost_reason: string | null;
+    /** A verified payment (store order paid) belongs to this enquiry: Won is allowed. */
+    verified_paid: boolean;
     last_activity_at: string | null;
     messages: number;
     payments: { type: string; id: string; number: string; status: string; total: number; currency: string; paid: boolean }[];
@@ -68,6 +73,15 @@ const REASONS: Record<Enquiry['start_reason'], string> = {
     manual: 'started by hand',
     backfill: 'from earlier messages',
     imported: 'from the imported WhatsApp Business app history',
+};
+
+/** What moved a stage, when it was not a person (item 4). */
+const STAGE_BY: Record<string, string> = {
+    flow: ' · by a flow',
+    booking: ' · by a booking',
+    payment: ' · by a verified payment',
+    lead_rule: ' · by the lead rule',
+    api: ' · through the API',
 };
 
 const BULK: Record<string, string> = { 'bulk update': 'in a bulk update', import: 'in an import', 'tag deleted': 'because the tag was deleted' };
@@ -129,7 +143,7 @@ function describeOnly(e: TimelineEntry): string {
         case 'conversation.reopened':
             return 'Chat reopened';
         case 'stage.changed':
-            return `Stage: ${s(d.from) || 'none'} → ${s(d.to) || 'none'}`;
+            return `Stage: ${s(d.from) || 'none'} → ${s(d.to) || 'none'}${d.note ? ` (${s(d.note)})` : ''}${STAGE_BY[s(d.reason)] ?? ''}`;
         case 'consent.changed':
             return `${s(d.action).replaceAll('_', ' ')} · ${s(d.source_label)}`;
         case 'payment.paid':

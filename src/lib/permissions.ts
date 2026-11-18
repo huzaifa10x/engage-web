@@ -37,6 +37,8 @@ export const P = {
     GrowthView: 'growth.view',
     GrowthManage: 'growth.manage',
     InboxRawText: 'inbox.raw_text',
+    StagesChange: 'stages.change',
+    StagesApproveWon: 'stages.approve_won',
 } as const;
 
 export type PermissionKey = (typeof P)[keyof typeof P];

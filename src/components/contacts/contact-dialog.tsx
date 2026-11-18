@@ -11,6 +11,7 @@ import { Field, FormError } from '@/components/app/field';
 import { ContactTimeline } from '@/components/contacts/contact-timeline';
 import { AcquisitionCard } from '@/components/growth/acquisition-card';
 import { ConsentHistory } from '@/components/contacts/consent-history';
+import { stageRequirement, useCurrentEnquiry } from './change-stage-dialog';
 import { StageHistory } from './stage-history';
 import { StageBadge } from './stage-badge';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { api, ApiError } from '@/lib/api';
 import { applyServerErrors } from '@/lib/form';
 import { useSession } from '@/components/app/session';
+import { P } from '@/lib/permissions';
 import { keys, useContactFields, useStages, useTags } from '@/lib/queries';
 import type { Contact, ContactField } from '@/lib/types';
 
@@ -127,9 +129,19 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
     const editsStage = editing && (role === 'owner' || role === 'admin');
     const stages = (useStages(open && editsStage).data ?? []).filter((s) => !s.archived);
     const [stageId, setStageId] = useState<string>(NO_STAGE);
+    const [stageReason, setStageReason] = useState('');
+    // The stage belongs to the current enquiry; its version is sent back so nobody is overwritten (item 4).
+    const enquiry = useCurrentEnquiry(contact?.id ?? '', open && editsStage && !!contact);
+    const { can } = useSession();
+    const stageNeed = stageRequirement(
+        stages.find((s) => s.id === stageId),
+        enquiry.data,
+        can(P.StagesApproveWon),
+    );
     if (open && loaded !== (contact?.id ?? null)) {
         setLoaded(contact?.id ?? null);
         setStageId(contact?.stage?.id ?? NO_STAGE);
+        setStageReason('');
         setTags(contact?.tags ?? []);
         setAttributes(Object.fromEntries(Object.entries(contact?.attributes ?? {}).map(([k, v]) => [k, toFormValue(v)])));
         setFieldErrors({});
@@ -160,7 +172,11 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
                 await api(`contacts/${contact.id}`, { method: 'PATCH', body: { name: v.name || null, email: v.email || null, tags, attributes: extra } });
                 const nextStage = stageId === NO_STAGE ? null : stageId;
                 if (editsStage && nextStage !== (contact.stage?.id ?? null)) {
-                    await api(`contacts/${contact.id}/stage`, { method: 'POST', body: { stage_id: nextStage, via: 'contact' } });
+                    await api(`contacts/${contact.id}/stage`, {
+                        method: 'POST',
+                        body: { stage_id: nextStage, version: enquiry.data?.stage_version ?? 0, reason: stageReason.trim() || null, via: 'contact' },
+                    });
+                    void qc.invalidateQueries({ queryKey: ['contacts', contact.id] });
                     void qc.invalidateQueries({ queryKey: keys.stageHistory(contact.id) });
                     void qc.invalidateQueries({ queryKey: keys.stages });
                     void qc.invalidateQueries({ queryKey: keys.leadsAll });
@@ -268,6 +284,18 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
                             </Select>
                         </Field>
                     )}
+                    {editsStage &&
+                        stageNeed &&
+                        stageId !== (contact?.stage?.id ?? NO_STAGE) &&
+                        (stageNeed.kind === 'blocked' ? (
+                            <p role="alert" className="rounded-md bg-warn-bg px-3 py-2 text-[12.5px] text-warn">
+                                {stageNeed.hint}
+                            </p>
+                        ) : (
+                            <Field label={stageNeed.label} htmlFor="c-stage-reason" hint={stageNeed.hint}>
+                                <Input id="c-stage-reason" value={stageReason} maxLength={200} onChange={(e) => setStageReason(e.target.value)} />
+                            </Field>
+                        ))}
                     <Field label="Tags" htmlFor="c-tags" hint="Used to build segments and campaign audiences">
                         <TagInput id="c-tags" value={tags} onChange={setTags} suggestions={(tagList.data ?? []).map((t) => t.name)} />
                     </Field>

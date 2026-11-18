@@ -1024,6 +1024,23 @@ function Editor({ ctx, onWebhook }: { ctx: Ctx; onWebhook: (enabled: boolean) =>
                     <Row label="Remove tags">
                         <TagInput value={c.remove ?? []} onChange={(remove) => set({ remove })} suggestions={options?.tags ?? []} />
                     </Row>
+                    <Row label="Set the stage" hint="Moves the lead on its current enquiry. Won is set by a verified payment, never by a flow.">
+                        <Select value={c.stage_id ?? 'keep'} onValueChange={(v) => set({ stage_id: v === 'keep' ? null : v })}>
+                            <SelectTrigger size="sm" aria-label="Set the stage">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="keep">Don’t change the stage</SelectItem>
+                                {(options?.stages ?? [])
+                                    .filter((s) => s.group !== 'won')
+                                    .map((s) => (
+                                        <SelectItem key={s.id} value={s.id}>
+                                            {s.name}
+                                        </SelectItem>
+                                    ))}
+                            </SelectContent>
+                        </Select>
+                    </Row>
                     <AssignPicker c={c} set={set} options={options} noneLabel="Don’t assign" />
                 </>
             );

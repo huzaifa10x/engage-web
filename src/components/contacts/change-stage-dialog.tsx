@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckIcon } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -8,39 +8,84 @@ import { toast } from 'sonner';
 import { useSession } from '@/components/app/session';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { api, errorMessage } from '@/lib/api';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { api, ApiError, errorMessage } from '@/lib/api';
 import { P } from '@/lib/permissions';
 import { keys, useStages } from '@/lib/queries';
-import type { Contact } from '@/lib/types';
+import type { Contact, CrmStage, StageRef } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
+import type { Enquiry } from './contact-timeline';
 import { StageBadge } from './stage-badge';
 
 /** Where a stage change is made. "contact" (the Contacts & CRM edit form) is Owner and Admin only. */
 export type StageVia = 'chat' | 'leads' | 'contact';
 
+/** The contact's current enquiry: its stage, the version to send back, and whether a verified payment allows Won. */
+export function useCurrentEnquiry(contactId: string, enabled = true) {
+    return useQuery({
+        queryKey: ['contacts', contactId, 'enquiries'],
+        queryFn: () => api<{ data: Enquiry[] }>(`contacts/${contactId}/enquiries`).then((r) => r.data),
+        enabled,
+        select: (list) => list.find((e) => e.current) ?? null,
+    });
+}
+
+export function invalidateStage(qc: ReturnType<typeof useQueryClient>, contactId: string) {
+    void qc.invalidateQueries({ queryKey: keys.contactsAll });
+    void qc.invalidateQueries({ queryKey: keys.conversationsAll });
+    void qc.invalidateQueries({ queryKey: keys.leadsAll });
+    void qc.invalidateQueries({ queryKey: keys.stages });
+    void qc.invalidateQueries({ queryKey: keys.stageHistory(contactId) });
+    void qc.invalidateQueries({ queryKey: ['contacts', contactId] });
+    void qc.invalidateQueries({ queryKey: ['inbox', 'conversation'] });
+}
+
+/**
+ * What a move to this stage still needs (item 4): a lost reason, or for Won without a verified
+ * payment, a reference from someone allowed to approve Won. null when it needs nothing more.
+ */
+export function stageRequirement(
+    stage: Pick<CrmStage, 'group'> | null | undefined,
+    enquiry: Pick<Enquiry, 'verified_paid'> | null | undefined,
+    canApproveWon: boolean,
+): { kind: 'lost' | 'reference' | 'blocked'; label: string; hint: string } | null {
+    if (stage?.group === 'lost') return { kind: 'lost', label: 'Why was it lost?', hint: 'For example: chose another company, too expensive, dates changed.' };
+    if (stage?.group !== 'won' || enquiry?.verified_paid) return null;
+    if (canApproveWon)
+        return { kind: 'reference', label: 'Reference', hint: 'No verified payment on this enquiry yet: add the invoice or receipt number that proves it.' };
+
+    return {
+        kind: 'blocked',
+        label: '',
+        hint: 'Won needs a verified payment (Stripe, WooCommerce or an authorised person). Ask someone allowed to approve Won.',
+    };
+}
+
 export function useMoveStage(contact: Contact, via: StageVia, onDone?: () => void) {
     const qc = useQueryClient();
 
     return useMutation({
-        mutationFn: (stageId: string | null) => api(`contacts/${contact.id}/stage`, { method: 'POST', body: { stage_id: stageId, via } }),
+        mutationFn: ({ stageId, version, reason }: { stageId: string | null; version: number; reason?: string | null }) =>
+            api(`contacts/${contact.id}/stage`, { method: 'POST', body: { stage_id: stageId, version, reason: reason?.trim() || null, via } }),
         onSuccess: () => {
-            void qc.invalidateQueries({ queryKey: keys.contactsAll });
-            void qc.invalidateQueries({ queryKey: keys.conversationsAll });
-            void qc.invalidateQueries({ queryKey: keys.leadsAll });
-            void qc.invalidateQueries({ queryKey: keys.stages });
-            void qc.invalidateQueries({ queryKey: keys.stageHistory(contact.id) });
-            void qc.invalidateQueries({ queryKey: ['inbox', 'conversation'] });
+            invalidateStage(qc, contact.id);
             onDone?.();
         },
-        onError: (e) => toast.error(errorMessage(e)),
+        onError: (e) => {
+            toast.error(errorMessage(e));
+            // Someone else changed it (409): show the stage as it is now.
+            if (e instanceof ApiError && e.status === 409) invalidateStage(qc, contact.id);
+        },
     });
 }
 
 /**
  * Contacts & CRM owns the stage (Technical Specification v1.2 §1); Contacts & CRM itself only shows
  * it. It is changed from the chat sidebar and Growth Hub › Leads with this action, or by an Owner or
- * Admin in the contact's edit form. Every change goes to the stage history (CN-01).
+ * Admin in the contact's edit form. The stage belongs to the contact's current enquiry; every change
+ * is kept in its history, and two people can't overwrite each other (item 4).
  */
 export function ChangeStageDialog({
     contact,
@@ -53,20 +98,32 @@ export function ChangeStageDialog({
     open: boolean;
     onOpenChange: (open: boolean) => void;
 }) {
+    const { can } = useSession();
     const stages = (useStages(open).data ?? []).filter((s) => !s.archived);
+    const enquiry = useCurrentEnquiry(contact.id, open);
     const [picked, setPicked] = useState<string | null | undefined>(undefined);
-    const current = contact.stage?.id ?? null;
+    const [reason, setReason] = useState('');
+    const current = enquiry.data?.stage?.id ?? contact.stage?.id ?? null;
     const choice = picked === undefined ? current : picked;
+    const need = stageRequirement(
+        stages.find((s) => s.id === choice),
+        enquiry.data,
+        can(P.StagesApproveWon),
+    );
+    const ready = need === null || (need.kind !== 'blocked' && reason.trim() !== '');
 
     const move = useMoveStage(contact, via, () => {
         toast.success('Stage updated · saved to Contacts & CRM');
-        onOpenChange(false);
+        close(false);
     });
 
-    const close = (o: boolean) => {
-        if (!o) setPicked(undefined);
+    function close(o: boolean) {
+        if (!o) {
+            setPicked(undefined);
+            setReason('');
+        }
         onOpenChange(o);
-    };
+    }
 
     return (
         <Dialog open={open} onOpenChange={close}>
@@ -74,7 +131,12 @@ export function ChangeStageDialog({
                 <DialogHeader>
                     <DialogTitle>Change stage</DialogTitle>
                     <DialogDescription>
-                        {contact.display_name} is now <StageBadge stage={contact.stage} className="align-middle" />. The change is kept in the stage history.
+                        {contact.display_name} is now{' '}
+                        <StageBadge
+                            stage={enquiry.data?.stage ? ({ ...contact.stage, ...enquiry.data.stage } as StageRef) : contact.stage}
+                            className="align-middle"
+                        />
+                        {enquiry.data ? ` (enquiry ${enquiry.data.number})` : ''}. The change is kept in the history.
                     </DialogDescription>
                 </DialogHeader>
                 {stages.length === 0 ? (
@@ -102,11 +164,29 @@ export function ChangeStageDialog({
                         ))}
                     </ul>
                 )}
+                {need && choice !== current && (
+                    <div className="grid gap-1.5">
+                        {need.kind === 'blocked' ? (
+                            <p role="alert" className="rounded-md bg-warn-bg px-3 py-2 text-[12.5px] text-warn">
+                                {need.hint}
+                            </p>
+                        ) : (
+                            <>
+                                <Label htmlFor="stage-reason">{need.label}</Label>
+                                <Input id="stage-reason" value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} />
+                                <p className="text-[12px] text-muted-foreground">{need.hint}</p>
+                            </>
+                        )}
+                    </div>
+                )}
                 <DialogFooter>
                     <Button variant="outline" onClick={() => close(false)}>
                         Cancel
                     </Button>
-                    <Button onClick={() => move.mutate(choice)} disabled={move.isPending || choice === current || stages.length === 0}>
+                    <Button
+                        onClick={() => move.mutate({ stageId: choice, version: enquiry.data?.stage_version ?? 0, reason })}
+                        disabled={move.isPending || enquiry.isLoading || choice === current || stages.length === 0 || !ready}
+                    >
                         Save stage
                     </Button>
                 </DialogFooter>
@@ -119,7 +199,7 @@ export function ChangeStageDialog({
 export function ChangeStageButton({ contact, via, className }: { contact: Contact; via: Exclude<StageVia, 'contact'>; className?: string }) {
     const { can } = useSession();
     const [open, setOpen] = useState(false);
-    if (!can(P.ContactsUpdate)) return null;
+    if (!can(P.StagesChange)) return null;
 
     return (
         <>

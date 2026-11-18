@@ -291,11 +291,24 @@ export type Contact = {
 
 export type StageColor = 'grey' | 'info' | 'good' | 'warn' | 'bad' | 'brand';
 
-export type StageRef = { id: string; name: string; color: StageColor; archived: boolean };
+/** group: Open, Won or Lost — reports count by group, whatever the stage is called (item 4). */
+export type StageGroup = 'open' | 'won' | 'lost';
+
+export type StageRef = { id: string; name: string; color: StageColor; archived: boolean; group?: StageGroup };
 
 export type CrmStage = StageRef & { position: number; contacts?: number };
 
-export type StageEvent = { id: string; from: StageRef | null; to: StageRef | null; changed_by: string | null; source: string; changed_at: string };
+export type StageEvent = {
+    id: string;
+    from: StageRef | null;
+    to: StageRef | null;
+    changed_by: string | null;
+    source: string;
+    reason?: string | null;
+    version?: number | null;
+    enquiry_id?: string | null;
+    changed_at: string;
+};
 
 export type AcquisitionStatus = 'meta' | 'ref' | 'multi' | 'web' | 'unattributed' | 'before';
 
