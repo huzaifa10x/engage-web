@@ -2,6 +2,7 @@
 
 import { createContext, useContext } from 'react';
 
+import { setWorkspaceDates } from '@/lib/format';
 import { can as canDo, type PermissionKey } from '@/lib/permissions';
 import type { Me, Membership } from '@/lib/types';
 
@@ -16,6 +17,9 @@ const SessionContext = createContext<Session | null>(null);
 
 export function SessionProvider({ me, children }: { me: Me; children: React.ReactNode }) {
     const membership = me.memberships.find((m) => m.tenant?.id === me.active_tenant_id) ?? me.memberships[0];
+    // Screens show dates in the workspace's format and time zone (item 1). Set during render so the
+    // first paint already uses them; it only changes when the workspace or its settings change.
+    setWorkspaceDates(me.dates);
     const value: Session = {
         me,
         membership,

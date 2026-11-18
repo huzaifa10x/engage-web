@@ -5,6 +5,7 @@ import { ExternalLinkIcon, MegaphoneIcon, PlusIcon, SendIcon, XIcon } from 'luci
 import { useState } from 'react';
 import { toast } from 'sonner';
 
+import { DateField } from '@/components/app/date-field';
 import { Badge, type Tone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -365,11 +366,11 @@ function EventsLog() {
                 </Select>
                 <label className="grid gap-1 text-[12px] text-muted-foreground">
                     From
-                    <Input
-                        type="date"
+                    <DateField
+                        aria-label="From"
                         value={from}
-                        onChange={(e) => {
-                            setFrom(e.target.value);
+                        onChange={(v) => {
+                            setFrom(v);
                             setPage(1);
                         }}
                         className="w-40"
@@ -377,11 +378,11 @@ function EventsLog() {
                 </label>
                 <label className="grid gap-1 text-[12px] text-muted-foreground">
                     To
-                    <Input
-                        type="date"
+                    <DateField
+                        aria-label="To"
                         value={to}
-                        onChange={(e) => {
-                            setTo(e.target.value);
+                        onChange={(v) => {
+                            setTo(v);
                             setPage(1);
                         }}
                         className="w-40"

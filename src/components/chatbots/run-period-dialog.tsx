@@ -3,25 +3,21 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 
+import { DateTimeField } from '@/components/app/date-field';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ApiError, errorMessage } from '@/lib/api';
 import { saveChatbot, type ChatbotFlowDetail } from '@/lib/chatbots';
+import { dateTime, isoToZoned, workspaceDates, zonedToIso } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
 type Flow = { id: string; name: string; is_active: boolean; published_version: number | null; activate_at: string | null; deactivate_at: string | null };
 
-const local = (iso: string | null) => {
-    if (!iso) return '';
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, '0');
+const local = (iso: string | null) => isoToZoned(iso);
 
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-};
-
-const when = (iso: string) => new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+const when = (iso: string) => dateTime(iso);
 
 /** One line for badges and the top bar: "Runs until 30 Nov, 18:00", "Starts 1 Dec, 09:00 · ends …", or null when it runs indefinitely. */
 export function runPeriodLabel(flow: Pick<Flow, 'activate_at' | 'deactivate_at'>): string | null {
@@ -53,7 +49,7 @@ export function RunPeriodDialog({ flow, onClose, onSaved }: { flow: Flow | null;
     }
     if (!flow && for_ !== null) setFor(null);
 
-    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const zone = workspaceDates().timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
     const live = flow?.is_active ?? false;
 
     const save = async () => {
@@ -63,8 +59,8 @@ export function RunPeriodDialog({ flow, onClose, onSaved }: { flow: Flow | null;
         if (mode === 'period') {
             if (!off) return setError('Choose when the bot stops. To keep it running, pick “Keep running until I switch it off”.');
             if (!live && !on) return setError('Choose when the bot starts, or switch it on now and set only the end.');
-            if (on && off && new Date(off) <= new Date(on)) return setError('The end must be after the start.');
-            body = { activate_at: on && !live ? new Date(on).toISOString() : null, deactivate_at: new Date(off).toISOString() };
+            if (on && off && off <= on) return setError('The end must be after the start.');
+            body = { activate_at: on && !live ? zonedToIso(on) : null, deactivate_at: zonedToIso(off) };
         }
         setSaving(true);
         try {
@@ -112,17 +108,17 @@ export function RunPeriodDialog({ flow, onClose, onSaved }: { flow: Flow | null;
                     <div className="grid gap-3 sm:grid-cols-2">
                         <div className="grid gap-1.5">
                             <Label htmlFor="rp-on">Starts</Label>
-                            <Input id="rp-on" type="datetime-local" value={live ? '' : on} onChange={(e) => setOn(e.target.value)} disabled={live} />
+                            <DateTimeField id="rp-on" aria-label="Starts" value={live ? '' : on} onChange={setOn} disabled={live} />
                             <p className="text-[11.5px] text-muted-foreground">{live ? 'It is live already.' : 'Leave empty and switch it on yourself.'}</p>
                         </div>
                         <div className="grid gap-1.5">
                             <Label htmlFor="rp-off">Ends</Label>
-                            <Input id="rp-off" type="datetime-local" value={off} onChange={(e) => setOff(e.target.value)} />
+                            <DateTimeField id="rp-off" aria-label="Ends" value={off} onChange={setOff} />
                             <p className="text-[11.5px] text-muted-foreground">Conversations still running then are stopped.</p>
                         </div>
                     </div>
                 )}
-                <p className="text-[11.5px] text-muted-foreground">Times are in your time zone ({zone}).</p>
+                <p className="text-[11.5px] text-muted-foreground">Times are in the workspace’s time zone ({zone.replace(/_/g, ' ')}).</p>
                 {error && <p className="rounded-md bg-bad-bg px-3 py-2 text-[12.5px] text-bad">{error}</p>}
                 <DialogFooter>
                     <Button variant="outline" onClick={onClose}>

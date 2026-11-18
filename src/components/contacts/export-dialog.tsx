@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { DownloadIcon } from 'lucide-react';
 import { useState } from 'react';
 
+import { DateField } from '@/components/app/date-field';
 import { Field } from '@/components/app/field';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -174,10 +175,10 @@ export function ExportContactsDialog({
                         </Field>
                     )}
                     <Field label="Added from" htmlFor="ex-from">
-                        <Input id="ex-from" type="date" value={f.added_from ?? ''} onChange={(e) => set({ added_from: e.target.value || undefined })} />
+                        <DateField id="ex-from" aria-label="Added from" value={f.added_from ?? ''} onChange={(v) => set({ added_from: v || undefined })} />
                     </Field>
                     <Field label="Added until" htmlFor="ex-to" error={badRange ? 'Choose a date after “Added from”.' : undefined}>
-                        <Input id="ex-to" type="date" value={f.added_to ?? ''} onChange={(e) => set({ added_to: e.target.value || undefined })} />
+                        <DateField id="ex-to" aria-label="Added until" value={f.added_to ?? ''} onChange={(v) => set({ added_to: v || undefined })} />
                     </Field>
                 </div>
                 {current.filter && (

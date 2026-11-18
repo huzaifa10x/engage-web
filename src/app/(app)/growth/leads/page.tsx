@@ -4,6 +4,7 @@ import { DownloadIcon, SearchIcon, TargetIcon } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 
+import { DateField } from '@/components/app/date-field';
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSelectedNumber } from '@/components/app/number-switcher';
 import { useSession } from '@/components/app/session';
@@ -113,9 +114,9 @@ function DateRange({ filters, onChange }: { filters: LeadFilters; onChange: (pat
                         onChange({ since, until, days: undefined });
                     }}
                 >
-                    <Input type="date" aria-label="From" value={since} max={until || undefined} onChange={(e) => setSince(e.target.value)} className="w-auto" />
+                    <DateField aria-label="From" value={since} max={until || undefined} onChange={setSince} className="w-40" />
                     <span className="text-muted-foreground">to</span>
-                    <Input type="date" aria-label="To" value={until} min={since || undefined} onChange={(e) => setUntil(e.target.value)} className="w-auto" />
+                    <DateField aria-label="To" value={until} min={since || undefined} onChange={setUntil} className="w-40" />
                     <Button type="submit" size="sm" disabled={!!error}>
                         Apply
                     </Button>

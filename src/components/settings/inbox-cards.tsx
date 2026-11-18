@@ -5,6 +5,7 @@ import { PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
+import { DateField } from '@/components/app/date-field';
 import { Field, FormError } from '@/components/app/field';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -396,7 +397,7 @@ function Holidays({ value, disabled, onChange }: { value: InboxSettings; disable
                 ))}
             </ul>
             <div className="flex flex-wrap items-center gap-2">
-                <Input type="date" className="w-44" aria-label="Holiday date" value={date} disabled={disabled} onChange={(e) => setDate(e.target.value)} />
+                <DateField className="w-44" aria-label="Holiday date" value={date} disabled={disabled} onChange={setDate} />
                 <Input
                     className="w-56"
                     placeholder="Eid Al Adha"

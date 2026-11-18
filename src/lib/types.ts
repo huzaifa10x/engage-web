@@ -23,6 +23,7 @@ export type Tenant = {
     slug: string;
     status: 'active' | 'suspended' | string;
     timezone: string;
+    date_format: 'dmy' | 'mdy' | 'ymd';
     locale: string;
     currency: string;
     country: string | null;
@@ -74,6 +75,8 @@ export type Me = {
     /** Growth Hub pilot switch for the active workspace (set by 10X Engage, not part of a plan). */
     /** tier: off | chip (Starter: Meta ad source chip only) | full (Growth Hub and Analytics → Marketing). */
     growth?: { enabled: boolean; tier?: 'off' | 'chip' | 'full' };
+    /** The active workspace's date format and time zone (screens follow them). */
+    dates?: { format: 'dmy' | 'mdy' | 'ymd'; timezone: string } | null;
     /** Two-factor sign-in; an Owner without it must set it up before using the workspace. */
     two_factor?: TwoFactorStatus;
 };

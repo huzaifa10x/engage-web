@@ -12,6 +12,16 @@ import { useSession } from '@/components/app/session';
 import { TwoFactorCard } from '@/components/auth/two-factor';
 import { EmailNotificationsCard, RememberedDevicesCard } from '@/components/settings/account-cards';
 import { BusinessHoursCard, CannedResponsesCard, InboxRulesCard } from '@/components/settings/inbox-cards';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -20,7 +30,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { COUNTRIES } from '@/lib/countries';
-import { date } from '@/lib/format';
+import { date, DATE_FORMAT_LABELS, type DateFormat, dayText } from '@/lib/format';
 import { P } from '@/lib/permissions';
 import { keys, useTenant } from '@/lib/queries';
 import type { Tenant } from '@/lib/types';
@@ -50,6 +60,7 @@ const SIZES = ['1', '2-10', '11-50', '51-200', '201-500', '500+'];
 type Form = Record<
     | 'name'
     | 'timezone'
+    | 'date_format'
     | 'locale'
     | 'legal_name'
     | 'industry'
@@ -68,6 +79,7 @@ type Form = Record<
 const fromTenant = (t: Tenant): Form => ({
     name: t.name,
     timezone: t.timezone,
+    date_format: t.date_format ?? 'dmy',
     locale: t.locale === 'ar' ? 'ar' : 'en',
     legal_name: t.legal_name ?? '',
     industry: t.industry ?? '',
@@ -89,6 +101,9 @@ function WorkspaceForm({ tenant, canManage, section }: { tenant: Tenant; canMana
     const [errors, setErrors] = useState<Record<string, string[]>>({});
     const [formError, setFormError] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+    // Changing the date format or time zone is confirmed first (item 1): what it changes, and what it doesn't.
+    const [confirmDates, setConfirmDates] = useState(false);
+    const datesChanged = form.date_format !== (tenant.date_format ?? 'dmy') || form.timezone !== tenant.timezone;
     const timezones = useMemo(() => (typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [tenant.timezone]), [tenant.timezone]);
     const dirty = JSON.stringify(form) !== JSON.stringify(fromTenant(tenant));
     const set = (key: keyof Form) => (value: string) => setForm((f) => ({ ...f, [key]: value }));
@@ -111,12 +126,16 @@ function WorkspaceForm({ tenant, canManage, section }: { tenant: Tenant; canMana
         try {
             const website = form.website.trim() && !/^https?:\/\//i.test(form.website.trim()) ? `https://${form.website.trim()}` : form.website.trim();
             const body = Object.fromEntries(
-                Object.entries({ ...form, website }).map(([k, v]) => [k, v.trim() === '' && !['name', 'timezone', 'locale'].includes(k) ? null : v.trim()]),
+                Object.entries({ ...form, website }).map(([k, v]) => [
+                    k,
+                    v.trim() === '' && !['name', 'timezone', 'locale', 'date_format'].includes(k) ? null : v.trim(),
+                ]),
             );
             const res = await api<{ data: Tenant }>('tenant', { method: 'PATCH', body });
             qc.setQueryData(keys.tenant, res.data);
             setForm(fromTenant(res.data));
             void qc.invalidateQueries({ queryKey: keys.me });
+            setConfirmDates(false);
             void qc.invalidateQueries({ queryKey: ['billing'] });
             toast.success('Workspace settings saved');
         } catch (e) {
@@ -153,6 +172,25 @@ function WorkspaceForm({ tenant, canManage, section }: { tenant: Tenant; canMana
                                     {timezones.map((tz) => (
                                         <SelectItem key={tz} value={tz}>
                                             {tz.replace(/_/g, ' ')}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </Field>
+                        <Field
+                            label="Date format"
+                            htmlFor="ws-date_format"
+                            error={err('date_format')}
+                            hint="How dates are shown, and how typed dates are read in flows"
+                        >
+                            <Select value={form.date_format} onValueChange={set('date_format')} disabled={!canManage}>
+                                <SelectTrigger id="ws-date_format">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {(Object.keys(DATE_FORMAT_LABELS) as DateFormat[]).map((f) => (
+                                        <SelectItem key={f} value={f}>
+                                            {DATE_FORMAT_LABELS[f]} ({dayText('2026-11-18', f)})
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
@@ -278,11 +316,53 @@ function WorkspaceForm({ tenant, canManage, section }: { tenant: Tenant; canMana
                     <Button variant="outline" onClick={() => setForm(fromTenant(tenant))} disabled={!dirty || saving}>
                         Discard changes
                     </Button>
-                    <Button onClick={save} disabled={!dirty || saving}>
+                    <Button onClick={() => (datesChanged ? setConfirmDates(true) : void save())} disabled={!dirty || saving}>
                         {saving ? 'Saving…' : 'Save changes'}
                     </Button>
                 </div>
             )}
+            <AlertDialog open={confirmDates} onOpenChange={setConfirmDates}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Change how dates work in this workspace?</AlertDialogTitle>
+                        <AlertDialogDescription asChild>
+                            <div className="grid gap-2">
+                                {form.date_format !== (tenant.date_format ?? 'dmy') && (
+                                    <p>
+                                        Typed dates in live flows will be read in the new format from now on (
+                                        {DATE_FORMAT_LABELS[form.date_format as DateFormat]}: a customer typing 5/1 means{' '}
+                                        {form.date_format === 'mdy'
+                                            ? 'May 1'
+                                            : form.date_format === 'ymd'
+                                              ? 'nothing until they write 2026-01-05'
+                                              : '5 January'}
+                                        ).
+                                    </p>
+                                )}
+                                {form.timezone !== tenant.timezone && (
+                                    <p>
+                                        Times will be shown in {form.timezone.replace(/_/g, ' ')}. Bookings and scheduled messages keep the moment they were set
+                                        for.
+                                    </p>
+                                )}
+                                <p>The change is recorded in the Audit log.</p>
+                            </div>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={saving}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            disabled={saving}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                void save();
+                            }}
+                        >
+                            {saving ? 'Saving…' : 'Change'}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

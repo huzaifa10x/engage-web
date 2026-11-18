@@ -4,6 +4,7 @@ import { DownloadIcon, PieChartIcon, SettingsIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 
+import { DateField } from '@/components/app/date-field';
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSelectedNumber } from '@/components/app/number-switcher';
 import { useSession } from '@/components/app/session';
@@ -251,22 +252,20 @@ export default function MarketingPage() {
                 </Select>
                 {preset === 'custom' && (
                     <>
-                        <Input
-                            type="date"
+                        <DateField
                             className="w-40"
                             aria-label="From"
                             value={custom.from}
                             max={custom.to}
-                            onChange={(e) => e.target.value && setCustom((c) => ({ ...c, from: e.target.value }))}
+                            onChange={(v) => v && setCustom((c) => ({ ...c, from: v }))}
                         />
-                        <Input
-                            type="date"
+                        <DateField
                             className="w-40"
                             aria-label="To"
                             value={custom.to}
                             min={custom.from}
                             max={today}
-                            onChange={(e) => e.target.value && setCustom((c) => ({ ...c, to: e.target.value }))}
+                            onChange={(v) => v && setCustom((c) => ({ ...c, to: v }))}
                         />
                     </>
                 )}

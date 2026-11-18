@@ -5,6 +5,7 @@ import { DownloadIcon, EyeIcon, Loader2Icon, UploadIcon } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
 
+import { DateTimeField } from '@/components/app/date-field';
 import { Field, FormError } from '@/components/app/field';
 import { abForm, AbTestSettings, emptyAb, type AbState } from '@/components/campaigns/ab-test-settings';
 import { CategoryChangeWarning, CostEstimateBox } from '@/components/campaigns/cost-estimate';
@@ -19,6 +20,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { ApiError, errorMessage } from '@/lib/api';
+import { clockTime, isoToZoned, workspaceDates, zonedToIso } from '@/lib/format';
 import {
     importContacts,
     keys,
@@ -55,8 +57,8 @@ const CATEGORIES: [string, string, string][] = [
 const textarea =
     'field-sizing-content min-h-16 w-full resize-y rounded-md border border-input bg-card px-3 py-2 text-sm leading-5 outline-none placeholder:text-faint focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20';
 
-/** Local date-time for <input type="datetime-local">, one hour from now. */
-const inAnHour = () => new Date(Date.now() + 3_600_000 - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+/** One hour from now, as a wall-clock time in the workspace's time zone (for the DateTimeField). */
+const inAnHour = () => isoToZoned(new Date(Date.now() + 3_600_000).toISOString());
 
 function Section({ step, title, children }: { step: string; title: string; children: React.ReactNode }) {
     return (
@@ -286,7 +288,7 @@ export function CampaignDialog({
         try {
             const saved = await saveCampaign(campaign?.id ?? null, form);
             if (launch) {
-                await launchCampaign(saved.id, when === 'later' ? new Date(at).toISOString() : null, needsConfirmation && consentConfirmed);
+                await launchCampaign(saved.id, when === 'later' ? zonedToIso(at) : null, needsConfirmation && consentConfirmed);
                 toast.success(
                     when === 'later' ? 'Campaign scheduled' : a?.quiet_until ? 'Campaign queued; it starts when quiet hours end' : 'Campaign started',
                 );
@@ -656,18 +658,20 @@ export function CampaignDialog({
                                 </Select>
                             </Field>
                             {when === 'later' && (
-                                <Field label="Date and time" htmlFor="cp-at" hint="In your local time">
-                                    <Input id="cp-at" type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} />
+                                <Field
+                                    label="Date and time"
+                                    htmlFor="cp-at"
+                                    hint={`In the workspace’s time zone (${(workspaceDates().timezone ?? '').replace(/_/g, ' ')})`}
+                                >
+                                    <DateTimeField id="cp-at" aria-label="Send" value={at} onChange={setAt} />
                                 </Field>
                             )}
                         </div>
                         {marketing && a?.quiet_hours && (
                             <p className="-mt-1 text-[12.5px] text-muted-foreground">
                                 Quiet hours: marketing is not sent between {a.quiet_hours.start} and {a.quiet_hours.end} ({a.quiet_hours.timezone}).
-                                {a.quiet_until && when === 'now'
-                                    ? ` It is quiet time now, so sending starts at ${new Date(a.quiet_until).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}.`
-                                    : ''}{' '}
-                                Change this in Consent & Privacy.
+                                {a.quiet_until && when === 'now' ? ` It is quiet time now, so sending starts at ${clockTime(a.quiet_until)}.` : ''} Change this
+                                in Consent & Privacy.
                             </p>
                         )}
                     </Section>
