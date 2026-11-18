@@ -133,7 +133,7 @@ function Runs() {
                                         <tr key={r.id} className={cn('click', open === r.id && 'sel')} onClick={() => setOpen(r.id)}>
                                             <td>
                                                 <b>{r.contact?.name ?? 'Unknown'}</b>
-                                                {r.contact?.phone && <div className="cb-small cb-muted">+{r.contact.phone}</div>}
+                                                {r.contact?.phone && <div className="cb-small cb-muted">{r.contact.phone}</div>}
                                             </td>
                                             <td className="cb-small">
                                                 {r.flow.name}

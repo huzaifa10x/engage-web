@@ -79,6 +79,7 @@ import type {
     Paginated,
     PhoneNumber,
     Role,
+    RoleCatalog,
     SignupAttempt,
     SignupLaunch,
     TemplateForm,
@@ -100,6 +101,7 @@ export const keys = {
     tenant: ['tenant'] as const,
     entitlements: ['entitlements'] as const,
     roles: ['roles'] as const,
+    roleCatalog: ['roles', 'catalog'] as const,
     members: ['team', 'members'] as const,
     invitations: ['team', 'invitations'] as const,
     grants: (membershipId: string) => ['team', 'grants', membershipId] as const,
@@ -134,6 +136,8 @@ export const useEntitlements = () =>
 
 export const useRoles = (enabled = true) =>
     useQuery({ queryKey: keys.roles, queryFn: () => api<Data<Role[]>>('roles').then((r) => r.data), enabled, staleTime: 300_000 });
+export const useRoleCatalog = (enabled = true) =>
+    useQuery({ queryKey: keys.roleCatalog, queryFn: () => api<Data<RoleCatalog>>('roles/catalog').then((r) => r.data), enabled });
 
 /** Teammates a conversation can be assigned to, each marked with access to its WhatsApp number. */
 export type Assignee = { id: string; name: string; role: string | null; can_access: boolean };

@@ -9,6 +9,7 @@ import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header'
 import { useSession } from '@/components/app/session';
 import { InviteDialog } from '@/components/team/invite-dialog';
 import { NumberAccessDialog } from '@/components/team/number-access-dialog';
+import { RolesTab } from '@/components/team/roles-tab';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -250,29 +251,7 @@ export default function TeamPage() {
                 </TabsContent>
 
                 <TabsContent value="roles">
-                    <div className="grid gap-3 md:grid-cols-2">
-                        {roleList.map((r) => (
-                            <Card key={r.id} className="p-5">
-                                <div className="flex items-center gap-2">
-                                    <p className="font-semibold">{r.name}</p>
-                                    {r.is_system && <Badge tone="grey">Built-in</Badge>}
-                                </div>
-                                <p className="mt-2 text-[13px] text-muted-foreground">
-                                    {r.permissions.includes('*') ? 'Full access to everything, including billing.' : `${r.permissions.length} permissions`}
-                                    {(r.key === 'owner' || r.key === 'admin') && r.is_system ? ' · All numbers.' : ' · Only numbers granted to them.'}
-                                </p>
-                                {!r.permissions.includes('*') && (
-                                    <div className="mt-3 flex flex-wrap gap-1">
-                                        {r.permissions.map((p) => (
-                                            <Badge key={p} tone="outline" className="font-mono text-[11px] font-normal">
-                                                {p}
-                                            </Badge>
-                                        ))}
-                                    </div>
-                                )}
-                            </Card>
-                        ))}
-                    </div>
+                    <RolesTab roles={roleList} canManage={canManage} />
                 </TabsContent>
 
                 <TabsContent value="teams">

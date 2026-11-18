@@ -39,6 +39,9 @@ export const P = {
     InboxRawText: 'inbox.raw_text',
     StagesChange: 'stages.change',
     StagesApproveWon: 'stages.approve_won',
+    PaymentsManual: 'payments.manual',
+    SuggestionsApprove: 'suggestions.approve',
+    ContactsViewPhone: 'contacts.view_phone',
 } as const;
 
 export type PermissionKey = (typeof P)[keyof typeof P];

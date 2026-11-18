@@ -17,6 +17,15 @@ export type Role = {
     permissions: string[];
 };
 
+/** GET roles/catalog: every permission grouped by area, the system roles, and the team privacy option. */
+export type RoleCatalog = {
+    areas: { area: string; permissions: { key: string; label: string }[] }[];
+    system_roles: { key: string; name: string; permissions: string[] }[];
+    hide_phone_from_agents: boolean;
+    /** Custom roles need a plan with full role-based access. */
+    custom_roles: boolean;
+};
+
 export type Tenant = {
     id: string;
     name: string;
@@ -266,6 +275,8 @@ export type Contact = {
     username: string | null;
     phone: string | null;
     wa_id: string | null;
+    /** The number is masked for this teammate (Settings › Team › Roles). */
+    phone_hidden?: boolean;
     bsuid: string | null;
     email: string | null;
     attributes: Record<string, unknown>;
