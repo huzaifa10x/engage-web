@@ -1308,6 +1308,8 @@ export type WebhookDelivery = {
     delivered_at: string | null;
     created_at: string | null;
     payload: Record<string, unknown>;
+    /** Every attempt, oldest first (times in UTC). */
+    attempt_log?: { at: string; status: number | null; ms: number; error: string | null }[];
 };
 
 /** Progress of the one-off import of contacts and chat history from the WhatsApp Business app. */

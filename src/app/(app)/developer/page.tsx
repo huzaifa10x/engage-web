@@ -9,6 +9,7 @@ import { Field, FormError } from '@/components/app/field';
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
 import { Badge, type Tone } from '@/components/ui/badge';
+import { DeliveryAttempts } from '@/components/developer/delivery-attempts';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -448,18 +449,24 @@ function WebhooksTab({ overview, canManage }: { overview: DeveloperOverview; can
                                 {events.length === overview.events.length ? 'Clear all' : 'Select all'}
                             </button>
                         </legend>
-                        {overview.events.map((ev) => (
-                            <label key={ev.key} className="flex items-start gap-2.5 text-sm">
-                                <Checkbox
-                                    checked={events.includes(ev.key)}
-                                    onCheckedChange={(c) => setEvents((cur) => (c ? [...cur, ev.key] : cur.filter((x) => x !== ev.key)))}
-                                    className="mt-0.5"
-                                />
-                                <span>
-                                    {ev.label}
-                                    <span className="block font-mono text-[11.5px] text-muted-foreground">{ev.key}</span>
-                                </span>
-                            </label>
+                        {Object.entries(Object.groupBy(overview.events, (ev) => ev.key.split('.')[0])).map(([group, list]) => (
+                            <div key={group} className="grid gap-2">
+                                <p className="mt-1 text-[12px] font-semibold tracking-wide text-muted-foreground uppercase">{EVENT_GROUPS[group] ?? group}</p>
+                                {(list ?? []).map((ev) => (
+                                    <label key={ev.key} className="flex items-start gap-2.5 text-sm">
+                                        <Checkbox
+                                            checked={events.includes(ev.key)}
+                                            onCheckedChange={(c) => setEvents((cur) => (c ? [...cur, ev.key] : cur.filter((x) => x !== ev.key)))}
+                                            className="mt-0.5"
+                                            aria-label={ev.label}
+                                        />
+                                        <span>
+                                            {ev.label}
+                                            <span className="block font-mono text-[11.5px] text-muted-foreground">{ev.key}</span>
+                                        </span>
+                                    </label>
+                                ))}
+                            </div>
                         ))}
                     </fieldset>
                     <DialogFooter>
@@ -568,7 +575,8 @@ function LogsTab({ canManage }: { canManage: boolean }) {
                     </DialogHeader>
                     <p className="text-sm font-medium">What we sent</p>
                     <Code>{JSON.stringify(open?.payload ?? {}, null, 2)}</Code>
-                    <p className="text-sm font-medium">What your server answered ({open?.response_status ?? 'no answer'})</p>
+                    <DeliveryAttempts attempts={open?.attempt_log} />
+                    <p className="text-sm font-medium">What your server answered last ({open?.response_status ?? 'no answer'})</p>
                     <pre className="max-h-40 overflow-auto rounded-lg border bg-muted p-3 font-mono text-[12.5px] whitespace-pre-wrap">
                         {open?.response_excerpt || '—'}
                     </pre>
@@ -697,6 +705,17 @@ function UsageStrip({ overview }: { overview: DeveloperOverview }) {
         </div>
     );
 }
+
+/** Webhook events grouped as the spec lists them (by the part before the dot). */
+const EVENT_GROUPS: Record<string, string> = {
+    message: 'Messages',
+    contact: 'Contacts',
+    enquiry: 'Enquiries',
+    booking: 'Bookings',
+    payment: 'Payments',
+    conversation: 'Conversations',
+    form: 'Forms',
+};
 
 export default function DeveloperPage() {
     const { can } = useSession();
