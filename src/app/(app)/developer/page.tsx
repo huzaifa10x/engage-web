@@ -218,13 +218,28 @@ function KeysTab({ overview, canManage }: { overview: DeveloperOverview; canMana
                         <Input id="key-name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} />
                     </Field>
                     <fieldset className="grid gap-2">
-                        <legend className="mb-1 text-sm font-medium">Permissions</legend>
+                        <legend className="mb-1 flex w-full items-center justify-between text-sm font-medium">
+                            Permissions
+                            <span className="flex gap-3">
+                                {(overview.presets ?? []).map((p) => (
+                                    <button
+                                        key={p.key}
+                                        type="button"
+                                        className="text-[12.5px] font-semibold text-brand-600 hover:underline"
+                                        onClick={() => setScopes(p.scopes)}
+                                    >
+                                        {p.label}
+                                    </button>
+                                ))}
+                            </span>
+                        </legend>
                         {overview.scopes.map((s) => (
                             <label key={s.key} className="flex items-start gap-2.5 text-sm">
                                 <Checkbox
                                     checked={scopes.includes(s.key)}
                                     onCheckedChange={(c) => setScopes((cur) => (c ? [...cur, s.key] : cur.filter((x) => x !== s.key)))}
                                     className="mt-0.5"
+                                    aria-label={s.label}
                                 />
                                 <span>
                                     {s.label}

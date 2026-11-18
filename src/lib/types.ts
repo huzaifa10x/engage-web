@@ -1262,6 +1262,8 @@ export type DeveloperOverview = {
     /** Public API requests of this workspace (the portal is counted apart and never held to the plan limit). */
     api_usage?: { this_minute: number; today: number };
     scopes: { key: string; label: string }[];
+    /** Ready-made sets of permissions for a new key ("Read only", "Read and write"). */
+    presets?: { key: string; label: string; scopes: string[] }[];
     events: { key: string; label: string }[];
 };
 
