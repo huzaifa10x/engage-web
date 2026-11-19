@@ -1,5 +1,6 @@
 'use client';
 
+import { ContactLink } from '@/components/contacts/contact-sheet';
 import { SearchIcon, ShoppingCartIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -190,7 +191,13 @@ export default function OrdersPage() {
                                         <p className="text-[12px] text-muted-foreground">{o.store}</p>
                                     </TableCell>
                                     <TableCell>
-                                        <p className="font-medium">{o.customer.display_name}</p>
+                                        <p className="font-medium">
+                                            {o.customer.id ? (
+                                                <ContactLink contact={o.customer.id}>{o.customer.display_name}</ContactLink>
+                                            ) : (
+                                                o.customer.display_name
+                                            )}
+                                        </p>
                                         <p className="font-mono text-[12px] text-muted-foreground">{o.customer.phone ?? '—'}</p>
                                     </TableCell>
                                     <TableCell>

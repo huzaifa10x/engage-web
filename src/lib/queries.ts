@@ -4,6 +4,11 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api, upload } from './api';
 import type {
+    EnquiryBoard,
+    MissedLeadsReport,
+    NextStep,
+    ReplyPromiseSettings,
+    WaitAlert,
     ConsentHistoryEntry,
     FollowUps,
     FollowUpSettings,
@@ -904,4 +909,44 @@ export const useStageHistory = (contactId: string | undefined, enabled = true) =
         queryKey: keys.stageHistory(contactId ?? ''),
         queryFn: () => api<Data<StageEvent[]>>(`contacts/${contactId}/stage-history`).then((r) => r.data),
         enabled: enabled && !!contactId,
+    });
+
+// ── Inbox & CRM 3.3: reply promise, enquiries board, next steps ──────────────────────────
+
+export const useContact = (id: string | null) =>
+    useQuery({ queryKey: ['contacts', id, 'record'], queryFn: () => api<Data<Contact>>(`contacts/${id}`).then((r) => r.data), enabled: !!id });
+
+export const useReplyPromise = (enabled = true) =>
+    useQuery({ queryKey: ['reply-promise'], queryFn: () => api<Data<ReplyPromiseSettings>>('tenant/reply-promise').then((r) => r.data), enabled });
+
+export const useWaitAlerts = (conversationId: string | null, enabled = true) =>
+    useQuery({
+        queryKey: ['inbox', 'wait-alerts', conversationId],
+        queryFn: () => api<Data<WaitAlert[]>>(`conversations/${conversationId}/wait-alerts`).then((r) => r.data),
+        enabled: enabled && !!conversationId,
+    });
+
+export const useMissedLeads = (weeksAgo: number, enabled = true) =>
+    useQuery({
+        queryKey: ['reports', 'missed-leads', weeksAgo],
+        queryFn: () => api<Data<MissedLeadsReport>>('reports/missed-leads', { query: { weeks_ago: weeksAgo } }).then((r) => r.data),
+        enabled,
+    });
+
+export type BoardFilters = { owner?: string | null; filter?: 'no_next_step' | 'overdue' | null; search?: string | null };
+export const useEnquiryBoard = (f: BoardFilters, enabled = true) =>
+    useQuery({
+        queryKey: ['enquiries', 'board', f],
+        queryFn: () =>
+            api<Data<EnquiryBoard>>('enquiries/board', { query: { owner: f.owner ?? null, filter: f.filter ?? null, search: f.search ?? null } }).then(
+                (r) => r.data,
+            ),
+        enabled,
+    });
+
+export const useNextSteps = (contactId: string | null, all = false) =>
+    useQuery({
+        queryKey: ['contacts', contactId, 'next-steps', all],
+        queryFn: () => api<Data<NextStep[]>>(`contacts/${contactId}/next-steps`, { query: { all: all ? 1 : null } }).then((r) => r.data),
+        enabled: !!contactId,
     });

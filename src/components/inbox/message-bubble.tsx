@@ -226,16 +226,78 @@ function RawText({ raw }: { raw: string }) {
     );
 }
 
+/**
+ * Why a message was not sent (3.3): a plain reason, Meta's code, Retry only for temporary errors,
+ * "Choose template" when the 24-hour window closed, and Meta's own details for codes we don't know.
+ * A failed reply never counts as answering: the chat is back in Needs reply.
+ */
+function FailureNote({ message, onRetry, onTemplate }: { message: Message; onRetry?: (m: Message) => Promise<void>; onTemplate?: () => void }) {
+    const [busy, setBusy] = useState(false);
+    const [details, setDetails] = useState(false);
+    const e = message.error;
+    const reason = e?.plain ?? e?.hint ?? e?.title ?? 'WhatsApp did not accept this message.';
+    const human = message.origin === 'agent' || message.origin === 'api';
+
+    return (
+        <div className="mt-1.5 rounded border border-bad/30 bg-bad-bg px-2 py-1.5 text-[12.5px] text-bad" role="alert">
+            <p className="font-semibold">
+                Not sent: {reason}
+                {e?.code && /^\d+$/.test(e.code) ? <span className="font-normal text-ink-2"> · Meta code {e.code}</span> : null}
+            </p>
+            {e?.plain && e.hint && <p className="mt-0.5 text-ink-2">{e.hint}</p>}
+            {human && <p className="mt-0.5 text-ink-2">A failed reply doesn’t count, so the chat is back in Needs reply unless another reply was accepted.</p>}
+            {(e?.known === false || details) && (e?.title || e?.detail) && (
+                <p className="mt-0.5 font-mono text-[11.5px] break-words text-ink-2">{[e?.title, e?.detail].filter(Boolean).join(' · ')}</p>
+            )}
+            <div className="mt-1 flex flex-wrap gap-1.5">
+                {e?.action === 'retry' && human && onRetry && (
+                    <button
+                        type="button"
+                        disabled={busy}
+                        className="rounded border border-bad/40 bg-card px-2 py-0.5 font-semibold hover:bg-white disabled:opacity-60"
+                        onClick={async () => {
+                            setBusy(true);
+                            try {
+                                await onRetry(message);
+                            } finally {
+                                setBusy(false);
+                            }
+                        }}
+                    >
+                        {busy ? 'Sending…' : 'Retry'}
+                    </button>
+                )}
+                {e?.action === 'template' && onTemplate && (
+                    <button type="button" className="rounded border border-bad/40 bg-card px-2 py-0.5 font-semibold hover:bg-white" onClick={onTemplate}>
+                        Choose template
+                    </button>
+                )}
+                {e?.known !== false && (e?.title || e?.detail) && (
+                    <button type="button" className="px-1 py-0.5 underline-offset-2 hover:underline" onClick={() => setDetails(!details)}>
+                        {details ? 'Hide details' : 'Details'}
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export function MessageBubble({
     message,
     quoted,
     authorLabel,
     onReply,
+    onRetry,
+    onTemplate,
 }: {
     message: Message;
     quoted?: Message | null;
     authorLabel?: string | null;
     onReply?: (m: Message) => void;
+    /** Send a failed reply again (offered only for temporary errors). */
+    onRetry?: (m: Message) => Promise<void>;
+    /** Open the template picker (the 24-hour window closed: 131047). */
+    onTemplate?: () => void;
 }) {
     const outbound = message.direction === 'outbound';
 
@@ -265,15 +327,7 @@ export function MessageBubble({
                 )}
                 <Body message={message} />
                 {message.raw_body && <RawText raw={message.raw_body} />}
-                {message.status === 'failed' && (
-                    <div className="mt-1.5 rounded border border-bad/30 bg-bad-bg px-2 py-1.5 text-[12.5px] text-bad" role="alert">
-                        <p className="font-semibold">
-                            Not sent{message.error?.title ? `: ${message.error.title}` : ''}
-                            {message.error?.code ? ` (${message.error.code})` : ''}
-                        </p>
-                        {(message.error?.hint ?? message.error?.detail) && <p className="mt-0.5 text-ink-2">{message.error?.hint ?? message.error?.detail}</p>}
-                    </div>
-                )}
+                {message.status === 'failed' && <FailureNote message={message} onRetry={onRetry} onTemplate={onTemplate} />}
                 <div className="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-500">
                     {message.origin === 'history' && (
                         <span className="inline-flex items-center gap-0.5" title="Imported from the WhatsApp Business app's chat history">

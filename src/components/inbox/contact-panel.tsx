@@ -6,8 +6,10 @@ import { XIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { ResizeHandle } from '@/components/app/resize-handle';
-import { ChangeStageButton } from '@/components/contacts/change-stage-dialog';
-import { ContactDialog } from '@/components/contacts/contact-dialog';
+import { ChangeStageButton, useCurrentEnquiry } from '@/components/contacts/change-stage-dialog';
+import { ContactLink, useOpenContact } from '@/components/contacts/contact-sheet';
+import { EnquiryCard } from '@/components/contacts/enquiry-card';
+import { RecordConsentDialog } from '@/components/contacts/record-consent-dialog';
 import { StageBadge } from '@/components/contacts/stage-badge';
 import { SourceSection } from '@/components/growth/source-section';
 import { ContactOrders } from '@/components/inbox/contact-orders';
@@ -15,18 +17,17 @@ import { useSession } from '@/components/app/session';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useStored } from '@/hooks/use-stored';
 import { api, errorMessage } from '@/lib/api';
 import { contactSource, dateTime, humanize, relative, timeLeft } from '@/lib/format';
 import { P } from '@/lib/permissions';
-import { keys, requestConsent, useAssignees, useInboxTeams } from '@/lib/queries';
-import type { Contact, Conversation } from '@/lib/types';
+import { keys, requestConsent, useAssignees, useInboxTeams, useWaitAlerts } from '@/lib/queries';
+import type { Conversation } from '@/lib/types';
 
 const UNASSIGNED = '__none__';
+const ROLE_LABEL = { agent: 'Assigned agent', manager: 'Managers', owner: 'Owner' } as const;
+const CHANNEL_LABEL = { app: 'In-app notification', email: 'email', whatsapp: 'WhatsApp' } as const;
 const NO_TEAM = '__no_team__';
 
 /**
@@ -40,7 +41,6 @@ export function ContactPanel({ conversation, open = false, onClose }: { conversa
     const teams = useInboxTeams();
     const contact = conversation.contact;
     const [width, setWidth] = useStored<number>('engage.inbox.panel-width', 320);
-    const [crmOpen, setCrmOpen] = useState(false);
 
     const refresh = () => {
         void qc.invalidateQueries({ queryKey: keys.conversation(conversation.id) });
@@ -54,31 +54,6 @@ export function ContactPanel({ conversation, open = false, onClose }: { conversa
         onError: (e) => toast.error(errorMessage(e)),
     });
 
-    // Opt-out (or an opt-in the customer gave outside WhatsApp: a form, a call, in store) recorded by a teammate.
-    const consent = useMutation({
-        mutationFn: (v: { state: 'opted_in' | 'opted_out'; note?: string }) =>
-            api<{ data: Contact; meta?: { changed: boolean; confirmation: { status: string; message: string } | null } }>(`contacts/${contact?.id}/consent`, {
-                method: 'POST',
-                // Recorded by the team: nothing is sent to the customer (confirmations answer the customer's own STOP / START / buttons).
-                body: { state: v.state, note: v.note ?? 'Changed from the inbox', notify: false, conversation_id: conversation.id },
-            }),
-        onSuccess: (r, v) => {
-            const what = v.state === 'opted_in' ? 'Opt-in recorded. Nothing was sent to the customer.' : 'Opt-out recorded. Nothing was sent to the customer.';
-            const c = r.meta?.confirmation;
-            if (!c || c.status === 'sent') {
-                toast.success(c ? `${what} ${c.message}` : what);
-            } else if (c.status === 'failed') {
-                toast.error(c.message);
-            } else {
-                toast.warning(`${what} ${c.message}`);
-            }
-            setElsewhere(false);
-            setElsewhereNote('');
-            refresh();
-            void qc.invalidateQueries({ queryKey: keys.thread(conversation.id) });
-        },
-        onError: (e) => toast.error(`The consent could not be recorded: ${errorMessage(e)}`),
-    });
     // Double opt-in: the customer gets the question with Subscribe / Unsubscribe buttons; only their tap is recorded.
     const ask = useMutation({
         mutationFn: () => requestConsent(conversation.id),
@@ -89,8 +64,10 @@ export function ContactPanel({ conversation, open = false, onClose }: { conversa
         },
         onError: (e) => toast.error(errorMessage(e)),
     });
-    const [elsewhere, setElsewhere] = useState(false);
-    const [elsewhereNote, setElsewhereNote] = useState('');
+    const [recording, setRecording] = useState<'opted_in' | 'opted_out' | null>(null);
+    const openContact = useOpenContact();
+    const enquiry = useCurrentEnquiry(contact?.id ?? '', !!contact && can(P.ContactsView));
+    const alerts = useWaitAlerts(conversation.id);
     const canAsk = conversation.window.replies_allowed ?? conversation.window.open;
 
     // Escape closes the slide-over.
@@ -108,33 +85,37 @@ export function ContactPanel({ conversation, open = false, onClose }: { conversa
         <>
             <div className="flex flex-col items-center border-b px-5 py-6 text-center">
                 <Avatar name={contact.display_name} className="size-16 text-lg" />
-                <p className="mt-3 text-[15px] font-semibold">{contact.display_name}</p>
+                <p className="mt-3 text-[15px] font-semibold">
+                    <ContactLink contact={contact} className="font-semibold text-foreground">
+                        {contact.display_name}
+                    </ContactLink>
+                </p>
                 {contact.phone && <p className="font-mono text-[13px] text-muted-foreground">{contact.phone}</p>}
                 {contact.username && <p className="text-[13px] text-muted-foreground">@{contact.username}</p>}
             </div>
 
             <SourceSection contact={contact} />
 
-            {/* Contacts & CRM owns the stage: shown here, changed only through "Change stage" (prototype › Contact). */}
-            <section className="grid gap-2.5 border-b px-5 py-4 text-[13px]" aria-label="Contact">
-                <h4 className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Contact</h4>
-                <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5">
-                    <dt className="text-muted-foreground">Stage</dt>
-                    <dd>
-                        <StageBadge stage={contact.stage} />
-                    </dd>
-                    <dt className="text-muted-foreground">First contact</dt>
-                    <dd>{dateTime(contact.created_at)}</dd>
-                </dl>
-                <div className="flex flex-wrap gap-2">
-                    <ChangeStageButton contact={contact} via="chat" />
+            {/* The enquiry this chat is about (3.3): stage stepper, Booked / Not booked, money and the next step. */}
+            <section className="grid gap-2.5 border-b px-5 py-4 text-[13px]" aria-label="Enquiry">
+                <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Enquiry</h4>
                     {can(P.ContactsView) && (
-                        <Button size="sm" variant="outline" onClick={() => setCrmOpen(true)}>
-                            Open CRM record
+                        <Button size="sm" variant="ghost" className="h-7 px-2 text-[12px]" onClick={() => openContact(contact)}>
+                            Open contact
                         </Button>
                     )}
                 </div>
-                {crmOpen && <ContactDialog open={crmOpen} onOpenChange={setCrmOpen} contact={contact} />}
+                {enquiry.data ? (
+                    <EnquiryCard enquiry={enquiry.data} conversationId={conversation.id} />
+                ) : enquiry.isLoading ? null : (
+                    <div className="flex items-center justify-between gap-2">
+                        <span className="text-muted-foreground">Stage</span>
+                        <StageBadge stage={contact.stage} />
+                    </div>
+                )}
+                {!enquiry.data && <ChangeStageButton contact={contact} via="chat" className="w-fit" />}
+                <p className="text-[12px] text-muted-foreground">First contact {dateTime(contact.created_at)}</p>
             </section>
 
             <section className="grid gap-3 border-b px-5 py-4 text-[13px]">
@@ -246,49 +227,27 @@ export function ContactPanel({ conversation, open = false, onClose }: { conversa
                 {can(P.ContactsUpdate) && (
                     <div className="flex flex-wrap gap-2">
                         {contact.consent_state !== 'opted_in' && (
-                            <Button size="sm" variant="ghost" onClick={() => setElsewhere(true)} disabled={consent.isPending}>
+                            <Button size="sm" variant="ghost" onClick={() => setRecording('opted_in')}>
                                 Consent given elsewhere…
                             </Button>
                         )}
                         {contact.consent_state !== 'opted_out' && (
-                            <Button size="sm" variant="outline" onClick={() => consent.mutate({ state: 'opted_out' })} disabled={consent.isPending}>
+                            <Button size="sm" variant="outline" onClick={() => setRecording('opted_out')}>
                                 Opt out
                             </Button>
                         )}
                     </div>
                 )}
-                <Dialog open={elsewhere} onOpenChange={setElsewhere}>
-                    <DialogContent className="sm:max-w-md">
-                        <DialogHeader>
-                            <DialogTitle>Record consent given elsewhere</DialogTitle>
-                            <DialogDescription>
-                                For a customer who agreed outside WhatsApp (a signed form, a website checkbox, in store). Nothing is sent to them. To ask in the
-                                chat, use “Ask for marketing consent” instead.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="consent-elsewhere">Where did they agree?</Label>
-                            <Input
-                                id="consent-elsewhere"
-                                value={elsewhereNote}
-                                maxLength={190}
-                                onChange={(e) => setElsewhereNote(e.target.value)}
-                                placeholder="e.g. Signed the opt-in form at the viewing"
-                            />
-                        </div>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setElsewhere(false)}>
-                                Cancel
-                            </Button>
-                            <Button
-                                onClick={() => consent.mutate({ state: 'opted_in', note: elsewhereNote.trim() })}
-                                disabled={consent.isPending || elsewhereNote.trim().length < 10}
-                            >
-                                Record opt-in
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
+                <RecordConsentDialog
+                    contact={contact}
+                    open={recording !== null}
+                    onOpenChange={(o) => {
+                        if (!o) setRecording(null);
+                        refresh();
+                    }}
+                    initialState={recording ?? 'opted_in'}
+                    conversationId={conversation.id}
+                />
                 <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
                     {contact.email && (
                         <>
@@ -304,6 +263,24 @@ export function ContactPanel({ conversation, open = false, onClose }: { conversa
                     <dd className="truncate">{conversation.phone_number?.verified_name ?? conversation.phone_number?.display_phone_number}</dd>
                 </dl>
             </section>
+            {(alerts.data ?? []).length > 0 && (
+                <section className="grid gap-2 border-t px-5 py-4 text-[13px]" aria-label="Wait alerts">
+                    <h4 className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">Wait alerts · {alerts.data!.length}</h4>
+                    <ol className="grid gap-2">
+                        {alerts.data!.map((a) => (
+                            <li key={a.id} className="grid gap-0.5 border-l-2 border-bad/50 pl-2.5">
+                                <span className="font-medium">
+                                    {a.minutes} min → {a.recipients.map((r) => r.name?.split(' ')[0] ?? 'Teammate').join(', ') || ROLE_LABEL[a.role]}
+                                </span>
+                                <span className="text-[12px] text-muted-foreground">
+                                    {dateTime(a.created_at)} · {a.channels.map((c) => CHANNEL_LABEL[c]).join(' + ')}
+                                    {a.whatsapp_error && a.role === 'owner' ? ` · WhatsApp not sent: ${a.whatsapp_error}` : ''}
+                                </span>
+                            </li>
+                        ))}
+                    </ol>
+                </section>
+            )}
             <ContactOrders contactId={contact.id} />
         </>
     );

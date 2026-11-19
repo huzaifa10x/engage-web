@@ -15,7 +15,7 @@ test('campaigns and templates: Meta’s cost before sending, and a warning when 
         const phone = `+97155${Math.floor(1_000_000 + Math.random() * 8_999_999)}`;
         ids.push((await api<{ data: { id: string } }>(page, 'POST', 'contacts', { phone, name: `${tag} ${i}`, tags: [tag] })).data.id);
     }
-    await api(page, 'POST', `contacts/${ids[0]}/consent`, { state: 'opted_out', notify: false });
+    await api(page, 'POST', `contacts/${ids[0]}/consent`, { method: 'form', state: 'opted_out', notify: false });
     templates(ids[1], false);
 
     await page.goto('/campaigns');

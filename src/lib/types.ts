@@ -324,7 +324,7 @@ export type StageGroup = 'open' | 'won' | 'lost';
 
 export type StageRef = { id: string; name: string; color: StageColor; archived: boolean; group?: StageGroup };
 
-export type CrmStage = StageRef & { position: number; contacts?: number };
+export type CrmStage = StageRef & { position: number; contacts?: number; enquiries?: number };
 
 export type StageEvent = {
     id: string;
@@ -627,6 +627,10 @@ export type Conversation = {
     after_hours?: boolean;
     /** The wait started from a paid ad (top of the Needs reply queue). */
     ad_lead?: boolean;
+    /** The assignee's name, for the wait clock ("Waiting 0:42 · Ahmed"). */
+    assigned_name?: string | null;
+    /** The reply promise (3.3): business time waited and left on the limit; paused outside business hours. Null unless it needs a reply. */
+    promise?: ReplyPromiseClock | null;
     contact?: Contact;
     /** `status` is "disconnected" once the number was offboarded: the chat stays readable, nothing can be sent. */
     phone_number?: {
@@ -636,6 +640,139 @@ export type Conversation = {
         status?: 'pending' | 'connected' | 'disconnected' | (string & {});
     };
     created_at: string | null;
+};
+
+export type ReplyPromiseClock = { limit_minutes: number; waited_seconds: number; left_seconds: number; due_at: string; over: boolean; paused: boolean };
+
+export type ReplyPromiseSettings = {
+    enabled: boolean;
+    limit_minutes: number;
+    ladder: { minutes: number; to: 'agent' | 'manager' | 'owner' }[];
+    owner_whatsapp: { phone: string | null; template: { name: string; language: string } | null; ready: boolean };
+    avg_booking_value: number | null;
+    baseline: MissedLeadsBaseline | null;
+};
+
+export type MissedLeadsBaseline = {
+    enquiries?: number | null;
+    in_time?: number | null;
+    over?: number | null;
+    median_reply_minutes?: number | null;
+    note?: string | null;
+    entered_at?: string;
+    entered_by?: string | null;
+};
+
+export type WaitAlert = {
+    id: string;
+    level: number;
+    minutes: number;
+    role: 'agent' | 'manager' | 'owner';
+    recipients: { id: string; name: string | null }[];
+    channels: ('app' | 'email' | 'whatsapp')[];
+    whatsapp_error: string | null;
+    episode: string;
+    created_at: string;
+};
+
+export type MissedLeadsReport = {
+    week: { from: string; to: string; weeks_ago: number; complete: boolean };
+    limit_minutes: number;
+    enquiries: number;
+    in_time: number;
+    over: number;
+    pending: number;
+    waited_over: {
+        enquiry_id: string;
+        enquiry_number: number;
+        title: string | null;
+        contact_id: string;
+        customer: string;
+        conversation_id: string | null;
+        started_at: string;
+        waited_seconds: number;
+        answered: boolean;
+        owner: string | null;
+    }[];
+    staff: { membership_id: string; name: string; replies: number; median_seconds: number; within_limit: number }[];
+    by_confidence: { key: 'verified' | 'partial' | 'unknown'; label: string; enquiries: number }[];
+    by_ad: { label: string; enquiries: number; verified: number; partial: number; unknown: number }[];
+    avg_booking_value: number | null;
+    aed_at_stake: number | null;
+    aed_protected: number;
+    verified_payments: number;
+    booked_without_payment: number;
+    baseline: MissedLeadsBaseline | null;
+};
+
+export type NextStep = {
+    id: string;
+    contact_id: string;
+    enquiry_id: string | null;
+    type: 'call' | 'message' | 'meeting' | 'quote' | 'other';
+    type_label: string;
+    title: string;
+    due_at: string;
+    overdue: boolean;
+    assigned: { id: string; name: string } | null;
+    status: 'open' | 'done' | 'cancelled';
+    done_at: string | null;
+    cancel_reason: string | null;
+    created_at: string | null;
+};
+
+/** One buying conversation of a contact (its card, stage, value and money). */
+export type Enquiry = {
+    id: string;
+    contact_id: string;
+    number: number;
+    current?: boolean;
+    title: string | null;
+    value: number | null;
+    value_period: 'once' | 'month' | 'year' | null;
+    expected_close_on: string | null;
+    details_version: number;
+    started_at: string;
+    started_by: string;
+    start_reason: string;
+    imported: boolean;
+    source: string;
+    source_label: string;
+    source_confidence: 'verified' | 'partial' | 'unknown';
+    confidence_label: string;
+    owner: { id: string; name: string } | null;
+    stage: { id: string; name: string; group: StageGroup; color?: StageColor } | null;
+    group: StageGroup;
+    open: boolean;
+    stage_version: number;
+    lost_reason: string | null;
+    verified_paid: boolean;
+    paid_total: number;
+    won: { reference: string | null; verified: boolean; by: string | null; at: string } | null;
+    next_step: NextStep | null;
+    last_activity_at: string | null;
+    updated_at: string | null;
+    updated_by: string | null;
+    messages: number;
+    bookings: unknown[];
+    payments: {
+        type: string;
+        id: string;
+        number: string;
+        status: string;
+        total: number;
+        currency: string;
+        paid: boolean;
+        paid_at?: string | null;
+        by?: string | null;
+    }[];
+    contact?: { id: string; name: string; deleted: boolean } | null;
+};
+
+export type EnquiryBoard = {
+    stages: (CrmStage & { enquiries: Enquiry[]; count: number; value: number })[];
+    stats: { open_value: number; open_count: number; open_valued: number; won_marked_30d: number; paid_verified_30d: number; open_without_next_step: number };
+    truncated: boolean;
 };
 
 export type MessageStatus = 'queued' | 'accepted' | 'sent' | 'delivered' | 'read' | 'failed' | 'received' | 'deleted';
@@ -671,7 +808,19 @@ export type Message = {
     wamid: string | null;
     reply_to_wamid: string | null;
     /** `hint` is a plain-language explanation of Meta's error code, `detail` Meta's own longer text. */
-    error: { code: string; title: string | null; detail?: string | null; hint?: string | null } | null;
+    /**
+     * `plain` a short reason for the inbox, `known` whether we know the code (unknown: show the details),
+     * `action` what to offer: retry (temporary errors only) or template (131047).
+     */
+    error: {
+        code: string;
+        title: string | null;
+        detail?: string | null;
+        hint?: string | null;
+        plain?: string | null;
+        known?: boolean;
+        action?: 'retry' | 'template' | null;
+    } | null;
     sent_by_membership_id: string | null;
     timestamp: string | null;
     sent_at: string | null;

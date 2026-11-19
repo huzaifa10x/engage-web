@@ -15,14 +15,16 @@ import {
     UploadIcon,
     UserPlusIcon,
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 import { toast } from 'sonner';
 
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
 import { BulkEditDialog } from '@/components/contacts/bulk-edit-dialog';
 import { ContactDialog } from '@/components/contacts/contact-dialog';
+import { useOpenContact } from '@/components/contacts/contact-sheet';
+import { EnquiryBoardView } from '@/components/contacts/enquiry-board';
 import { SourceChip } from '@/components/growth/source-chip';
 import { StageBadge } from '@/components/contacts/stage-badge';
 import { CrmSettingsDialog } from '@/components/contacts/crm-settings-dialog';
@@ -65,16 +67,19 @@ import { P } from '@/lib/permissions';
 import { useStored } from '@/hooks/use-stored';
 import { type ContactFilters, keys, useContactCounts, useContactFields, useContacts, usePhoneNumbers, useSegments, useStages, useTags } from '@/lib/queries';
 import type { ConsentState, Contact, Segment } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 const ALL = '__all__';
 
-export default function ContactsPage() {
+function ContactsList() {
     const { can } = useSession();
     const router = useRouter();
     const qc = useQueryClient();
     const [search, setSearch] = useState('');
     const [filters, setFilters] = useState<ContactFilters>({});
-    const [editing, setEditing] = useState<Contact | null | undefined>(undefined); // undefined = closed, null = new
+    // Adding a contact opens the form; opening an existing one slides its record in over the list (3.3).
+    const [adding, setAdding] = useState(false);
+    const openContact = useOpenContact();
     const [messaging, setMessaging] = useState<Contact | null>(null);
     const [deleting, setDeleting] = useState<Contact | null>(null);
     const [importing, setImporting] = useState(false);
@@ -170,7 +175,7 @@ export default function ContactsPage() {
                             </Button>
                         )}
                         {can(P.ContactsCreate) && (
-                            <Button onClick={() => setEditing(null)}>
+                            <Button onClick={() => setAdding(true)}>
                                 <UserPlusIcon /> Add contact
                             </Button>
                         )}
@@ -425,7 +430,14 @@ export default function ContactsPage() {
                                         <div className="flex items-center gap-3">
                                             <Avatar name={c.display_name} />
                                             <div className="min-w-0">
-                                                <div className="truncate font-semibold">{c.display_name}</div>
+                                                <button
+                                                    type="button"
+                                                    className="block max-w-full truncate text-left font-semibold underline-offset-2 hover:text-primary hover:underline"
+                                                    onClick={() => openContact(c)}
+                                                    title="Open the contact"
+                                                >
+                                                    {c.display_name}
+                                                </button>
                                                 {c.email && <div className="truncate text-[12.5px] text-muted-foreground">{c.email}</div>}
                                             </div>
                                         </div>
@@ -497,7 +509,7 @@ export default function ContactsPage() {
                                                     </DropdownMenuItem>
                                                 )}
                                                 {can(P.ContactsUpdate) && (
-                                                    <DropdownMenuItem onSelect={() => setEditing(c)}>
+                                                    <DropdownMenuItem onSelect={() => openContact(c)}>
                                                         <PencilIcon /> Edit
                                                     </DropdownMenuItem>
                                                 )}
@@ -527,7 +539,7 @@ export default function ContactsPage() {
             <CrmSettingsDialog open={managing} onOpenChange={setManaging} canEdit={can(P.ContactsUpdate)} onEditSegment={setSegmentEditing} />
             <SegmentDialog open={segmentEditing !== undefined} onOpenChange={(o) => !o && setSegmentEditing(undefined)} segment={segmentEditing ?? null} />
             <BulkEditDialog open={bulkEditing} onOpenChange={setBulkEditing} contacts={[...selected.values()]} onDone={() => setSelected(new Map())} />
-            <ContactDialog open={editing !== undefined} onOpenChange={(o) => !o && setEditing(undefined)} contact={editing ?? null} />
+            <ContactDialog open={adding} onOpenChange={setAdding} contact={null} />
             {messaging && (
                 <NewConversationDialog
                     open
@@ -561,5 +573,48 @@ export default function ContactsPage() {
                 syncNumbers={syncNumbers}
             />
         </>
+    );
+}
+
+/** Contacts & CRM: the contacts list, and the enquiries pipeline (deals board) beside it (3.3). */
+function ContactsArea() {
+    const params = useSearchParams();
+    const router = useRouter();
+    const view = params.get('view') === 'pipeline' ? 'pipeline' : 'contacts';
+
+    return (
+        <>
+            <div className="mb-4 flex gap-1 border-b" role="tablist" aria-label="Contacts & CRM">
+                {(
+                    [
+                        ['contacts', 'Contacts'],
+                        ['pipeline', 'Enquiries pipeline'],
+                    ] as const
+                ).map(([k, label]) => (
+                    <button
+                        key={k}
+                        type="button"
+                        role="tab"
+                        aria-selected={view === k}
+                        onClick={() => router.replace(k === 'contacts' ? '/contacts' : '/contacts?view=pipeline', { scroll: false })}
+                        className={cn(
+                            '-mb-px border-b-2 px-3 py-2 text-[13.5px] font-medium transition-colors',
+                            view === k ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+                        )}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+            {view === 'pipeline' ? <EnquiryBoardView /> : <ContactsList />}
+        </>
+    );
+}
+
+export default function ContactsPage() {
+    return (
+        <Suspense>
+            <ContactsArea />
+        </Suspense>
     );
 }

@@ -6,6 +6,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { useSession } from '@/components/app/session';
+import { ContactLink } from '@/components/contacts/contact-sheet';
 import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -30,9 +31,11 @@ import type { Message } from '@/lib/types';
 
 import { Composer, type ComposerHandle } from './composer';
 import { ContactPanel } from './contact-panel';
+import { useNow } from './conversation-list';
 import { MessageBubble } from './message-bubble';
 import { NotesButton, SnoozeMenu } from './thread-tools';
 import { TemplateDialog } from './template-dialog';
+import { WaitChip } from './wait-chip';
 
 /** True while something that contains files is being dragged (not text or a link). */
 const hasFiles = (e: React.DragEvent) => [...e.dataTransfer.types].includes('Files');
@@ -52,6 +55,19 @@ export function Thread({
     const { can, membership } = useSession();
     const qc = useQueryClient();
     const conversation = useConversation(conversationId, polling ? 15_000 : false);
+    const now = useNow();
+    const retry = async (m: Message) => {
+        try {
+            await api(`conversations/${conversationId}/messages/${m.id}/retry`, { method: 'POST' });
+            toast.success('Sending again');
+        } catch (e) {
+            toast.error(errorMessage(e));
+        } finally {
+            void qc.invalidateQueries({ queryKey: keys.thread(conversationId) });
+            void qc.invalidateQueries({ queryKey: keys.conversation(conversationId) });
+            void qc.invalidateQueries({ queryKey: keys.conversationsAll });
+        }
+    };
     const thread = useThread(conversationId, polling ? 5_000 : false);
     const members = useMembers(can(P.TeamView));
     const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -233,7 +249,13 @@ export function Thread({
                     </Button>
                     <Avatar name={contact?.display_name ?? '?'} />
                     <div className="min-w-32 flex-1">
-                        <p className="truncate text-[14.5px] font-semibold">{contact?.display_name}</p>
+                        <p className="truncate text-[14.5px] font-semibold">
+                            {contact ? (
+                                <ContactLink contact={contact} className="font-semibold text-foreground">
+                                    {contact.display_name}
+                                </ContactLink>
+                            ) : null}
+                        </p>
                         <p className="truncate text-[12px] text-muted-foreground">
                             {contact?.phone ?? (contact?.username ? `@${contact.username}` : 'WhatsApp user')}
                             {c.phone_number ? ` · via ${c.phone_number.verified_name ?? c.phone_number.display_phone_number}` : ''}
@@ -241,6 +263,7 @@ export function Thread({
                     </div>
                     {/* Status and actions: one group that wraps as a whole row when space is short, so nothing is hidden. */}
                     <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
+                        <WaitChip conversation={c} fetchedAt={conversation.dataUpdatedAt} now={now} large />
                         {numberGone ? null : c.window.open ? (
                             <Badge tone="good" dot title="The customer wrote in the last 24 hours: you can send text and media.">
                                 Window open · {timeLeft(c.window.expires_at)}
@@ -389,6 +412,8 @@ export function Thread({
                                         quoted={m.reply_to_wamid ? (byWamid.get(m.reply_to_wamid) ?? null) : undefined}
                                         authorLabel={author}
                                         onReply={disabledReason ? undefined : setReplyTo}
+                                        onRetry={disabledReason ? undefined : retry}
+                                        onTemplate={disabledReason ? undefined : () => setTemplateOpen(true)}
                                     />
                                 </div>
                             </Fragment>

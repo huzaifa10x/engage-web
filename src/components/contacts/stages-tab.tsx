@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -55,6 +55,11 @@ export function StagesTab({ open }: { open: boolean }) {
     const qc = useQueryClient();
     const stages = useStages(open);
     const list = stages.data ?? [];
+    const archived = useQuery({
+        queryKey: [...keys.stages, 'archived'],
+        queryFn: () => api<{ data: CrmStage[] }>('crm/stages', { query: { include_archived: 1 } }).then((r) => r.data.filter((s) => s.archived)),
+        enabled: open,
+    });
     const [name, setName] = useState('');
     const [color, setColor] = useState<StageColor>('grey');
     const [group, setGroup] = useState<StageGroup>('open');
@@ -85,7 +90,7 @@ export function StagesTab({ open }: { open: boolean }) {
         <div className="grid gap-3">
             <p className="text-[12.5px] text-muted-foreground">
                 Stages show where each enquiry is in your sales process. Each stage is Open, Won or Lost, so reports keep working when you rename it. Won needs
-                a verified payment, or approval with a reference.
+                a verified payment or a reference; Lost asks why.
             </p>
             {list.length === 0 && !stages.isLoading && (
                 <div className="grid justify-items-center gap-2 rounded-lg border border-dashed p-5 text-center text-[13px] text-muted-foreground">
@@ -128,7 +133,9 @@ export function StagesTab({ open }: { open: boolean }) {
                                 </Badge>
                             </button>
                         )}
-                        <span className="text-[12px] text-muted-foreground">{s.contacts ?? 0} contact(s)</span>
+                        <span className="text-[12px] text-muted-foreground">
+                            {s.enquiries ?? 0} enquir{(s.enquiries ?? 0) === 1 ? 'y' : 'ies'}
+                        </span>
                         {editable ? (
                             <GroupSelect
                                 value={s.group ?? 'open'}
@@ -165,8 +172,9 @@ export function StagesTab({ open }: { open: boolean }) {
                                     aria-label={`Remove stage ${s.name}`}
                                     disabled={run.isPending}
                                     onClick={() =>
-                                        window.confirm(`Remove the stage “${s.name}”? Contacts on it must be moved first. Used stages are kept in history.`) &&
-                                        run.mutate(() => api(`crm/stages/${s.id}`, { method: 'DELETE' }))
+                                        window.confirm(
+                                            `Archive the stage “${s.name}”? Every enquiry on it must be moved first, and you always keep at least one Open, one Won and one Lost stage. Archived stages stay in the history and can be restored.`,
+                                        ) && run.mutate(() => api(`crm/stages/${s.id}`, { method: 'DELETE' }))
                                     }
                                 >
                                     <Trash2Icon />
@@ -176,6 +184,30 @@ export function StagesTab({ open }: { open: boolean }) {
                     </li>
                 ))}
             </ol>
+            {(archived.data ?? []).length > 0 && (
+                <div className="grid gap-1.5">
+                    <p className="text-[12px] font-semibold text-muted-foreground">Archived</p>
+                    <ul className="grid gap-1.5">
+                        {archived.data!.map((s) => (
+                            <li key={s.id} className="flex items-center gap-2 rounded-md border border-dashed px-2.5 py-1.5 opacity-80">
+                                <Badge tone="grey">{s.name}</Badge>
+                                <span className="text-[12px] text-muted-foreground">{GROUPS.find((g) => g.value === (s.group ?? 'open'))?.label}</span>
+                                {editable && (
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="ml-auto"
+                                        disabled={run.isPending}
+                                        onClick={() => run.mutate(() => api(`crm/stages/${s.id}/restore`, { method: 'POST' }))}
+                                    >
+                                        Restore
+                                    </Button>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
             {editable && (
                 <form
                     className="flex gap-2"

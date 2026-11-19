@@ -5,6 +5,7 @@ import { Loader2Icon, MessageSquarePlusIcon, RadioIcon, WifiOffIcon } from 'luci
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 
+import { useChatOpen } from '@/components/app/app-shell';
 import { EmptyState, Forbidden } from '@/components/app/page-header';
 import { useSelectedNumber } from '@/components/app/number-switcher';
 import { useSession } from '@/components/app/session';
@@ -29,6 +30,7 @@ function Inbox() {
     const [numberId] = useSelectedNumber();
     const [composeOpen, setComposeOpen] = useState(false);
     const selected = params.get('c');
+    useChatOpen(!!selected);
     const [listWidth, setListWidth] = useStored<number>('engage.inbox.list-width', 384);
     // A WhatsApp Business app number whose chat history import has not finished yet.
     const syncing = (usePhoneNumbers().data ?? []).find(
