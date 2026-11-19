@@ -7,6 +7,7 @@ import { useSelectedNumber } from '@/components/app/number-switcher';
 import { useSession } from '@/components/app/session';
 import { FollowUpResultsCard } from '@/components/analytics/follow-up-results';
 import { FeedbackResultsCard } from '@/components/analytics/feedback-results';
+import { MissedLeadsCard } from '@/components/analytics/missed-leads';
 import { ResponseTimesCard } from '@/components/analytics/response-times';
 import { Funnel } from '@/components/campaigns/campaign-detail';
 import { Badge } from '@/components/ui/badge';
@@ -201,6 +202,8 @@ export default function InsightsPage() {
                             </TableBody>
                         </Table>
                     </Card>
+
+                    <MissedLeadsCard />
 
                     <ResponseTimesCard days={days} numberId={numberId} />
 

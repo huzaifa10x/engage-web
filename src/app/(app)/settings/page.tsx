@@ -12,6 +12,7 @@ import { useSession } from '@/components/app/session';
 import { TwoFactorCard } from '@/components/auth/two-factor';
 import { EmailNotificationsCard, RememberedDevicesCard } from '@/components/settings/account-cards';
 import { BusinessHoursCard, CannedResponsesCard, InboxRulesCard } from '@/components/settings/inbox-cards';
+import { ReplyPromiseCard } from '@/components/settings/reply-promise-card';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -444,6 +445,7 @@ export default function SettingsPage() {
             ) : tab === 'hours' ? (
                 <div className="grid gap-4">
                     <BusinessHoursCard canManage={can(P.SettingsManage)} />
+                    <ReplyPromiseCard canManage={can(P.SettingsManage)} />
                     <p className="text-[13px] text-muted-foreground">
                         The after-hours auto reply for each number is in{' '}
                         <Link href="/follow-ups" className="font-medium text-foreground underline-offset-2 hover:underline">
