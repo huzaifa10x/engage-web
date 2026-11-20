@@ -1816,9 +1816,8 @@ export type InboxHealth = {
 export type ContactFunnel = { all: number; subscriber: number; lead: number; opportunity: number; customer: number; other: number; duplicates: number };
 
 export type CrmSync = {
-    provider: 'none' | 'hubspot' | 'zoho';
+    provider: 'none' | 'hubspot';
     providers_available: string[];
-    stage_map: { stage: StageRef & { group: StageGroup }; hubspot: string; zoho: string }[];
+    stage_map: { stage: StageRef & { group: StageGroup }; hubspot: string }[];
     hubspot_stages: string[];
-    zoho_stages: string[];
 };

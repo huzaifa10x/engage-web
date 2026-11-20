@@ -73,9 +73,9 @@ export function LifeBar({ contact, fill = false, note = false }: { contact: Cont
     );
 }
 
-/* ---------- sync (status only until HubSpot / Zoho are connected) ---------- */
+/* ---------- sync (status only until HubSpot is connected) ---------- */
 
-export function useSyncState(): { tone: 'none' | 'warn' | 'good'; label: string; provider: 'none' | 'hubspot' | 'zoho' } {
+export function useSyncState(): { tone: 'none' | 'warn' | 'good'; label: string; provider: 'none' | 'hubspot' } {
     const sync = useCrmSync();
     const provider = sync.data?.provider ?? 'none';
     if (provider === 'none') return { tone: 'none', label: 'Not connected', provider };
@@ -98,7 +98,6 @@ export type CrmField = {
     get: (x: FieldCtx) => string;
     edit: EditKind | null;
     hubspot: string;
-    zoho: string;
     dir: Dir;
     note: string;
     /** The change-history field names that count as an edit of this row. */
@@ -117,7 +116,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => engageId(c.id),
         edit: null,
         hubspot: 'engagex_id (custom)',
-        zoho: 'engageX_ID (custom)',
         dir: 'out',
         note: 'Permanent. Never changes, survives merges.',
     },
@@ -128,7 +126,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => or(c.bsuid),
         edit: null,
         hubspot: '—',
-        zoho: '—',
         dir: 'match',
         note: 'Supplied by Meta. Used inside engageX to match messages to this contact; not sent to other systems.',
     },
@@ -139,7 +136,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => (c.phone ? fmtPhone(c.phone) : 'Hidden by customer'),
         edit: 'tel',
         hubspot: 'phone / mobilephone',
-        zoho: 'Mobile',
         dir: 'both',
         note: 'Given by the customer. 2nd match key, stored as +971…',
         history: ['phone'],
@@ -151,7 +147,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => (c.username ? `@${c.username}` : '—'),
         edit: null,
         hubspot: '—',
-        zoho: '—',
         dir: 'match',
         note: 'Supplied by Meta. Matching only.',
     },
@@ -162,7 +157,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => or(c.email),
         edit: 'email',
         hubspot: 'email',
-        zoho: 'Email',
         dir: 'both',
         note: '3rd match key.',
         history: ['email'],
@@ -174,7 +168,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => or(first(c)),
         edit: 'text',
         hubspot: 'firstname',
-        zoho: 'First_Name',
         dir: 'both',
         note: 'The name the customer gave or your team saved.',
         history: ['name'],
@@ -186,9 +179,8 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => or(last(c)),
         edit: 'text',
         hubspot: 'lastname',
-        zoho: 'Last_Name',
         dir: 'both',
-        note: 'Zoho requires Last name. If none is saved, engageX sends “WhatsApp contact” + engageX ID, not the WhatsApp profile name.',
+        note: '',
         history: ['name'],
     },
     {
@@ -198,7 +190,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => or(c.profile_name),
         edit: null,
         hubspot: '—',
-        zoho: '—',
         dir: 'match',
         note: 'Supplied by Meta. Shown to agents in engageX only; save it as the contact’s name if the customer confirms it.',
     },
@@ -209,7 +200,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => or(c.company),
         edit: 'text',
         hubspot: 'company (+ associated Company)',
-        zoho: 'Company (Lead) / Account_Name (Contact)',
         dir: 'both',
         note: '',
         history: ['company'],
@@ -221,7 +211,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => or(c.job_title),
         edit: 'text',
         hubspot: 'jobtitle',
-        zoho: 'Designation (Lead) / Title (Contact)',
         dir: 'both',
         note: '',
         history: ['job_title'],
@@ -233,7 +222,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => or(c.city),
         edit: 'text',
         hubspot: 'city',
-        zoho: 'City / Mailing_City',
         dir: 'both',
         note: '',
         history: ['city'],
@@ -245,7 +233,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => or(c.country),
         edit: 'text',
         hubspot: 'country',
-        zoho: 'Country / Mailing_Country',
         dir: 'both',
         note: '',
         history: ['country'],
@@ -257,7 +244,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => c.language ?? 'English',
         edit: 'lang',
         hubspot: 'hs_language',
-        zoho: 'Preferred_Language (custom)',
         dir: 'both',
         note: 'Picks Arabic or English templates.',
         history: ['language'],
@@ -269,7 +255,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => c.owner?.name ?? 'Unassigned',
         edit: 'owner',
         hubspot: 'hubspot_owner_id',
-        zoho: 'Owner',
         dir: 'both',
         note: 'Mapped user-to-user in sync settings.',
         history: ['owner_membership_id'],
@@ -281,7 +266,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => c.lifecycle?.label ?? 'Lead',
         edit: null,
         hubspot: 'lifecyclestage',
-        zoho: 'Module: Leads → Contacts (convert)',
         dir: 'out',
         note: 'Automatic from deals. Only moves forward.',
     },
@@ -292,7 +276,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => (c.lifecycle?.key === 'customer' ? '—' : (c.lead_status?.label ?? 'New')),
         edit: 'leadStatus',
         hubspot: 'hs_lead_status',
-        zoho: 'Lead_Status',
         dir: 'both',
         note: 'Automatic unless an agent sets it.',
         history: ['lead_status'],
@@ -304,7 +287,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => c.tags.join(', ') || '—',
         edit: 'tags',
         hubspot: 'engagex_tags (custom multi-select)',
-        zoho: 'Tag',
         dir: 'both',
         note: '',
         history: ['tags'],
@@ -316,7 +298,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => contactSource(c.source),
         edit: null,
         hubspot: 'engagex_original_source (custom)',
-        zoho: 'Lead_Source',
         dir: 'out',
         note: 'HubSpot sets its own Original source automatically, so engageX writes to a custom property.',
     },
@@ -327,7 +308,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => or(c.source_detail),
         edit: 'text',
         hubspot: 'engagex_source_detail (custom)',
-        zoho: 'Source_Detail (custom)',
         dir: 'out',
         note: 'Ad, campaign or page.',
         history: ['source_detail'],
@@ -339,7 +319,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c, now }) => (c.created_at ? fmtWhen(c.created_at, now) : '—'),
         edit: null,
         hubspot: 'engagex_created_at (custom)',
-        zoho: 'engageX_Created (custom)',
         dir: 'out',
         note: '',
     },
@@ -350,7 +329,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => consentLabel(c.consent_state),
         edit: null,
         hubspot: 'Subscription: WhatsApp marketing',
-        zoho: 'WhatsApp_Opt_In (custom)',
         dir: 'both',
         note: 'Opt-outs sync both ways and always win (Meta: respect opt-outs made on or off WhatsApp). Opt-ins only come from the customer.',
     },
@@ -361,7 +339,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ consentAt }) => consentAt ?? '—',
         edit: null,
         hubspot: 'whatsapp_consent_at / _via (custom)',
-        zoho: 'WhatsApp_Consent_Date / _Via (custom)',
         dir: 'both',
         note: 'Proof of when and how consent changed.',
     },
@@ -372,7 +349,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c, now }) => (c.last_inbound_at ? fmtWhen(c.last_inbound_at, now) : '—'),
         edit: null,
         hubspot: 'Logged as WhatsApp activity',
-        zoho: 'Notes / Activities',
         dir: 'out',
         note: '',
     },
@@ -383,7 +359,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c, now }) => (c.last_human_reply_at ? fmtWhen(c.last_human_reply_at, now) : '—'),
         edit: null,
         hubspot: 'engagex_last_human_reply (custom)',
-        zoho: 'Last_Human_Reply (custom)',
         dir: 'out',
         note: '',
     },
@@ -399,7 +374,6 @@ export const CRM_FIELDS: CrmField[] = [
                   : 'Closed · template only',
         edit: null,
         hubspot: '—',
-        zoho: '—',
         dir: 'none',
         note: 'Live in engageX only.',
     },
@@ -410,7 +384,6 @@ export const CRM_FIELDS: CrmField[] = [
         get: ({ contact: c }) => (!c.chat ? 'No chat yet' : (REPLY_LABEL[c.chat.state] ?? 'Waiting for customer')),
         edit: null,
         hubspot: '—',
-        zoho: '—',
         dir: 'none',
         note: 'Live in engageX only.',
     },
@@ -496,7 +469,7 @@ export function FieldRow({
     const c = ctx.contact;
     const ok = canEditField(c, f) && can(P.ContactsUpdate);
     const lastChange = changes.find((x) => f.history?.includes(x.field));
-    const tip = `HubSpot: ${f.hubspot} · Zoho: ${f.zoho}${lastChange ? ` · Last changed by ${lastChange.by?.name ?? 'Engage'}, ${fmtWhen(lastChange.at, ctx.now)}` : ''}`;
+    const tip = `HubSpot: ${f.hubspot}${lastChange ? ` · Last changed by ${lastChange.by?.name ?? 'Engage'}, ${fmtWhen(lastChange.at, ctx.now)}` : ''}`;
     const [flash, setFlash] = useState(false);
     const pen = useRef<HTMLButtonElement>(null);
     const value = f.get(ctx);

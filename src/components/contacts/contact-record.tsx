@@ -94,7 +94,7 @@ function ActivityList({ items, now }: { items: Act[]; now: number }) {
     );
 }
 
-function DealRows({ deals, now, codes }: { deals: Enquiry[]; now: number; codes?: Map<string, { hubspot: string; zoho: string }> }) {
+function DealRows({ deals, now, codes }: { deals: Enquiry[]; now: number; codes?: Map<string, { hubspot: string }> }) {
     if (deals.length === 0) return <p className="text-[12px] text-muted-foreground">No deals. Support contacts don’t need one.</p>;
 
     return (
@@ -117,8 +117,7 @@ function DealRows({ deals, now, codes }: { deals: Enquiry[]; now: number; codes?
                     </p>
                     {codes && d.stage && codes.get(d.stage.id) && (
                         <p className="text-[12px] text-muted-foreground">
-                            HubSpot dealstage: <code className="rounded bg-muted px-1 font-mono text-[11px]">{codes.get(d.stage.id)?.hubspot}</code> · Zoho:{' '}
-                            <code className="rounded bg-muted px-1 font-mono text-[11px]">{codes.get(d.stage.id)?.zoho}</code>
+                            HubSpot dealstage: <code className="rounded bg-muted px-1 font-mono text-[11px]">{codes.get(d.stage.id)?.hubspot}</code>
                         </p>
                     )}
                 </div>
@@ -424,7 +423,7 @@ export function FullRecord({ contact: c, onReview }: { contact: Contact; onRevie
     const changes = useContactChanges(c.id).data ?? [];
     const sync = useSyncState();
     const crm = useCrmSync();
-    const codes = useMemo(() => new Map((crm.data?.stage_map ?? []).map((m) => [m.stage.id, { hubspot: m.hubspot, zoho: m.zoho }])), [crm.data]);
+    const codes = useMemo(() => new Map((crm.data?.stage_map ?? []).map((m) => [m.stage.id, { hubspot: m.hubspot }])), [crm.data]);
     const a = useRecordActions(c);
 
     return (
@@ -531,7 +530,6 @@ export function FullRecord({ contact: c, onReview }: { contact: Contact; onRevie
                     <RBox title="Sync">
                         <Kv k="Status" v={<Chip tone={sync.tone === 'warn' ? 'warn' : sync.tone === 'good' ? 'good' : 'grey'}>{sync.label}</Chip>} />
                         <Kv k="HubSpot contact ID" v={<span className="text-muted-foreground">—</span>} />
-                        <Kv k="Zoho record" v={<span className="text-muted-foreground">—</span>} />
                         <Kv k="Matched by" v={c.bsuid ? 'WhatsApp user ID' : c.phone ? 'Phone' : 'Email'} />
                     </RBox>
                 </div>

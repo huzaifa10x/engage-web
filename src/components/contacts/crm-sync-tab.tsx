@@ -20,7 +20,7 @@ const td = 'border-b border-line-2 px-3 py-2.5 align-middle text-[13px]';
 
 /**
  * Contacts & CRM › Fields & sync (3.5): which CRM is connected, how records are matched, who wins when
- * both sides change, Meta's policy guardrails, and the field and stage mapping a HubSpot or Zoho
+ * both sides change, Meta's policy guardrails, and the field and stage mapping a HubSpot
  * connection will use. Connecting is not available yet, so every contact shows "Not connected".
  */
 export function CrmSyncTab() {
@@ -31,11 +31,11 @@ export function CrmSyncTab() {
     const provider = sync.data?.provider ?? 'none';
     const rows =
         obj === 'contact'
-            ? CRM_FIELDS.map((f) => [f.label, f.group, f.hubspot, f.zoho, f.dir, f.note] as const)
-            : (obj === 'deal' ? DEAL_FIELDS : TASK_FIELDS).map((f) => [f[0], '', f[1], f[2], f[3], f[4]] as const);
-    const save = async (stageId: string, side: 'hubspot' | 'zoho', value: string) => {
-        const map = Object.fromEntries((sync.data?.stage_map ?? []).map((m) => [m.stage.id, { hubspot: m.hubspot, zoho: m.zoho }]));
-        map[stageId] = { ...map[stageId], [side]: value };
+            ? CRM_FIELDS.map((f) => [f.label, f.group, f.hubspot, f.dir, f.note] as const)
+            : (obj === 'deal' ? DEAL_FIELDS : TASK_FIELDS).map((f) => [f[0], '', f[1], f[3], f[4]] as const);
+    const save = async (stageId: string, value: string) => {
+        const map = Object.fromEntries((sync.data?.stage_map ?? []).map((m) => [m.stage.id, { hubspot: m.hubspot }]));
+        map[stageId] = { hubspot: value };
         try {
             await saveCrmStageMap(map);
             void qc.invalidateQueries({ queryKey: ['crm', 'sync'] });
@@ -51,7 +51,6 @@ export function CrmSyncTab() {
                 {(
                     [
                         ['hubspot', 'HubSpot', 'One contact with a lifecycle stage; deals as separate records.'],
-                        ['zoho', 'Zoho CRM', 'Leads module until converted, then Contact + Account + Deal.'],
                         ['none', 'Not connected', 'engageX is the only CRM.'],
                     ] as const
                 ).map(([k, l, d]) => {
@@ -111,7 +110,7 @@ export function CrmSyncTab() {
                     ],
                     [
                         'Opt-outs are honoured from anywhere.',
-                        'An unsubscribe in HubSpot or Zoho blocks WhatsApp marketing in engageX. Opt-ins only come from the customer.',
+                        'An unsubscribe in HubSpot blocks WhatsApp marketing in engageX. Opt-ins only come from the customer.',
                     ],
                     ['No sensitive IDs.', 'There are no fields for card, bank account, passport or Emirates ID numbers.'],
                     ['Chats stay private.', 'Merging joins one person’s records; nothing from one customer’s chat is shown to another.'],
@@ -122,7 +121,7 @@ export function CrmSyncTab() {
                 ))}
             </RBox>
             <RBox title="Sync log">
-                <p className="text-[12px] text-muted-foreground">No sync run yet. The log fills once HubSpot or Zoho CRM is connected.</p>
+                <p className="text-[12px] text-muted-foreground">No sync run yet. The log fills once HubSpot is connected.</p>
             </RBox>
             <RBox
                 className="min-[1100px]:col-span-3"
@@ -146,7 +145,6 @@ export function CrmSyncTab() {
                                 <th className={th}>engageX field</th>
                                 {obj === 'contact' && <th className={th}>Group</th>}
                                 <th className={th}>HubSpot property</th>
-                                <th className={th}>Zoho CRM field</th>
                                 <th className={th}>Direction</th>
                                 <th className={th}>Notes</th>
                             </tr>
@@ -161,19 +159,16 @@ export function CrmSyncTab() {
                                     <td className={td}>
                                         <code className={code}>{r[2]}</code>
                                     </td>
-                                    <td className={td}>
-                                        <code className={code}>{r[3]}</code>
-                                    </td>
-                                    <td className={cn(td, 'text-[12px] whitespace-nowrap')}>{DIR_LABEL[r[4]]}</td>
-                                    <td className={cn(td, 'text-[12px] text-muted-foreground')}>{r[5]}</td>
+                                    <td className={cn(td, 'text-[12px] whitespace-nowrap')}>{DIR_LABEL[r[3]]}</td>
+                                    <td className={cn(td, 'text-[12px] text-muted-foreground')}>{r[4]}</td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
                 <p className="mt-2 text-[12px] text-muted-foreground">
-                    Property names are the defaults in new HubSpot and Zoho accounts. Custom ones are created when the CRM is connected. Your developer should
-                    confirm names in each customer’s account settings.
+                    Property names are the defaults in new HubSpot accounts. Custom ones are created when the CRM is connected. Your developer should confirm
+                    names in each customer’s account settings.
                 </p>
             </RBox>
             <RBox className="min-[1100px]:col-span-3" title="Deal stage mapping">
@@ -183,7 +178,6 @@ export function CrmSyncTab() {
                             <tr>
                                 <th className={th}>engageX stage</th>
                                 <th className={th}>HubSpot dealstage</th>
-                                <th className={th}>Zoho Stage</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -192,28 +186,26 @@ export function CrmSyncTab() {
                                     <td className={td}>
                                         <b className="font-semibold">{m.stage.name}</b>
                                     </td>
-                                    {(['hubspot', 'zoho'] as const).map((side) => (
-                                        <td key={side} className={td}>
-                                            <select
-                                                value={m[side]}
-                                                disabled={!can(P.SettingsManage)}
-                                                onChange={(e) => void save(m.stage.id, side, e.target.value)}
-                                                aria-label={`${m.stage.name} in ${side === 'hubspot' ? 'HubSpot' : 'Zoho'}`}
-                                                className="h-8 rounded-md border border-input bg-card px-2 text-[13px] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20 disabled:opacity-60"
-                                            >
-                                                {(side === 'hubspot' ? sync.data?.hubspot_stages : sync.data?.zoho_stages)?.map((x) => (
-                                                    <option key={x}>{x}</option>
-                                                ))}
-                                            </select>
-                                        </td>
-                                    ))}
+                                    <td className={td}>
+                                        <select
+                                            value={m.hubspot}
+                                            disabled={!can(P.SettingsManage)}
+                                            onChange={(e) => void save(m.stage.id, e.target.value)}
+                                            aria-label={`${m.stage.name} in HubSpot`}
+                                            className="h-8 rounded-md border border-input bg-card px-2 text-[13px] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20 disabled:opacity-60"
+                                        >
+                                            {sync.data?.hubspot_stages.map((x) => (
+                                                <option key={x}>{x}</option>
+                                            ))}
+                                        </select>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
                 <p className="mt-1.5 text-[12px] text-muted-foreground">
-                    engageX reads the connected CRM’s real pipeline stages on connect. These are the default pipelines.
+                    engageX reads HubSpot’s real pipeline stages on connect. These are the default pipeline’s stages.
                 </p>
             </RBox>
         </div>

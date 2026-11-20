@@ -25,8 +25,7 @@ export function CrmShell({ tab, children }: { tab: CrmTab; children: React.React
                 <div className="pb-2">
                     <h1 className="text-[17px] font-semibold tracking-tight">Contacts &amp; CRM</h1>
                     <span className="text-[12px] text-muted-foreground">
-                        Same records as the Team Inbox ·{' '}
-                        {provider === 'none' ? 'No CRM connected' : `${provider === 'hubspot' ? 'HubSpot' : 'Zoho CRM'} connected`}
+                        Same records as the Team Inbox · {provider === 'none' ? 'No CRM connected' : 'HubSpot connected'}
                     </span>
                 </div>
                 <nav className="flex gap-0.5 pb-2" aria-label="Contacts & CRM">

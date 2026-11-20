@@ -1115,7 +1115,7 @@ export const useContactFunnel = () =>
 
 export const useCrmSync = () => useQuery({ queryKey: ['crm', 'sync'], queryFn: () => api<Data<CrmSync>>('crm/sync').then((r) => r.data) });
 
-export const saveCrmStageMap = (stage_map: Record<string, { hubspot: string; zoho: string }>) =>
+export const saveCrmStageMap = (stage_map: Record<string, { hubspot: string }>) =>
     api<Data<CrmSync>>('crm/sync', { method: 'PUT', body: { stage_map } }).then((r) => r.data);
 
 export const setCurrentEnquiry = (contactId: string, enquiryId: string) =>
