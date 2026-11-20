@@ -1,124 +1,88 @@
 'use client';
 
-import { RingAvatar, TagDots } from '@/components/inbox/window-ring';
-import { LIFECYCLE_TONE } from '@/lib/inbox';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-    Columns3Icon,
-    ContactIcon,
-    DownloadIcon,
-    MessageSquareIcon,
-    MoreHorizontalIcon,
-    PencilIcon,
-    SearchIcon,
-    SlidersHorizontalIcon,
-    SmartphoneIcon,
-    Trash2Icon,
-    UploadIcon,
-    UserPlusIcon,
-} from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useState } from 'react';
-import { toast } from 'sonner';
+import { DownloadIcon, MoreHorizontalIcon, PencilIcon, PlusIcon, SearchIcon, SlidersHorizontalIcon, UploadIcon } from 'lucide-react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useState } from 'react';
 
-import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
+import { Forbidden } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
 import { BulkEditDialog } from '@/components/contacts/bulk-edit-dialog';
-import { ContactDialog } from '@/components/contacts/contact-dialog';
-import { useOpenContact } from '@/components/contacts/contact-sheet';
-import { EnquiryBoardView } from '@/components/contacts/enquiry-board';
-import { SourceChip } from '@/components/growth/source-chip';
-import { StageBadge } from '@/components/contacts/stage-badge';
+import { usePeekedContact, useOpenContact } from '@/components/contacts/contact-sheet';
 import { CrmSettingsDialog } from '@/components/contacts/crm-settings-dialog';
-import { describeRule, FieldFilter, type FieldFilterValue, formatFieldValue } from '@/components/contacts/field-filter';
-import { ImportContactsDialog } from '@/components/contacts/import-dialog';
-import { SegmentDialog } from '@/components/contacts/segment-dialog';
-import { StartConversationDialog } from '@/components/inbox/start-conversation-dialog';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import { consentLabel, consentTone, LifePill, useSyncState, useTeamOwners } from '@/components/contacts/crm-fields';
+import { CrmShell, type CrmTab } from '@/components/contacts/crm-shell';
+import { CrmSyncTab } from '@/components/contacts/crm-sync-tab';
+import { EnquiryBoardView } from '@/components/contacts/enquiry-board';
 import { ExportContactsDialog } from '@/components/contacts/export-dialog';
-import { Avatar } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
+import { ImportContactsDialog } from '@/components/contacts/import-dialog';
+import { NewContactDialog } from '@/components/contacts/new-contact-dialog';
+import { SegmentDialog } from '@/components/contacts/segment-dialog';
+import { Chip, useNow } from '@/components/inbox/conversation-list';
+import { OwnerAvatar, RingAvatar } from '@/components/inbox/window-ring';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-    DropdownMenu,
-    DropdownMenuCheckItem,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { api, errorMessage } from '@/lib/api';
-import { contactSource, humanize, number, relative } from '@/lib/format';
+import { contactSource } from '@/lib/format';
+import { aedK, engageId, fmtDay, fmtPhone } from '@/lib/inbox';
 import { P } from '@/lib/permissions';
-import { useStored } from '@/hooks/use-stored';
-import { type ContactFilters, keys, useContactCounts, useContactFields, useContacts, usePhoneNumbers, useSegments, useStages, useTags } from '@/lib/queries';
-import type { ConsentState, Contact, Segment } from '@/lib/types';
+import { type ContactFilters, useContactFunnel, useContacts, useSegments, useTags } from '@/lib/queries';
+import type { Contact, LifecycleKey, Segment } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-const ALL = '__all__';
+const LIFE: ['' | LifecycleKey, string][] = [
+    ['', 'All contacts'],
+    ['subscriber', 'Subscriber'],
+    ['lead', 'Lead'],
+    ['opportunity', 'Opportunity'],
+    ['customer', 'Customer'],
+    ['other', 'Other'],
+];
+const th = 'border-b bg-[#f5f5f4] px-3 py-2.5 text-left text-[11px] font-semibold tracking-[0.06em] whitespace-nowrap text-muted-foreground uppercase';
+const td = 'border-b border-line-2 px-3 py-2.5 align-middle';
+const windowFor = (c: Contact) =>
+    c.chat?.window_expires_at ?? (c.last_inbound_at ? new Date(new Date(c.last_inbound_at).getTime() + 86_400_000).toISOString() : null);
 
-function ContactsList() {
+/** Contacts & CRM › Contacts (3.5): search any format or ID, lifecycle funnel, possible duplicates. */
+function ContactsTab() {
     const { can } = useSession();
-    const router = useRouter();
-    const qc = useQueryClient();
-    const [search, setSearch] = useState('');
-    const [filters, setFilters] = useState<ContactFilters>({});
-    // Adding a contact opens the form; opening an existing one slides its record in over the list (3.3).
-    const [adding, setAdding] = useState(false);
+    const now = useNow();
     const openContact = useOpenContact();
-    const [messaging, setMessaging] = useState<Contact | null>(null);
-    const [deleting, setDeleting] = useState<Contact | null>(null);
+    const peeked = usePeekedContact();
+    const owners = useTeamOwners();
+    const sync = useSyncState();
+    const funnel = useContactFunnel().data;
+    const [search, setSearch] = useState('');
+    const [q, setQ] = useState('');
+    const [life, setLife] = useState<'' | LifecycleKey>('');
+    const [owner, setOwner] = useState('');
+    const [dup, setDup] = useState(false);
+    const [adding, setAdding] = useState(false);
     const [importing, setImporting] = useState(false);
-    const [managing, setManaging] = useState(false);
-    const [segmentEditing, setSegmentEditing] = useState<Segment | null | undefined>(undefined); // undefined = closed, null = new
-    const segments = useSegments(can(P.ContactsView));
-    const tags = useTags(can(P.ContactsView));
-    const stages = (useStages(can(P.ContactsView)).data ?? []).filter((s) => !s.archived);
-    const fields = useContactFields(can(P.ContactsView)).data ?? [];
-    const [fieldFilter, setFieldFilter] = useState<FieldFilterValue | null>(null);
-    // Custom fields shown as columns: remembered per browser (comma-separated keys).
-    const [columnsRaw, setColumnsRaw] = useStored<string>('engage.contacts.columns', '');
-    const columnKeys = columnsRaw.split(',').filter((k) => k !== '');
-    const columns = fields.filter((f) => columnKeys.includes(f.key));
-    const toggleColumn = (key: string) => setColumnsRaw((columnKeys.includes(key) ? columnKeys.filter((k) => k !== key) : [...columnKeys, key]).join(','));
-    const filtered = Boolean(
-        filters.q || filters.consent || filters.tag || filters.segment_id || filters.synced_from || filters.source || filters.filter || filters.stage_id,
-    );
-    // Numbers shared with the WhatsApp Business app: the only ones contacts can have been synced from.
-    const syncNumbers = (usePhoneNumbers().data ?? []).filter((n) => n.onboarding_type === 'coexistence');
     const [exporting, setExporting] = useState(false);
-    // Selected contacts (by id, with the row as shown) for Edit selected. Cleared when the filters change.
-    const [selected, setSelected] = useState<Map<string, Contact>>(new Map());
-    const [bulkEditing, setBulkEditing] = useState(false);
-    const [selectionFor, setSelectionFor] = useState('');
-    const filterKey = JSON.stringify(filters);
-    if (selectionFor !== filterKey) {
-        setSelectionFor(filterKey);
-        if (selected.size > 0) setSelected(new Map());
-    }
-    const MAX_SELECTED = 500;
-
+    const [managing, setManaging] = useState(false);
+    const [segmentEditing, setSegmentEditing] = useState<Segment | null | undefined>(undefined);
+    const segments = useSegments(exporting);
+    const tags = useTags(exporting);
+    useEffect(() => {
+        const t = setTimeout(() => setQ(search.trim()), 200);
+        return () => clearTimeout(t);
+    }, [search]);
+    const filters: ContactFilters = {
+        q: q || undefined,
+        lifecycle: !dup && life ? life : undefined,
+        owner: owner || undefined,
+        duplicates: dup ? 1 : undefined,
+        sort: 'activity',
+    };
     const contacts = useContacts(filters);
     const rows = contacts.data?.pages.flatMap((p) => p.data) ?? [];
-    const rowIds = rows.map((r) => r.id);
-    const counts = useContactCounts(filters).data;
+    const ids = rows.map((r) => r.id);
+    // Select several and edit them together (tags, consent, owner…): kept from Engage beside the 3.5 table.
     const canBulk = can(P.ContactsUpdate);
+    const MAX_SELECTED = 500;
+    const [selected, setSelected] = useState<Map<string, Contact>>(new Map());
+    const [bulkEditing, setBulkEditing] = useState(false);
     const allShown = rows.length > 0 && rows.every((c) => selected.has(c.id));
     const someShown = rows.some((c) => selected.has(c.id));
     const toggle = (c: Contact, on: boolean) =>
@@ -137,221 +101,105 @@ function ContactsList() {
             }
             return next;
         });
-    // One Source filter: how a contact was added (manual, import, inbound …), or the number it was synced from.
-    const sourceValue = filters.synced_from ? `synced:${filters.synced_from}` : filters.source ? `source:${filters.source}` : ALL;
-    const pickSource = (v: string) =>
-        setFilters((f) => ({
-            ...f,
-            source: v.startsWith('source:') ? v.slice(7) : undefined,
-            synced_from: v.startsWith('synced:') ? v.slice(7) : undefined,
-        }));
-
-    const remove = useMutation({
-        mutationFn: (id: string) => api(`contacts/${id}`, { method: 'DELETE' }),
-        onSuccess: () => {
-            toast.success('Contact deleted');
-            void qc.invalidateQueries({ queryKey: keys.contactsAll });
-        },
-        onError: (e) => toast.error(errorMessage(e)),
-    });
-
-    if (!can(P.ContactsView)) return <Forbidden />;
+    const filterKey = JSON.stringify(filters);
+    const [selectionFor, setSelectionFor] = useState(filterKey);
+    if (selectionFor !== filterKey) {
+        setSelectionFor(filterKey);
+        if (selected.size > 0) setSelected(new Map());
+    }
+    const counts: Record<string, number | undefined> = { '': funnel?.all, ...funnel };
 
     return (
         <>
-            <PageHeader
-                title="Contacts"
-                description="Everyone who messaged your numbers or was added by your team. Consent is tracked per contact."
-                actions={
-                    <>
-                        <Button variant="outline" onClick={() => setManaging(true)}>
-                            <SlidersHorizontalIcon /> Segments, tags, fields & stages
-                        </Button>
-                        {can(P.ContactsExport) && (
-                            <Button variant="outline" onClick={() => setExporting(true)}>
-                                <DownloadIcon /> Export
-                            </Button>
-                        )}
-                        {can(P.ContactsImport) && (
-                            <Button variant="outline" onClick={() => setImporting(true)}>
-                                <UploadIcon /> Import
-                            </Button>
-                        )}
-                        {can(P.ContactsCreate) && (
-                            <Button onClick={() => setAdding(true)}>
-                                <UserPlusIcon /> Add contact
-                            </Button>
-                        )}
-                    </>
-                }
-            />
-
             <div className="mb-3 flex flex-wrap items-center gap-2">
-                <form
-                    onSubmit={(e) => {
-                        e.preventDefault();
-                        setFilters((f) => ({ ...f, q: search.trim() || undefined }));
-                    }}
-                    className="relative w-full sm:w-72"
-                >
-                    <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-faint" />
-                    <Input
+                <label className="relative block w-full max-w-[360px] flex-1">
+                    <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-[15px] -translate-y-1/2 text-faint" />
+                    <input
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        placeholder="Name, number, email or @username"
-                        className="pl-8"
+                        placeholder="Name, phone in any format, email, company, ID"
                         aria-label="Search contacts"
+                        className="h-8 w-full rounded-md border border-input bg-card pr-2 pl-8 text-[13px] outline-none placeholder:text-faint focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20"
                     />
-                </form>
-                <Select
-                    value={filters.consent ?? ALL}
-                    onValueChange={(v) => setFilters((f) => ({ ...f, consent: v === ALL ? undefined : (v as ConsentState) }))}
+                </label>
+                <select
+                    value={owner}
+                    onChange={(e) => setOwner(e.target.value)}
+                    aria-label="Owner"
+                    className="h-8 rounded-md border border-input bg-card px-2 text-[13px] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20"
                 >
-                    <SelectTrigger className="w-44" aria-label="Consent">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value={ALL}>Any consent</SelectItem>
-                        <SelectItem value="opted_in">Opted in</SelectItem>
-                        <SelectItem value="unknown">Unknown</SelectItem>
-                        <SelectItem value="opted_out">Opted out</SelectItem>
-                    </SelectContent>
-                </Select>
-                {((counts?.sources.length ?? 0) > 0 || syncNumbers.length > 0) && (
-                    <Select value={sourceValue} onValueChange={pickSource}>
-                        <SelectTrigger className="w-56" aria-label="Source">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value={ALL}>Any source</SelectItem>
-                            {(counts?.sources ?? []).map((src) => (
-                                <SelectItem key={src.value} value={`source:${src.value}`}>
-                                    {contactSource(src.value)} · {number(src.count)}
-                                </SelectItem>
-                            ))}
-                            {syncNumbers.map((n) => (
-                                <SelectItem key={n.id} value={`synced:${n.id}`}>
-                                    Synced from {n.verified_name ?? n.display_phone_number}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                )}
-                {stages.length > 0 && (
-                    <Select value={filters.stage_id ?? ALL} onValueChange={(v) => setFilters((f) => ({ ...f, stage_id: v === ALL ? undefined : v }))}>
-                        <SelectTrigger className="w-40" aria-label="Stage">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value={ALL}>Any stage</SelectItem>
-                            <SelectItem value="none">No stage</SelectItem>
-                            {stages.map((s) => (
-                                <SelectItem key={s.id} value={s.id}>
-                                    {s.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                )}
-                <Select value={filters.segment_id ?? ALL} onValueChange={(v) => setFilters((f) => ({ ...f, segment_id: v === ALL ? undefined : v }))}>
-                    <SelectTrigger className="w-48" aria-label="Segment">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value={ALL}>All contacts</SelectItem>
-                        {(segments.data ?? []).map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                                {s.name}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-                {(tags.data ?? []).length > 0 && (
-                    <Select value={filters.tag ?? ALL} onValueChange={(v) => setFilters((f) => ({ ...f, tag: v === ALL ? undefined : v }))}>
-                        <SelectTrigger className="w-40" aria-label="Tag">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value={ALL}>Any tag</SelectItem>
-                            {(tags.data ?? []).map((t) => (
-                                <SelectItem key={t.id} value={t.name}>
-                                    {t.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                )}
-                <FieldFilter
-                    fields={fields}
-                    value={fieldFilter}
-                    onChange={(v) => {
-                        setFieldFilter(v);
-                        setFilters((f) => ({ ...f, filter: v ? JSON.stringify(v) : undefined }));
-                    }}
-                />
-                {fields.length > 0 && (
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" aria-label="Columns">
-                                <Columns3Icon /> Columns{columns.length > 0 ? ` (${columns.length})` : ''}
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="max-h-80 overflow-y-auto">
-                            <DropdownMenuLabel>Show custom fields</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            {fields.map((f) => (
-                                <DropdownMenuCheckItem
-                                    key={f.key}
-                                    checked={columnKeys.includes(f.key)}
-                                    onSelect={(e) => {
-                                        e.preventDefault(); // keep the menu open to pick several
-                                        toggleColumn(f.key);
-                                    }}
-                                >
-                                    {f.label}
-                                </DropdownMenuCheckItem>
-                            ))}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                )}
-            </div>
-            {fieldFilter && (
-                <div className="-mt-1 mb-3 flex flex-wrap items-center gap-1.5 text-[12.5px]">
-                    <span className="text-muted-foreground">{fieldFilter.match === 'any' ? 'Any of:' : 'Matching:'}</span>
-                    {fieldFilter.rules.map((r, i) => (
-                        <Badge key={i} tone="brand">
-                            {describeRule(r, fields)}
-                        </Badge>
+                    <option value="">All owners</option>
+                    {owners.map((o) => (
+                        <option key={o.id} value={o.id}>
+                            {o.name.split(' ')[0]}
+                        </option>
                     ))}
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-2 text-[12px]"
-                        onClick={() => {
-                            setFieldFilter(null);
-                            setFilters((f) => ({ ...f, filter: undefined }));
-                        }}
-                    >
-                        Clear
+                </select>
+                <span className="flex-1" />
+                {can(P.ContactsImport) && (
+                    <Button variant="outline" size="sm" onClick={() => setImporting(true)}>
+                        <UploadIcon /> Import CSV
                     </Button>
-                </div>
-            )}
+                )}
+                {can(P.ContactsCreate) && (
+                    <Button size="sm" onClick={() => setAdding(true)}>
+                        <PlusIcon /> New contact
+                    </Button>
+                )}
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon-sm" aria-label="More" title="More">
+                            <MoreHorizontalIcon />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => setManaging(true)}>
+                            <SlidersHorizontalIcon /> Segments, tags, fields & stages
+                        </DropdownMenuItem>
+                        {can(P.ContactsExport) && (
+                            <DropdownMenuItem onSelect={() => setExporting(true)}>
+                                <DownloadIcon /> Export
+                            </DropdownMenuItem>
+                        )}
+                    </DropdownMenuContent>
+                </DropdownMenu>
+            </div>
 
-            {counts && (
-                <p className="mb-2 text-[13px] text-muted-foreground" aria-live="polite">
-                    {filtered ? (
-                        <>
-                            <span className="font-semibold text-foreground tabular-nums">{number(counts.matching)}</span> of {number(counts.total)} contacts
-                            match
-                        </>
-                    ) : (
-                        <>
-                            <span className="font-semibold text-foreground tabular-nums">{number(counts.total)}</span> contact{counts.total === 1 ? '' : 's'}
-                        </>
+            <div className="mb-3 flex flex-wrap gap-2" aria-label="Lifecycle">
+                {LIFE.map(([k, l]) => (
+                    <button
+                        key={k}
+                        type="button"
+                        aria-pressed={life === k && !dup}
+                        onClick={() => {
+                            setLife(k);
+                            setDup(false);
+                        }}
+                        className={cn(
+                            'flex min-w-24 flex-col items-start rounded-lg border bg-card px-3 py-2 text-[13px] text-muted-foreground transition-colors duration-150 hover:border-[#d6d3d1] motion-reduce:transition-none',
+                            life === k && !dup && 'border-brand-500 bg-brand-50 text-brand-600 shadow-[0_0_0_1px_var(--brand-500)]',
+                        )}
+                    >
+                        <b className="text-[17px] font-semibold tracking-tight text-foreground tabular-nums">{counts[k] ?? '–'}</b>
+                        {l}
+                    </button>
+                ))}
+                <button
+                    type="button"
+                    aria-pressed={dup}
+                    onClick={() => {
+                        setDup((d) => !d);
+                        setLife('');
+                    }}
+                    className={cn(
+                        'flex min-w-24 flex-col items-start rounded-lg border bg-card px-3 py-2 text-[13px] text-muted-foreground transition-colors duration-150 hover:border-[#d6d3d1] motion-reduce:transition-none',
+                        dup && 'border-warn bg-warn-bg shadow-[0_0_0_1px_var(--warn)]',
                     )}
-                    {rows.length > 0 && rows.length < (filtered ? counts.matching : counts.total) ? ` · showing ${number(rows.length)}` : ''}
-                </p>
-            )}
+                >
+                    <b className="text-[17px] font-semibold tracking-tight text-warn tabular-nums">{funnel?.duplicates ?? '–'}</b>
+                    Possible duplicates
+                </button>
+            </div>
 
             {canBulk && selected.size > 0 && (
                 <div
@@ -359,203 +207,150 @@ function ContactsList() {
                     role="region"
                     aria-label="Selected contacts"
                 >
-                    <span className="font-semibold tabular-nums">{number(selected.size)} selected</span>
-                    {selected.size >= MAX_SELECTED && <span className="text-muted-foreground">(the most at once)</span>}
-                    {!allShown && rows.length > 0 && selected.size < MAX_SELECTED && (
-                        <Button variant="ghost" size="sm" onClick={() => toggleAll(true)}>
-                            Select all {number(Math.min(rows.length, MAX_SELECTED))} shown
-                        </Button>
-                    )}
+                    <span className="font-semibold tabular-nums">{selected.size} selected</span>
                     <div className="ml-auto flex gap-2">
                         <Button variant="outline" size="sm" onClick={() => setSelected(new Map())}>
                             Clear selection
                         </Button>
                         <Button size="sm" onClick={() => setBulkEditing(true)}>
-                            <PencilIcon /> Edit {number(selected.size)}
+                            <PencilIcon /> Edit {selected.size}
                         </Button>
                     </div>
                 </div>
             )}
+            <div className="overflow-x-auto rounded-[10px] border bg-card">
+                <table className="w-full border-collapse text-[13px]">
+                    <thead>
+                        <tr>
+                            {canBulk && (
+                                <th className={cn(th, 'w-9 pr-0')}>
+                                    <Checkbox
+                                        aria-label="Select all contacts shown"
+                                        checked={allShown ? true : someShown ? 'indeterminate' : false}
+                                        onCheckedChange={(v) => toggleAll(v === true)}
+                                    />
+                                </th>
+                            )}
+                            {['Contact', 'WhatsApp', 'Company', 'Lifecycle', 'Lead status', 'Owner', 'Open deals', 'Source', 'Consent', 'Last activity'].map(
+                                (h) => (
+                                    <th key={h} className={th}>
+                                        {h}
+                                    </th>
+                                ),
+                            )}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {contacts.isLoading &&
+                            [0, 1, 2, 3, 4].map((i) => (
+                                <tr key={i}>
+                                    <td colSpan={canBulk ? 11 : 10} className={td}>
+                                        <Skeleton className="h-6" />
+                                    </td>
+                                </tr>
+                            ))}
+                        {!contacts.isLoading && rows.length === 0 && (
+                            <tr>
+                                <td colSpan={canBulk ? 11 : 10} className="p-8 text-center text-muted-foreground">
+                                    No contacts match
+                                </td>
+                            </tr>
+                        )}
+                        {rows.map((c) => {
+                            const on = peeked === c.id;
+                            const od = c.open_deals ?? { count: 0, value: 0 };
+                            const lead = c.lifecycle?.key === 'customer' ? '—' : (c.lead_status?.label ?? 'New');
 
-            <Card>
-                {contacts.isLoading ? (
-                    <div className="p-5">
-                        <Skeleton className="h-48" />
-                    </div>
-                ) : rows.length === 0 ? (
-                    <EmptyState
-                        icon={<ContactIcon className="size-5" />}
-                        title={filtered ? 'No contacts match' : 'No contacts yet'}
-                        description={
-                            filtered ? 'Try a different search or filter.' : 'Customers who message your WhatsApp numbers are added here automatically.'
-                        }
-                    />
-                ) : (
-                    <Table>
-                        <TableHeader>
-                            <TableRow className="hover:bg-transparent">
-                                {canBulk && (
-                                    <TableHead className="w-10">
-                                        <Checkbox
-                                            aria-label="Select all contacts shown"
-                                            checked={allShown ? true : someShown ? 'indeterminate' : false}
-                                            onCheckedChange={(v) => toggleAll(v === true)}
-                                        />
-                                    </TableHead>
-                                )}
-                                <TableHead>Contact</TableHead>
-                                <TableHead>WhatsApp</TableHead>
-                                <TableHead>Company</TableHead>
-                                <TableHead>Lifecycle</TableHead>
-                                <TableHead>Lead status</TableHead>
-                                <TableHead>Owner</TableHead>
-                                <TableHead>Tags</TableHead>
-                                <TableHead>Stage</TableHead>
-                                <TableHead>Consent</TableHead>
-                                <TableHead>Last message</TableHead>
-                                <TableHead>Source</TableHead>
-                                {columns.map((f) => (
-                                    <TableHead key={f.key}>{f.label}</TableHead>
-                                ))}
-                                <TableHead className="w-10" />
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {rows.map((c) => (
-                                <TableRow
+                            return (
+                                <tr
                                     key={c.id}
-                                    data-state={selected.has(c.id) ? 'selected' : undefined}
-                                    // Rows are reachable with Tab and open with Enter (3.5).
                                     tabIndex={0}
                                     aria-label={`${c.display_name}: press Enter to open`}
-                                    className="cursor-default focus-visible:bg-brand-50 focus-visible:outline-none"
+                                    onClick={() => openContact(c, { list: ids })}
                                     onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && e.target === e.currentTarget) openContact(c, { list: rowIds });
+                                        if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
+                                            e.preventDefault();
+                                            openContact(c, { list: ids });
+                                        }
                                     }}
+                                    className={cn(
+                                        'cursor-pointer transition-colors duration-150 hover:bg-[#f5f5f4] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500 motion-reduce:transition-none last:[&>td]:border-b-0',
+                                        on && 'bg-brand-50 hover:bg-brand-50 [&>td:first-child]:shadow-[inset_3px_0_0_var(--brand-500)]',
+                                    )}
                                 >
                                     {canBulk && (
-                                        <TableCell>
+                                        <td className={cn(td, 'pr-0')} onClick={(e) => e.stopPropagation()}>
                                             <Checkbox
                                                 aria-label={`Select ${c.display_name}`}
                                                 checked={selected.has(c.id)}
                                                 disabled={!selected.has(c.id) && selected.size >= MAX_SELECTED}
                                                 onCheckedChange={(v) => toggle(c, v === true)}
                                             />
-                                        </TableCell>
+                                        </td>
                                     )}
-                                    <TableCell>
-                                        <div className="flex items-center gap-3">
+                                    <td className={td}>
+                                        <div className="flex items-center gap-2.5">
                                             <RingAvatar
                                                 name={c.display_name}
-                                                expiresAt={
-                                                    c.last_inbound_at ? new Date(new Date(c.last_inbound_at).getTime() + 86_400_000).toISOString() : null
-                                                }
-                                                hasChat={!!c.last_inbound_at}
+                                                expiresAt={windowFor(c)}
+                                                hasChat={!!c.chat || !!c.last_inbound_at}
+                                                className="size-7 text-[11px]"
+                                                now={now}
                                             />
-                                            <div className="min-w-0">
-                                                <button
-                                                    type="button"
-                                                    tabIndex={-1}
-                                                    className="block max-w-full truncate text-left font-semibold underline-offset-2 hover:text-primary hover:underline"
-                                                    onClick={() => openContact(c, { list: rowIds })}
-                                                    title="Open the contact"
-                                                >
+                                            <span className="min-w-0">
+                                                <b className="block font-semibold whitespace-nowrap" dir="auto">
                                                     {c.display_name}
-                                                </button>
-                                                {c.email && <div className="truncate text-[12.5px] text-muted-foreground">{c.email}</div>}
-                                            </div>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="font-mono text-[13px]">{c.phone ?? '—'}</div>
-                                        {c.username && <div className="text-[12px] text-muted-foreground">@{c.username}</div>}
-                                    </TableCell>
-                                    <TableCell className="max-w-40 truncate text-[13px]">{c.company ?? <span className="text-faint">—</span>}</TableCell>
-                                    <TableCell>
-                                        {c.lifecycle && (
-                                            <Badge tone={LIFECYCLE_TONE[c.lifecycle.key]} className="border border-current/15">
-                                                {c.lifecycle.label}
-                                            </Badge>
-                                        )}
-                                    </TableCell>
-                                    <TableCell className="text-[13px] whitespace-nowrap text-muted-foreground">{c.lead_status?.label ?? '—'}</TableCell>
-                                    <TableCell className="text-[13px] whitespace-nowrap">
-                                        {c.owner?.name ?? <span className="text-faint">Unassigned</span>}
-                                    </TableCell>
-                                    <TableCell>
-                                        <TagDots tags={c.tags} className="max-w-56" />
-                                    </TableCell>
-                                    <TableCell>
-                                        <StageBadge stage={c.stage} />
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge tone={c.consent_state === 'opted_out' ? 'bad' : c.consent_state === 'opted_in' ? 'good' : 'grey'}>
-                                            {humanize(c.consent_state)}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground">{c.last_inbound_at ? relative(c.last_inbound_at) : '—'}</TableCell>
-                                    <TableCell className="text-muted-foreground">
-                                        {c.synced_from ? (
-                                            <span
-                                                className="inline-flex max-w-52 flex-col rounded-md border border-brand-500/30 bg-brand-50 px-2 py-1 leading-tight"
-                                                title={`Synced from the WhatsApp Business app on ${c.synced_from.display_phone_number ?? 'this number'}${c.synced_from.status === 'disconnected' ? ' (number now disconnected)' : ''}`}
-                                            >
-                                                <span className="flex items-center gap-1 text-[11px] font-semibold text-brand-600">
-                                                    <SmartphoneIcon className="size-3" /> Synced from
-                                                </span>
-                                                <span className="truncate text-[12.5px] font-medium text-foreground">
-                                                    {c.synced_from.verified_name ?? c.synced_from.display_phone_number}
-                                                </span>
-                                                {c.synced_from.verified_name && (
-                                                    <span className="truncate font-mono text-[11px]">{c.synced_from.display_phone_number}</span>
-                                                )}
+                                                </b>
+                                                <small className="block text-[11px] text-muted-foreground">
+                                                    {engageId(c.id)}
+                                                    {dup && <span className="text-warn"> · ⚠ duplicate?</span>}
+                                                </small>
                                             </span>
+                                        </div>
+                                    </td>
+                                    <td className={cn(td, 'whitespace-nowrap')}>
+                                        {c.phone ? (
+                                            fmtPhone(c.phone)
                                         ) : (
-                                            contactSource(c.source, c.source_detail)
+                                            <span className="text-muted-foreground">{c.username ? `@${c.username}` : 'Hidden'}</span>
                                         )}
-                                        {c.acquisition && <SourceChip acquisition={c.acquisition} compact className="mt-1 block w-fit max-w-52" />}
-                                    </TableCell>
-                                    {columns.map((f) => (
-                                        <TableCell
-                                            key={f.key}
-                                            className="max-w-48 truncate text-[13px]"
-                                            title={formatFieldValue(c.attributes?.[f.key], f.type)}
-                                        >
-                                            {formatFieldValue(c.attributes?.[f.key], f.type)}
-                                        </TableCell>
-                                    ))}
-                                    <TableCell>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon-sm" aria-label={`Actions for ${c.display_name}`}>
-                                                    <MoreHorizontalIcon />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                {can(P.InboxReply) && (
-                                                    <DropdownMenuItem onSelect={() => setMessaging(c)}>
-                                                        <MessageSquareIcon /> Send message
-                                                    </DropdownMenuItem>
-                                                )}
-                                                {can(P.ContactsUpdate) && (
-                                                    <DropdownMenuItem onSelect={() => openContact(c, { list: rowIds })}>
-                                                        <PencilIcon /> Edit
-                                                    </DropdownMenuItem>
-                                                )}
-                                                {can(P.ContactsDelete) && (
-                                                    <DropdownMenuItem destructive onSelect={() => setDeleting(c)}>
-                                                        <Trash2Icon className="!text-destructive" /> Delete
-                                                    </DropdownMenuItem>
-                                                )}
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                )}
-            </Card>
+                                        {!c.chat && <small className="block text-[11px] text-muted-foreground">No chat yet</small>}
+                                    </td>
+                                    <td className={td}>{c.company || '—'}</td>
+                                    <td className={td}>
+                                        <LifePill contact={c} />
+                                    </td>
+                                    <td className={cn(td, 'whitespace-nowrap')}>{lead}</td>
+                                    <td className={td}>{c.owner ? <OwnerAvatar name={c.owner.name} /> : <span className="text-muted-foreground">—</span>}</td>
+                                    <td className={cn(td, 'whitespace-nowrap')}>
+                                        {od.count ? (
+                                            <>
+                                                <b className="font-semibold">{od.count}</b> · {aedK(od.value)}
+                                            </>
+                                        ) : (
+                                            <span className="text-muted-foreground">—</span>
+                                        )}
+                                    </td>
+                                    <td className={cn(td, 'text-[12px]')}>{contactSource(c.source, c.source_detail)}</td>
+                                    <td className={td}>
+                                        <Chip tone={consentTone(c.consent_state)}>{consentLabel(c.consent_state)}</Chip>
+                                    </td>
+                                    <td className={cn(td, 'text-[12px] whitespace-nowrap')}>
+                                        {fmtDay(c.last_activity_at ?? c.created_at ?? new Date(now).toISOString(), now)}
+                                        <span
+                                            className={cn(
+                                                'ml-1.5 inline-block size-[7px] rounded-full align-middle',
+                                                sync.tone === 'good' ? 'bg-good' : sync.tone === 'warn' ? 'bg-warn' : 'bg-[#d6d3d1]',
+                                            )}
+                                            title={sync.label}
+                                        />
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
             {contacts.hasNextPage && (
                 <div className="mt-4 flex justify-center">
                     <Button variant="outline" onClick={() => contacts.fetchNextPage()} disabled={contacts.isFetchingNextPage}>
@@ -564,80 +359,31 @@ function ContactsList() {
                 </div>
             )}
 
+            <NewContactDialog open={adding} onOpenChange={setAdding} />
+            <BulkEditDialog open={bulkEditing} onOpenChange={setBulkEditing} contacts={[...selected.values()]} onDone={() => setSelected(new Map())} />
             <ImportContactsDialog open={importing} onOpenChange={setImporting} />
             <CrmSettingsDialog open={managing} onOpenChange={setManaging} canEdit={can(P.ContactsUpdate)} onEditSegment={setSegmentEditing} />
             <SegmentDialog open={segmentEditing !== undefined} onOpenChange={(o) => !o && setSegmentEditing(undefined)} segment={segmentEditing ?? null} />
-            <BulkEditDialog open={bulkEditing} onOpenChange={setBulkEditing} contacts={[...selected.values()]} onDone={() => setSelected(new Map())} />
-            <ContactDialog open={adding} onOpenChange={setAdding} contact={null} />
-            {messaging && (
-                <StartConversationDialog
-                    open
-                    onOpenChange={(o) => !o && setMessaging(null)}
-                    contactId={messaging.id}
-                    onStarted={(id) => router.push(`/inbox?c=${id}`)}
-                />
-            )}
-            <AlertDialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Delete {deleting?.display_name}?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            The contact is hidden from lists. Their conversation history is kept, and they reappear automatically if they message you again.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction destructive onClick={() => deleting && remove.mutate(deleting.id)}>
-                            Delete
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
             <ExportContactsDialog
                 open={exporting}
                 onOpenChange={setExporting}
                 current={filters}
                 segments={segments.data ?? []}
                 tags={tags.data ?? []}
-                syncNumbers={syncNumbers}
+                syncNumbers={[]}
             />
         </>
     );
 }
 
-/** Contacts & CRM: the contacts list, and the enquiries pipeline (deals board) beside it (3.3). */
 function ContactsArea() {
+    const { can } = useSession();
     const params = useSearchParams();
-    const router = useRouter();
-    const view = params.get('view') === 'pipeline' ? 'pipeline' : 'contacts';
+    const t = params.get('tab') ?? (params.get('view') === 'pipeline' ? 'deals' : 'contacts');
+    const tab: CrmTab = t === 'deals' || t === 'sync' ? t : 'contacts';
+    if (!can(P.ContactsView)) return <Forbidden />;
 
-    return (
-        <>
-            <div className="mb-4 flex gap-1 border-b" role="tablist" aria-label="Contacts & CRM">
-                {(
-                    [
-                        ['contacts', 'Contacts'],
-                        ['pipeline', 'Enquiries pipeline'],
-                    ] as const
-                ).map(([k, label]) => (
-                    <button
-                        key={k}
-                        type="button"
-                        role="tab"
-                        aria-selected={view === k}
-                        onClick={() => router.replace(k === 'contacts' ? '/contacts' : '/contacts?view=pipeline', { scroll: false })}
-                        className={cn(
-                            '-mb-px border-b-2 px-3 py-2 text-[13.5px] font-medium transition-colors',
-                            view === k ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
-                        )}
-                    >
-                        {label}
-                    </button>
-                ))}
-            </div>
-            {view === 'pipeline' ? <EnquiryBoardView /> : <ContactsList />}
-        </>
-    );
+    return <CrmShell tab={tab}>{tab === 'deals' ? <EnquiryBoardView /> : tab === 'sync' ? <CrmSyncTab /> : <ContactsTab />}</CrmShell>;
 }
 
 export default function ContactsPage() {

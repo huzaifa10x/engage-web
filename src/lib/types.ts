@@ -310,6 +310,8 @@ export type Contact = {
     marketing_opted_out: boolean;
     last_inbound_at: string | null;
     created_at: string | null;
+    /** 3.5 Contacts list sorted by activity: the latest message, edit or creation. */
+    last_activity_at?: string | null;
     /** Growth Hub: where this lead came from. null when Growth Hub is off. Agents get status + label only. */
     acquisition?: Acquisition | null;
     /** CRM pipeline stage; null = no stage yet. */
@@ -326,6 +328,11 @@ export type Contact = {
     /** null key: customers have no lead status. `automatic` false when a teammate picked it. */
     lead_status?: { key: LeadStatusKey | null; label: string | null; automatic: boolean };
     /** How the customer agreed to be contacted, when a teammate started the chat. */
+    /** Open deals (enquiries in an open stage) and their value. */
+    open_deals?: { count: number; value: number };
+    last_human_reply_at?: string | null;
+    /** The contact's latest chat. */
+    chat?: { id: string; state: 'needs_reply' | 'waiting' | 'snoozed' | 'resolved'; window_expires_at: string | null } | null;
     contact_permission?: { via: PermissionVia; via_label: string; note: string | null; by: string | null; by_name: string | null; at: string } | null;
 };
 
@@ -701,6 +708,19 @@ export type Conversation = {
     promise?: ReplyPromiseClock | null;
     /** The closure the chat is in now (closed chats only). */
     resolution?: Resolution | null;
+    /** Who wrote the last message: the card's "You:", "Auto:", "Sara:" prefix. */
+    last_message_by?: { kind: 'customer' | 'you' | 'agent' | 'auto'; name: string | null } | null;
+    /** The contact's earliest open next step, and how many are open and overdue. */
+    next_step?: {
+        id: string;
+        type: string;
+        type_label: string;
+        title: string;
+        due_at: string;
+        enquiry_id: string | null;
+        open: number;
+        overdue: number;
+    } | null;
     contact?: Contact;
     /** `status` is "disconnected" once the number was offboarded: the chat stays readable, nothing can be sent. */
     phone_number?: {
@@ -836,7 +856,7 @@ export type Enquiry = {
         paid_at?: string | null;
         by?: string | null;
     }[];
-    contact?: { id: string; name: string; deleted: boolean } | null;
+    contact?: { id: string; name: string; deleted: boolean; chat_id?: string | null } | null;
 };
 
 export type EnquiryBoard = {
@@ -1770,4 +1790,35 @@ export type ResponseTimes = {
     numbers: (ResponseStat & { id: string; display: string | null })[];
 };
 
-export type ConversationCounts = { needs_reply: number; needs_reply_mine: number; after_hours: number; unassigned: number };
+export type ConversationCounts = { needs_reply: number; needs_reply_mine: number; needs_reply_unassigned?: number; after_hours: number; unassigned: number };
+
+export type ConversationEvent = {
+    id: string;
+    type: string;
+    at: string;
+    actor: 'customer' | 'agent' | 'system';
+    actor_name: string | null;
+    data: Record<string, unknown>;
+};
+
+export type InboxHealth = {
+    days: number;
+    expired: number;
+    in_time: number;
+    pending: number;
+    decided: number;
+    rate: number | null;
+    human_first_response: { median_seconds: number | null; count: number };
+    automation_first_response: { median_seconds: number | null; count: number };
+    sales: { open: number; open_with_next_step: number; open_value: number; open_valued: number };
+};
+
+export type ContactFunnel = { all: number; subscriber: number; lead: number; opportunity: number; customer: number; other: number; duplicates: number };
+
+export type CrmSync = {
+    provider: 'none' | 'hubspot' | 'zoho';
+    providers_available: string[];
+    stage_map: { stage: StageRef & { group: StageGroup }; hubspot: string; zoho: string }[];
+    hubspot_stages: string[];
+    zoho_stages: string[];
+};

@@ -19,19 +19,26 @@ test('lead stages: Lost asks why, Won needs proof, and every change is on the hi
         await expect(page.getByRole('row').filter({ hasText: name })).toHaveCount(1, { timeout: 3000 });
     }).toPass({ timeout: 30_000 });
 
+    // The contact panel (3.5) opens from the row; its stage is edited under Edit all details.
+    const closeAll = async () => {
+        while ((await page.getByRole('dialog').count()) > 0) await page.keyboard.press('Escape');
+    };
     const openContact = async () => {
-        await page.getByRole('button', { name: `Actions for ${name}` }).click();
-        await page.getByRole('menuitem', { name: 'Edit' }).click();
+        await closeAll();
+        await page.getByRole('row').filter({ hasText: name }).click();
+        await page.getByRole('dialog').getByText('Custom fields', { exact: true }).click();
+        await page.getByRole('dialog').getByRole('button', { name: 'Edit all details' }).click();
     };
 
     // Lost: the reason is asked for and saved with the change.
     await openContact();
-    const dialog = page.getByRole('dialog');
+    const dialog = page.getByRole('dialog').last();
     await dialog.getByRole('combobox', { name: 'Stage' }).click();
     await page.getByRole('option', { name: 'Lost' }).click();
     await dialog.getByLabel('Why was it lost?').fill('Chose another company');
     await dialog.getByRole('button', { name: /Save/ }).click();
     await expect(page.getByText('Contact updated')).toBeVisible();
+    await page.keyboard.press('Escape');
 
     // Won without a verified payment: the Owner gives a reference.
     await openContact();
@@ -41,9 +48,17 @@ test('lead stages: Lost asks why, Won needs proof, and every change is on the hi
     await dialog.getByLabel('Reference').fill('Receipt 4471');
     await dialog.getByRole('button', { name: /Save/ }).click();
     await expect(page.getByText('Contact updated').first()).toBeVisible();
+    await page.keyboard.press('Escape');
 
-    await openContact();
-    const history = dialog.getByRole('region', { name: 'Enquiries and history' }).getByRole('region', { name: 'History' });
+    // The full record keeps every change on its history.
+    await closeAll();
+    await page.getByRole('row').filter({ hasText: name }).click();
+    await page
+        .getByRole('dialog')
+        .getByRole('link', { name: /Open full record/ })
+        .click();
+    await page.getByText('Full history and enquiries').click();
+    const history = page.getByRole('region', { name: 'Enquiries and history' }).getByRole('region', { name: 'History' });
     await history.getByRole('button', { name: 'Stages' }).click();
     const events = history.getByRole('list', { name: 'Events' });
     await expect(events).toContainText('Stage: none → Lost (Chose another company)');

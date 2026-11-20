@@ -60,6 +60,9 @@ export function ContactSheetHeader({ contact }: { contact: Contact }) {
 
 type Opener = (contact: Contact | string, options?: { list?: string[] }) => void;
 const ContactSheetContext = createContext<Opener | null>(null);
+/** The contact open in the panel right now (the Contacts table highlights its row). */
+const PeekedContext = createContext<string | null>(null);
+export const usePeekedContact = () => useContext(PeekedContext);
 
 /**
  * Opening a contact anywhere (the contacts list, the deals board, the inbox, reports) slides its
@@ -95,8 +98,22 @@ export function ContactSheetProvider({ children }: { children: React.ReactNode }
 
     return (
         <ContactSheetContext.Provider value={value}>
-            {children}
-            {contact && <ContactRecordSheet open={open} onOpenChange={setOpen} contact={contact} nav={nav} returnFocus={opener} />}
+            <PeekedContext.Provider value={open ? id : null}>
+                {children}
+                {contact && (
+                    <ContactRecordSheet
+                        open={open}
+                        onOpenChange={setOpen}
+                        contact={contact}
+                        nav={nav}
+                        returnFocus={opener}
+                        onReview={(other) => {
+                            setList(null);
+                            setTarget(other);
+                        }}
+                    />
+                )}
+            </PeekedContext.Provider>
         </ContactSheetContext.Provider>
     );
 }

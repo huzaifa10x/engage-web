@@ -4,6 +4,10 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api, upload } from './api';
 import type {
+    ContactFunnel,
+    ConversationEvent,
+    CrmSync,
+    InboxHealth,
     ContactDuplicate,
     ContactFieldChange,
     LeadStatusKey,
@@ -249,6 +253,12 @@ export type ConversationFilters = {
     state?: 'needs_reply' | 'waiting';
     /** "Arrived after hours" (still needing a reply). */
     after_hours?: boolean;
+    /** 3.5: All lists snoozed chats too. */
+    include_snoozed?: boolean;
+    window?: 'open' | 'closed';
+    followup?: boolean;
+    tag?: string;
+    sort?: 'priority' | 'newest' | 'waiting';
 };
 
 /** Inbox teams: named groups of teammates a conversation or a chatbot handover can go to. */
@@ -276,6 +286,8 @@ export const useConversations = (filters: ConversationFilters, refetchInterval: 
                     ...filters,
                     unread: filters.unread ? 1 : undefined,
                     after_hours: filters.after_hours ? 1 : undefined,
+                    include_snoozed: filters.include_snoozed ? 1 : undefined,
+                    followup: filters.followup ? 1 : undefined,
                     cursor: pageParam,
                     per_page: 30,
                 },
@@ -322,6 +334,11 @@ export type ContactFilters = {
     source?: string;
     filter?: string;
     stage_id?: string;
+    lifecycle?: 'subscriber' | 'lead' | 'opportunity' | 'customer' | 'other';
+    owner?: string;
+    duplicates?: 1;
+    /** 3.5: newest activity first (page numbers as the cursor). */
+    sort?: 'activity';
 };
 
 export type ContactCounts = { matching: number; total: number; sources: { value: string; count: number }[] };
@@ -962,7 +979,13 @@ export const useNextSteps = (contactId: string | null, all = false) =>
 
 // ── Inbox & CRM 3.5: resolutions, the contact record, start conversation ────────────────
 
-export type ResolutionFilters = { agent?: string | null; reason?: ResolutionReason | null; days?: number; phone_number_id?: string | null };
+export type ResolutionFilters = {
+    agent?: string | null;
+    reason?: ResolutionReason | null;
+    days?: number;
+    phone_number_id?: string | null;
+    conversation_id?: string | null;
+};
 
 export const useResolutions = (f: ResolutionFilters, refetchInterval: number | false = false) =>
     useQuery({
@@ -970,7 +993,13 @@ export const useResolutions = (f: ResolutionFilters, refetchInterval: number | f
         refetchInterval,
         queryFn: () =>
             api<Data<Resolution[]>>('resolutions', {
-                query: { agent: f.agent ?? null, reason: f.reason ?? null, days: f.days ?? 7, phone_number_id: f.phone_number_id ?? null },
+                query: {
+                    agent: f.agent ?? null,
+                    reason: f.reason ?? null,
+                    days: f.days ?? 7,
+                    phone_number_id: f.phone_number_id ?? null,
+                    conversation_id: f.conversation_id ?? null,
+                },
             }).then((r) => r.data),
     });
 
@@ -1016,6 +1045,8 @@ export type ContactRecordPatch = Partial<{
     lead_status: LeadStatusKey | null;
     owner_membership_id: string | null;
     tags: string[];
+    phone: string | null;
+    source_detail: string | null;
 }>;
 
 export const updateContactRecord = (id: string, body: ContactRecordPatch) =>
@@ -1056,3 +1087,42 @@ export const useContactConversations = (contactId: string | null) =>
         queryFn: () => api<Data<ContactChat[]>>(`contacts/${contactId}/conversations`).then((r) => r.data),
         enabled: !!contactId,
     });
+
+// ── Inbox & CRM 3.5 (prototype) ─────────────────────────────────────────────────────────
+
+export const useConversationEvents = (id: string | null, refetchInterval: number | false = false) =>
+    useQuery({
+        queryKey: ['inbox', 'events', id],
+        queryFn: () => api<Data<ConversationEvent[]>>(`conversations/${id}/events`).then((r) => r.data),
+        enabled: !!id,
+        refetchInterval,
+    });
+
+export const markUnread = (id: string) => api<Data<Conversation>>(`conversations/${id}/unread`, { method: 'POST' }).then((r) => r.data);
+
+export const sendTyping = (id: string, typing: boolean) => api(`conversations/${id}/typing`, { method: 'POST', body: { typing } });
+
+export const useInboxHealth = (phoneNumberId: string | null, enabled = true) =>
+    useQuery({
+        queryKey: ['inbox', 'health', phoneNumberId],
+        queryFn: () => api<Data<InboxHealth>>('inbox/health', { query: { phone_number_id: phoneNumberId } }).then((r) => r.data),
+        enabled,
+        refetchInterval: enabled ? 60_000 : false,
+    });
+
+export const useContactFunnel = () =>
+    useQuery({ queryKey: ['contacts', 'funnel'], queryFn: () => api<Data<ContactFunnel>>('contacts/funnel').then((r) => r.data) });
+
+export const useCrmSync = () => useQuery({ queryKey: ['crm', 'sync'], queryFn: () => api<Data<CrmSync>>('crm/sync').then((r) => r.data) });
+
+export const saveCrmStageMap = (stage_map: Record<string, { hubspot: string; zoho: string }>) =>
+    api<Data<CrmSync>>('crm/sync', { method: 'PUT', body: { stage_map } }).then((r) => r.data);
+
+export const setCurrentEnquiry = (contactId: string, enquiryId: string) =>
+    api(`contacts/${contactId}/current-enquiry`, { method: 'POST', body: { enquiry_id: enquiryId } });
+
+export const assignConversation = (id: string, membershipId: string | null) =>
+    api<Data<Conversation>>(`conversations/${id}`, { method: 'PATCH', body: { assigned_membership_id: membershipId } }).then((r) => r.data);
+
+export const reopenConversation = (id: string) =>
+    api<Data<Conversation>>(`conversations/${id}`, { method: 'PATCH', body: { status: 'open' } }).then((r) => r.data);

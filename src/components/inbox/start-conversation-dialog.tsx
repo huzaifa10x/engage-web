@@ -1,39 +1,57 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeftIcon, ChevronDownIcon, MessageCircleIcon, PhoneOffIcon, SearchIcon, SendIcon, UserPlusIcon } from 'lucide-react';
+import { PlusIcon, SearchIcon, SendIcon } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
-import { Field, FormError } from '@/components/app/field';
-import { TagInput } from '@/components/contacts/tag-input';
+import { useNow } from '@/components/inbox/conversation-list';
 import { RingAvatar } from '@/components/inbox/window-ring';
-import { emptySelection, selectionError, selectionPayload, TemplatePicker, type TemplateSelection } from '@/components/templates/template-picker';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { errorMessage } from '@/lib/api';
 import { newId } from '@/lib/id';
-import { LIFECYCLE_TONE, looksLikePhone, PERMISSION_VIA, validName, withCountryCode } from '@/lib/inbox';
-import { keys, startConversation, type StartPayload, useContact, usePhoneNumbers, useStartSearch } from '@/lib/queries';
-import type { PermissionVia, StartCandidate } from '@/lib/types';
+import { dur, engageId, fmtDay, fmtPhone, PERMISSION_VIA, validName, windowLeft, withCountryCode } from '@/lib/inbox';
+import { keys, startConversation, type StartPayload, useContact, usePhoneNumbers, useStartSearch, useTemplates } from '@/lib/queries';
+import type { LifecycleKey, MessageTemplate, PermissionVia, StartCandidate } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-type Step = { kind: 'search' } | { kind: 'existing'; candidate: StartCandidate } | { kind: 'new'; typed: string };
-
-const ACTION: Record<StartCandidate['action'], string> = {
-    open_chat: 'Open chat',
-    send_template: 'Send template',
-    start_chat: 'Start chat',
-    no_phone: 'No phone',
+const LIFE_TONE: Record<LifecycleKey, string> = {
+    subscriber: 'border-border bg-muted text-ink-2',
+    lead: 'border-info/25 bg-info-bg text-info',
+    opportunity: 'border-brand-500/30 bg-brand-50 text-brand-600',
+    customer: 'border-good/30 bg-good-bg text-good',
+    other: 'border-border bg-muted text-faint',
 };
+const badge = 'inline-flex h-[22px] items-center rounded-full border px-2.5 text-[11px] font-semibold whitespace-nowrap';
+const label = 'flex flex-col gap-1.5 text-[13px] font-semibold';
+const field =
+    'h-9 rounded-md border border-input bg-card px-2 text-[13px] font-normal outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20';
+const digitsOf = (v: string) => v.replace(/\D/g, '');
+const looksNum = (q: string) => digitsOf(q).length >= 7 && !/[a-z@]/i.test(q);
+
+/** What choosing a search result does, in the words shown on the row. */
+function actionOf(c: StartCandidate, now: number): { k: 'none' | 'open' | 'tpl' | 'start'; l: string; why: string } {
+    if (c.action === 'no_phone') return { k: 'none', l: 'No phone number', why: 'Add a number in Contacts & CRM first' };
+    if (c.conversation && (c.conversation.window_open || windowLeft(c.conversation.window_expires_at, now) > 0))
+        return {
+            k: 'open',
+            l: 'Open chat',
+            why: `Window open · ${dur(windowLeft(c.conversation.window_expires_at, now), true)} left · reply without a template`,
+        };
+    if (c.conversation) return { k: 'tpl', l: 'Send template', why: 'Window closed · template in the existing chat' };
+
+    return { k: 'start', l: 'Start chat', why: 'No chat yet · first message is a template' };
+}
+
+type Step = { kind: 'search' } | { kind: 'form'; pre: StartCandidate | null; seed: string };
 
 /**
- * Start conversation, search first (3.5). Type a name, number (any format), email or company; each result
- * says what will happen: open the chat they already have, send a template (window closed), start a chat,
- * or nothing (no number). The last option adds a new contact with what was typed. Arrow keys and Enter work.
+ * Start a conversation (3.5): search first so nobody gets a duplicate. If the customer already has a chat
+ * it is continued (with a template when the window is closed); otherwise a short form records who they
+ * are and how they agreed to be contacted, and the first message is an approved utility template.
  */
 export function StartConversationDialog({
     open,
@@ -49,28 +67,26 @@ export function StartConversationDialog({
     contactId?: string | null;
     onStarted: (conversationId: string) => void;
 }) {
+    const router = useRouter();
+    const now = useNow();
     const numbers = (usePhoneNumbers().data ?? []).filter((n) => n.status === 'connected');
-    const [numberId, setNumberId] = useState<string | null>(defaultNumberId ?? null);
-    const from = numbers.find((n) => n.id === numberId) ?? numbers[0] ?? null;
+    const from = numbers.find((n) => n.id === defaultNumberId) ?? numbers[0] ?? null;
     const [step, setStep] = useState<Step>({ kind: 'search' });
     const [typed, setTyped] = useState('');
     const [q, setQ] = useState('');
-    const [active, setActive] = useState(0);
+    const [hl, setHl] = useState(0);
     const listId = useId();
     const search = useStartSearch(q, from?.id ?? null, open && step.kind === 'search');
-    const results = search.data ?? [];
-    const options = results.length + 1; // the last one: a new contact
+    const results = useMemo(() => search.data ?? [], [search.data]);
 
-    // Opened for one contact (from its record): straight to that contact, until Back.
+    // Opened for one contact (from its record): straight to the form, or to its chat.
     const preset = useContact(open && contactId ? contactId : null);
-    const presetSearch = useStartSearch(preset.data?.phone ?? preset.data?.display_name ?? '', from?.id ?? null, open && !!preset.data);
+    const presetSearch = useStartSearch(preset.data?.phone ?? preset.data?.email ?? preset.data?.display_name ?? '', from?.id ?? null, open && !!preset.data);
     const presetHit = presetSearch.data?.find((c) => c.id === contactId) ?? null;
-    const [presetDismissed, setPresetDismissed] = useState(false);
-    const current: Step = step.kind === 'search' && presetHit && !presetDismissed ? { kind: 'existing', candidate: presetHit } : step;
+    const [presetUsed, setPresetUsed] = useState<string | null>(null);
 
     useEffect(() => {
-        const t = setTimeout(() => setQ(typed.trim()), 200);
-
+        const t = setTimeout(() => setQ(typed.trim()), 150);
         return () => clearTimeout(t);
     }, [typed]);
 
@@ -78,435 +94,495 @@ export function StartConversationDialog({
         if (!o) {
             setStep({ kind: 'search' });
             setTyped('');
-            setPresetDismissed(false);
+            setHl(0);
+            setPresetUsed(null);
         }
         onOpenChange(o);
     };
-
-    const choose = (c: StartCandidate) => {
-        if (c.action === 'no_phone') return;
-        if (c.action === 'open_chat' && c.conversation) {
-            close(false);
-            onStarted(c.conversation.id);
-
-            return;
+    const pick = (c: StartCandidate) => {
+        const a = actionOf(c, now);
+        if (a.k === 'none') return;
+        if (a.k === 'start') return setStep({ kind: 'form', pre: c, seed: '' });
+        close(false);
+        if (a.k === 'tpl') {
+            router.push(`/inbox?c=${c.conversation?.id}&compose=template`, { scroll: false });
+            toast.message(`Window closed · pick a template to continue with ${c.display_name}`);
+        } else {
+            onStarted(c.conversation?.id as string);
+            toast.success(`Opened ${c.display_name} · window open, reply normally`);
         }
-        setStep({ kind: 'existing', candidate: c });
     };
+    if (open && presetHit && presetUsed !== presetHit.id && step.kind === 'search') {
+        setPresetUsed(presetHit.id);
+        const a = actionOf(presetHit, now);
+        if (a.k === 'start') setStep({ kind: 'form', pre: presetHit, seed: '' });
+    }
 
-    const pickActive = () => (active < results.length ? choose(results[active]) : setStep({ kind: 'new', typed: typed.trim() }));
+    const seedNum = looksNum(q);
+    const exact = seedNum && results.some((c) => c.phone && digitsOf(c.phone) === digitsOf(withCountryCode(q)));
+    const enabled = results.filter((c) => actionOf(c, now).k !== 'none');
+    const count = enabled.length + 1;
+    const active = !results.length && q ? count - 1 : Math.min(hl, count - 1);
+    const choose = (i: number) => (i < enabled.length ? pick(enabled[i]) : setStep({ kind: 'form', pre: null, seed: typed.trim() }));
 
     return (
         <Dialog open={open} onOpenChange={close}>
-            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        {current.kind !== 'search' && (
-                            <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                className="-ml-1"
-                                onClick={() => (setStep({ kind: 'search' }), setPresetDismissed(true))}
-                                aria-label="Back to search"
-                            >
-                                <ArrowLeftIcon />
-                            </Button>
-                        )}
-                        {current.kind === 'new' ? 'New contact' : 'Start conversation'}
-                    </DialogTitle>
-                    <DialogDescription>
-                        {current.kind === 'search'
-                            ? 'Search first: the person may already have a chat or be another teammate’s customer.'
-                            : current.kind === 'new'
-                              ? 'Add who they are and how they agreed to be contacted, then send the first template.'
-                              : 'WhatsApp only allows an approved template until the customer replies.'}
-                    </DialogDescription>
-                </DialogHeader>
-
-                {numbers.length > 1 && (
-                    <Field label="From" htmlFor="sc-from">
-                        <Select value={from?.id ?? ''} onValueChange={setNumberId}>
-                            <SelectTrigger id="sc-from">
-                                <SelectValue placeholder="Choose a number" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {numbers.map((n) => (
-                                    <SelectItem key={n.id} value={n.id}>
-                                        {n.verified_name ?? n.display_phone_number}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </Field>
-                )}
-
-                {current.kind === 'search' && (
-                    <div className="grid gap-2">
-                        <div className="relative">
-                            <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-faint" />
-                            <Input
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+                {step.kind === 'search' ? (
+                    <>
+                        <DialogHeader>
+                            <DialogTitle>Start a conversation</DialogTitle>
+                            <DialogDescription>
+                                Search first so you don’t create a duplicate. If the customer already has a chat, you’ll continue it.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <label className="relative mt-1 block">
+                            <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-[15px] -translate-y-1/2 text-faint" />
+                            <input
                                 autoFocus
                                 value={typed}
-                                onChange={(e) => (setTyped(e.target.value), setActive(0))}
+                                autoComplete="off"
+                                onChange={(e) => (setTyped(e.target.value), setHl(0))}
                                 onKeyDown={(e) => {
-                                    if (e.key === 'ArrowDown') (e.preventDefault(), setActive((a) => (a + 1) % options));
-                                    if (e.key === 'ArrowUp') (e.preventDefault(), setActive((a) => (a - 1 + options) % options));
-                                    if (e.key === 'Enter') (e.preventDefault(), pickActive());
+                                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                                        e.preventDefault();
+                                        setHl((active + (e.key === 'ArrowDown' ? 1 : -1) + count) % count);
+                                    }
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        choose(active);
+                                    }
                                 }}
-                                placeholder="Name, number, email or company"
-                                className="pl-8"
+                                placeholder="Search name, number, email or company"
                                 role="combobox"
                                 aria-expanded
                                 aria-controls={listId}
                                 aria-activedescendant={`${listId}-${active}`}
                                 aria-label="Search contacts"
+                                className="h-9 w-full rounded-md border border-input bg-card pr-2 pl-8 text-[13px] outline-none placeholder:text-faint focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20"
                             />
-                        </div>
-                        {!q && results.length > 0 && <p className="text-[11px] font-semibold tracking-[0.06em] text-muted-foreground uppercase">Recent</p>}
-                        <ul id={listId} role="listbox" aria-label="Contacts" className="max-h-[46vh] divide-y overflow-y-auto rounded-lg border">
-                            {results.map((c, i) => (
-                                <li
-                                    key={c.id}
-                                    id={`${listId}-${i}`}
-                                    role="option"
-                                    aria-selected={active === i}
-                                    aria-disabled={c.action === 'no_phone'}
-                                    onMouseEnter={() => setActive(i)}
-                                    onClick={() => choose(c)}
-                                    className={cn(
-                                        'flex cursor-pointer items-center gap-3 px-3 py-2.5 transition-colors duration-100 motion-reduce:transition-none',
-                                        active === i && 'bg-muted',
-                                        c.action === 'no_phone' && 'cursor-not-allowed',
-                                    )}
-                                >
-                                    <RingAvatar
-                                        name={c.display_name}
-                                        expiresAt={c.conversation?.window_expires_at}
-                                        hasChat={!!c.conversation}
-                                        className="size-9 text-[12px]"
-                                    />
-                                    <span className="min-w-0 flex-1">
-                                        <span className="flex items-center gap-1.5">
-                                            <span className="truncate text-[13px] font-semibold">{c.display_name}</span>
-                                            <Badge tone={LIFECYCLE_TONE[c.lifecycle.key]} className="border border-current/15 text-[11px]">
-                                                {c.lifecycle.label}
-                                            </Badge>
-                                        </span>
-                                        <span className="block truncate text-[12px] text-muted-foreground">
-                                            {[c.phone ?? 'No phone number', c.company].filter(Boolean).join(' · ')}
-                                        </span>
-                                        {c.opted_out && <span className="block text-[11px] font-semibold text-bad">Opted out · utility only</span>}
-                                        {c.owner && !c.owner.is_me && <span className="block text-[11px] text-muted-foreground">Owned by {c.owner.name}</span>}
-                                    </span>
-                                    <span
+                        </label>
+                        <div
+                            id={listId}
+                            role="listbox"
+                            aria-label="Contacts"
+                            className="mt-2.5 max-h-[min(420px,56vh)] overflow-y-auto rounded-[10px] border p-1"
+                        >
+                            {!q && <p className="px-2.5 pt-2 pb-1 text-[11px] font-semibold tracking-[0.06em] text-faint uppercase">Recent contacts</p>}
+                            {q && results.length === 0 && !search.isFetching && (
+                                <p className="px-2.5 pt-2 pb-1 text-[11px] font-semibold tracking-[0.06em] text-faint uppercase">No contact matches</p>
+                            )}
+                            {results.map((c) => {
+                                const a = actionOf(c, now);
+                                const i = enabled.indexOf(c);
+                                const on = i >= 0 && i === active;
+
+                                return (
+                                    <button
+                                        key={c.id}
+                                        id={i >= 0 ? `${listId}-${i}` : undefined}
+                                        type="button"
+                                        role="option"
+                                        aria-selected={on}
+                                        disabled={a.k === 'none'}
+                                        onMouseEnter={() => i >= 0 && setHl(i)}
+                                        onClick={() => pick(c)}
                                         className={cn(
-                                            'inline-flex h-7 shrink-0 items-center gap-1 rounded-md px-2.5 text-[12px] font-semibold',
-                                            c.action === 'no_phone'
-                                                ? 'bg-muted text-faint'
-                                                : c.action === 'open_chat'
-                                                  ? 'bg-primary text-primary-foreground'
-                                                  : 'border bg-card',
+                                            'flex w-full items-center gap-3 rounded-lg p-2.5 text-left transition-colors duration-150 hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50 motion-reduce:transition-none',
+                                            on && 'bg-muted shadow-[inset_3px_0_0_var(--brand-500)]',
                                         )}
                                     >
-                                        {c.action === 'no_phone' ? (
-                                            <PhoneOffIcon className="size-3.5" />
-                                        ) : c.action === 'open_chat' ? (
-                                            <MessageCircleIcon className="size-3.5" />
-                                        ) : (
-                                            <SendIcon className="size-3.5" />
-                                        )}
-                                        {ACTION[c.action]}
-                                    </span>
-                                </li>
-                            ))}
-                            <li
-                                id={`${listId}-${results.length}`}
+                                        <RingAvatar
+                                            name={c.display_name}
+                                            expiresAt={c.conversation?.window_expires_at}
+                                            hasChat={!!c.conversation}
+                                            className="size-9 text-[12px]"
+                                            now={now}
+                                        />
+                                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                            <b className="truncate text-[13px] font-semibold" dir="auto">
+                                                {c.display_name}
+                                            </b>
+                                            <small className="text-[13px] text-muted-foreground">
+                                                {c.phone ? fmtPhone(c.phone) : 'Number hidden'}
+                                                {c.company ? ` · ${c.company}` : ''}
+                                                {c.owner && !c.owner.is_me ? ` · Owned by ${c.owner.name.split(' ')[0]}` : ''}
+                                            </small>
+                                            <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                                                <span className={cn(badge, LIFE_TONE[c.lifecycle.key])}>{c.lifecycle.label}</span>
+                                                {c.opted_out && <span className={cn(badge, 'border-bad/30 bg-bad-bg text-bad')}>Opted out · utility only</span>}
+                                                <span className="text-[12px] text-muted-foreground">{a.why}</span>
+                                            </span>
+                                        </span>
+                                        <span
+                                            className={cn(
+                                                'pointer-events-none inline-flex h-8 shrink-0 items-center rounded-md px-3 text-[13px] font-semibold',
+                                                a.k === 'open' ? 'bg-primary text-primary-foreground' : 'border bg-card',
+                                            )}
+                                        >
+                                            {a.l}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                            <button
+                                id={`${listId}-${enabled.length}`}
+                                type="button"
                                 role="option"
-                                aria-selected={active === results.length}
-                                onMouseEnter={() => setActive(results.length)}
-                                onClick={() => setStep({ kind: 'new', typed: typed.trim() })}
-                                className={cn('flex cursor-pointer items-center gap-3 px-3 py-2.5', active === results.length && 'bg-muted')}
+                                aria-selected={active === enabled.length}
+                                onMouseEnter={() => setHl(enabled.length)}
+                                onClick={() => choose(enabled.length)}
+                                className={cn(
+                                    'mt-1 flex w-full items-center gap-3 rounded-b-lg border-t border-line-2 p-2.5 text-left transition-colors duration-150 hover:bg-muted motion-reduce:transition-none',
+                                    active === enabled.length && 'bg-muted shadow-[inset_3px_0_0_var(--brand-500)]',
+                                )}
                             >
-                                <span className="inline-flex size-9 items-center justify-center rounded-full bg-brand-50 text-brand-600">
-                                    <UserPlusIcon className="size-4" />
+                                <span className="grid size-9 shrink-0 place-items-center rounded-full border-[1.5px] border-dashed border-brand-500/50 text-brand-600">
+                                    <PlusIcon className="size-4" />
                                 </span>
-                                <span className="text-[13px] font-semibold">
-                                    {typed.trim() ? `New contact “${typed.trim()}”` : 'New contact'}
-                                    {search.isFetching && <span className="ml-2 font-normal text-faint">Searching…</span>}
+                                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                    <b className="truncate text-[13px] font-semibold">
+                                        {seedNum && !exact ? (
+                                            <>
+                                                Start a new contact with <b>{fmtPhone(withCountryCode(q))}</b>
+                                            </>
+                                        ) : q && !seedNum ? (
+                                            <>
+                                                Create a new contact “<b>{q}</b>”
+                                            </>
+                                        ) : (
+                                            'New contact'
+                                        )}
+                                    </b>
+                                    <small className="text-[13px] text-muted-foreground">Name, number and how they agreed to be contacted</small>
                                 </span>
-                            </li>
-                        </ul>
-                    </div>
+                            </button>
+                        </div>
+                        <p className="text-[12px] text-muted-foreground">↑ ↓ to move · Enter to choose · numbers match in any format (050…, 55…, +971 55…)</p>
+                    </>
+                ) : (
+                    from && (
+                        <StartForm
+                            key={step.pre?.id ?? 'new'}
+                            pre={step.pre}
+                            seed={step.seed}
+                            numberId={from.id}
+                            wabaAccountId={from.waba_account_id ?? null}
+                            onBack={() => setStep({ kind: 'search' })}
+                            onCancel={() => close(false)}
+                            onDone={(id) => (close(false), onStarted(id))}
+                        />
+                    )
                 )}
-
-                {current.kind === 'existing' && from && (
-                    <ExistingForm
-                        candidate={current.candidate}
-                        numberId={from.id}
-                        wabaAccountId={from.waba_account_id ?? null}
-                        onDone={(id) => (close(false), onStarted(id))}
-                    />
-                )}
-                {current.kind === 'new' && from && (
-                    <NewContactForm
-                        typed={current.typed}
-                        numberId={from.id}
-                        wabaAccountId={from.waba_account_id ?? null}
-                        onDone={(id) => (close(false), onStarted(id))}
-                    />
-                )}
-                {current.kind !== 'search' && !from && <FormError message="Connect a WhatsApp number first." />}
+                {step.kind === 'form' && !from && <p className="text-[13px] text-bad">Connect a WhatsApp number first.</p>}
             </DialogContent>
         </Dialog>
     );
 }
 
-/** How the customer agreed to be contacted: required for a new contact or one with nothing on record. */
-function PermissionField({
-    via,
-    note,
-    onVia,
-    onNote,
-}: {
-    via: PermissionVia | null;
-    note: string;
-    onVia: (v: PermissionVia) => void;
-    onNote: (v: string) => void;
-}) {
-    return (
-        <fieldset className="grid gap-1.5">
-            <legend className="mb-1 text-[13px] font-semibold">How did they agree to be contacted?</legend>
-            <div className="grid gap-1 sm:grid-cols-2">
-                {PERMISSION_VIA.map((p) => (
-                    <label
-                        key={p.id}
-                        className={cn(
-                            'flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-[13px] transition-colors duration-100 motion-reduce:transition-none',
-                            via === p.id ? 'border-brand-500 bg-brand-50 font-semibold' : 'hover:bg-muted',
-                        )}
-                    >
-                        <input
-                            type="radio"
-                            name="permission"
-                            value={p.id}
-                            checked={via === p.id}
-                            onChange={() => onVia(p.id)}
-                            className="accent-[var(--brand-500)]"
-                        />
-                        {p.label}
-                    </label>
-                ))}
-            </div>
-            {via === 'other' && (
-                <Input value={note} onChange={(e) => onNote(e.target.value)} maxLength={200} placeholder="Say how they agreed" aria-label="How they agreed" />
-            )}
-        </fieldset>
+/** Approved utility templates the form can fill by itself: {{1}} first name, {{2}} enquiry topic. */
+function useStartTemplates(wabaAccountId: string | null): MessageTemplate[] {
+    const list = useTemplates({ waba_account_id: wabaAccountId }, !!wabaAccountId);
+
+    return useMemo(
+        () =>
+            (list.data?.data ?? []).filter(
+                (t) =>
+                    t.status === 'APPROVED' &&
+                    t.sendable &&
+                    t.category === 'UTILITY' &&
+                    t.variables.header.length === 0 &&
+                    !['IMAGE', 'VIDEO', 'DOCUMENT', 'LOCATION'].includes(t.variables.header_format ?? '') &&
+                    t.variables.body.length <= 2 &&
+                    !t.variables.buttons.some((b) => b.variable),
+            ),
+        [list.data],
     );
 }
 
-function useSend(onDone: (conversationId: string) => void) {
+function StartForm({
+    pre,
+    seed,
+    numberId,
+    wabaAccountId,
+    onBack,
+    onCancel,
+    onDone,
+}: {
+    pre: StartCandidate | null;
+    seed: string;
+    numberId: string;
+    wabaAccountId: string | null;
+    onBack: () => void;
+    onCancel: () => void;
+    onDone: (conversationId: string) => void;
+}) {
     const qc = useQueryClient();
-    const [error, setError] = useState<string | null>(null);
-    const [pending, setPending] = useState(false);
-    const send = async (payload: StartPayload) => {
-        setError(null);
-        setPending(true);
+    const now = useNow();
+    const record = useContact(pre?.id ?? null).data;
+    const templates = useStartTemplates(wabaAccountId);
+    const num = looksNum(seed);
+    const [name, setName] = useState(pre ? (record?.name ?? record?.profile_name ?? pre.display_name ?? '') : num ? '' : seed.includes('@') ? '' : seed);
+    const [phone, setPhone] = useState(pre ? (pre.phone ? fmtPhone(pre.phone) : '') : num ? fmtPhone(withCountryCode(seed)) : '');
+    const [via, setVia] = useState<PermissionVia | ''>('');
+    const [viaNote, setViaNote] = useState('');
+    const [email, setEmail] = useState(seed.includes('@') ? seed : '');
+    const [company, setCompany] = useState('');
+    const [source, setSource] = useState('Outbound · started by You');
+    const [tags, setTags] = useState('');
+    const [tpl, setTpl] = useState('');
+    const [topic, setTopic] = useState('');
+    const [deal, setDeal] = useState(false);
+    const [error, setError] = useState<React.ReactNode>(null);
+    const [bad, setBad] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+    const nameRef = useRef<HTMLInputElement>(null);
+    const phoneRef = useRef<HTMLInputElement>(null);
+    const viaRef = useRef<HTMLSelectElement>(null);
+    const noteRef = useRef<HTMLInputElement>(null);
+    const needOptIn = !pre || !pre.has_permission;
+    const own = pre?.owner && !pre.owner.is_me ? pre.owner.name.split(' ')[0] : '';
+    const t = templates.find((x) => x.id === tpl) ?? templates[0] ?? null;
+    const perm = record?.contact_permission;
+
+    useEffect(() => {
+        const el = pre ? document.getElementById('nc-topic') : !name ? nameRef.current : needOptIn && phone ? viaRef.current : phoneRef.current;
+        setTimeout(() => el?.focus(), 40);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const fail = (m: React.ReactNode, at: 'name' | 'phone' | 'via' | 'note' | null) => {
+        setError(m);
+        setBad(at);
+        (({ name: nameRef, phone: phoneRef, via: viaRef, note: noteRef }) as const)[at ?? 'name'].current?.focus();
+    };
+    const submit = async () => {
+        const n = name.trim().replace(/\s+/g, ' ');
+        if (!validName(n)) return fail('Enter the customer’s name: at least two letters, no numbers', 'name');
+        const raw = withCountryCode(phone);
+        const d = digitsOf(raw);
+        if (!pre && (!raw.startsWith('+') || d.length < 8 || d.length > 15))
+            return fail('Enter a WhatsApp number, e.g. 050 123 4567 or +971 50 123 4567', 'phone');
+        if (needOptIn && !via) return fail('Choose how they agreed to be contacted', 'via');
+        if (via === 'other' && viaNote.trim().length < 3) return fail('Say how they agreed to be contacted', 'note');
+        if (!t) return fail('No approved utility template fits. Approve one with up to two variables ({{1}} name, {{2}} topic).', null);
+        const body = t.variables.body.map((_, i) => (i === 0 ? n.split(' ')[0] : topic.trim() || 'your enquiry'));
+        const payload: StartPayload = {
+            phone_number_id: numberId,
+            ...(pre
+                ? { contact_id: pre.id }
+                : {
+                      to: raw,
+                      new_contact: {
+                          name: n,
+                          email: email.trim().toLowerCase() || null,
+                          company: company.trim() || null,
+                          source: source.trim() || null,
+                          tags: tags
+                              .split(',')
+                              .map((x) => x.trim())
+                              .filter(Boolean),
+                      },
+                  }),
+            ...(via ? { permission: { via, note: viaNote.trim() || null } } : {}),
+            type: 'template',
+            template: { name: t.name, language: t.language, variables: { header: [], body, buttons: {} } },
+            topic: topic.trim() || null,
+            create_enquiry: deal,
+        };
+        setBusy(true);
         try {
             const message = await startConversation(payload, newId());
             void qc.invalidateQueries({ queryKey: keys.conversationsAll });
             void qc.invalidateQueries({ queryKey: keys.contactsAll });
+            toast.success(
+                pre
+                    ? `Template sent to ${pre.display_name}${own ? ` · ${own} notified` : ''} · Waiting for customer`
+                    : `Contact created · template sent to ${n} · Waiting for customer`,
+            );
             onDone(message.conversation_id);
         } catch (e) {
-            setError(errorMessage(e));
+            const m = errorMessage(e);
+            const saved = m.match(/^Already saved as (.+?)\.?$/);
+            if (saved) {
+                fail(
+                    <>
+                        Already saved as <b>{saved[1]}</b>.{' '}
+                        <button type="button" className="font-semibold text-brand-600 hover:underline" onClick={onBack}>
+                            Open instead
+                        </button>
+                    </>,
+                    'phone',
+                );
+            } else fail(m, null);
         } finally {
-            setPending(false);
+            setBusy(false);
         }
     };
+    const errClass = (k: string) => (bad === k ? 'border-bad' : '');
 
-    return { send, error, setError, pending };
-}
-
-function TopicAndDeal({ topic, onTopic, deal, onDeal }: { topic: string; onTopic: (v: string) => void; deal: boolean; onDeal: (v: boolean) => void }) {
     return (
         <>
-            <Field label="Topic" htmlFor="sc-topic" hint="Optional. What the chat is about, for the team.">
-                <Input id="sc-topic" value={topic} onChange={(e) => onTopic(e.target.value)} maxLength={200} placeholder="e.g. Wedding photography quote" />
-            </Field>
-            <label className="flex items-center gap-2 text-[13px]">
-                <Checkbox checked={deal} onCheckedChange={(v) => onDeal(v === true)} /> Create deal
-            </label>
-        </>
-    );
-}
-
-function ExistingForm({
-    candidate: c,
-    numberId,
-    wabaAccountId,
-    onDone,
-}: {
-    candidate: StartCandidate;
-    numberId: string;
-    wabaAccountId: string | null;
-    onDone: (id: string) => void;
-}) {
-    const askPermission = !c.has_permission && !c.conversation;
-    const [via, setVia] = useState<PermissionVia | null>(null);
-    const [note, setNote] = useState('');
-    const [selection, setSelection] = useState<TemplateSelection>(emptySelection);
-    const [topic, setTopic] = useState('');
-    const [deal, setDeal] = useState(false);
-    const { send, error, setError, pending } = useSend(onDone);
-
-    const submit = () => {
-        if (askPermission && !via) return setError('Say how they agreed to be contacted.');
-        if (via === 'other' && !note.trim()) return setError('Add a short note on how they agreed.');
-        const problem = selectionError(selection);
-        if (problem) return setError(problem);
-        if (c.opted_out && selection.template?.category === 'MARKETING')
-            return setError('This contact opted out. Choose a utility or authentication template.');
-        void send({
-            phone_number_id: numberId,
-            contact_id: c.id,
-            ...selectionPayload(selection),
-            ...(via ? { permission: { via, note: note.trim() || null } } : {}),
-            topic: topic.trim() || null,
-            create_enquiry: deal,
-        });
-    };
-
-    return (
-        <div className="grid gap-4">
-            <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-3 py-2.5">
-                <RingAvatar name={c.display_name} expiresAt={c.conversation?.window_expires_at} hasChat={!!c.conversation} className="size-9 text-[12px]" />
-                <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-semibold">{c.display_name}</span>
-                    <span className="block truncate text-[12px] text-muted-foreground">{[c.phone, c.company].filter(Boolean).join(' · ')}</span>
-                </span>
-            </div>
-            {c.owner && !c.owner.is_me && (
-                <p className="rounded-md bg-info-bg px-3 py-2 text-[12px] text-info">
-                    {c.owner.name}’s customer. They stay the owner and are told you started a chat.
+            <DialogHeader>
+                <DialogTitle>{pre ? `Start a conversation with ${pre.display_name}` : 'New contact'}</DialogTitle>
+                <DialogDescription>
+                    {pre
+                        ? 'Business-initiated chats start with an approved template.'
+                        : 'Only the first three fields are required. Add the rest now or later in the contact panel.'}
+                </DialogDescription>
+            </DialogHeader>
+            {pre ? (
+                <p className="mt-2 rounded-lg border bg-muted/50 px-3 py-2 text-[12px]">
+                    Uses the existing contact <b>{engageId(pre.id)}</b>. The chat, any deal and the history stay on this record.
+                    {own && (
+                        <>
+                            {' '}
+                            <b>{own}</b> stays the owner and is notified.
+                        </>
+                    )}
                 </p>
-            )}
-            {c.opted_out && (
-                <p className="rounded-md bg-bad-bg px-3 py-2 text-[12px] text-bad">Opted out of marketing: only utility and authentication templates.</p>
-            )}
-            {askPermission && <PermissionField via={via} note={note} onVia={setVia} onNote={setNote} />}
-            <TemplatePicker wabaAccountId={wabaAccountId} value={selection} onChange={setSelection} category={c.opted_out ? 'UTILITY' : null} idPrefix="sc" />
-            <TopicAndDeal topic={topic} onTopic={setTopic} deal={deal} onDeal={setDeal} />
-            <FormError message={error} />
-            <DialogFooter>
-                <Button onClick={submit} disabled={pending}>
-                    <SendIcon /> {pending ? 'Sending…' : 'Send template'}
-                </Button>
-            </DialogFooter>
-        </div>
-    );
-}
-
-function NewContactForm({
-    typed,
-    numberId,
-    wabaAccountId,
-    onDone,
-}: {
-    typed: string;
-    numberId: string;
-    wabaAccountId: string | null;
-    onDone: (id: string) => void;
-}) {
-    // What was typed in the search goes where it belongs: a number into WhatsApp number, anything else into Name.
-    const [name, setName] = useState(looksLikePhone(typed) ? '' : typed);
-    const [phone, setPhone] = useState(looksLikePhone(typed) ? withCountryCode(typed) : '');
-    const [via, setVia] = useState<PermissionVia | null>(null);
-    const [note, setNote] = useState('');
-    const [more, setMore] = useState(false);
-    const [email, setEmail] = useState('');
-    const [company, setCompany] = useState('');
-    const [source, setSource] = useState('');
-    const [tags, setTags] = useState<string[]>([]);
-    const [selection, setSelection] = useState<TemplateSelection>(emptySelection);
-    const [topic, setTopic] = useState('');
-    const [deal, setDeal] = useState(false);
-    const { send, error, setError, pending } = useSend(onDone);
-    const nameRef = useRef<HTMLInputElement>(null);
-    const nameProblem = name && !validName(name) ? 'Use at least 2 letters and no numbers.' : null;
-    const normalized = useMemo(() => withCountryCode(phone), [phone]);
-
-    const submit = () => {
-        if (!validName(name)) return (setError('Add their name: at least 2 letters, no numbers.'), nameRef.current?.focus());
-        if (!looksLikePhone(phone)) return setError('Add their WhatsApp number, e.g. +971 50 123 4567.');
-        if (!via) return setError('Say how they agreed to be contacted.');
-        if (via === 'other' && !note.trim()) return setError('Add a short note on how they agreed.');
-        const problem = selectionError(selection);
-        if (problem) return setError(problem);
-        void send({
-            phone_number_id: numberId,
-            to: normalized,
-            new_contact: { name: name.trim(), email: email.trim() || null, company: company.trim() || null, source: source.trim() || null, tags },
-            permission: { via, note: note.trim() || null },
-            ...selectionPayload(selection),
-            topic: topic.trim() || null,
-            create_enquiry: deal,
-        });
-    };
-
-    return (
-        <div className="grid gap-4">
-            <Field label="Name" htmlFor="nc-name" error={nameProblem ?? undefined}>
-                <Input id="nc-name" ref={nameRef} autoFocus={!name} value={name} onChange={(e) => setName(e.target.value)} maxLength={190} dir="auto" />
-            </Field>
-            <Field
-                label="WhatsApp number"
-                htmlFor="nc-phone"
-                hint={phone && normalized !== phone.trim() ? `Saved as ${normalized}` : 'Local UAE numbers get +971.'}
-            >
-                <Input
-                    id="nc-phone"
-                    autoFocus={!!name && !phone}
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    inputMode="tel"
-                    placeholder="+971 50 123 4567"
-                />
-            </Field>
-            <PermissionField via={via} note={note} onVia={setVia} onNote={setNote} />
-            <div className="grid gap-3">
-                <button
-                    type="button"
-                    onClick={() => setMore((m) => !m)}
-                    aria-expanded={more}
-                    className="flex w-fit items-center gap-1 text-[13px] font-semibold text-brand-600"
-                >
-                    <ChevronDownIcon className={cn('size-4 transition-transform duration-150 motion-reduce:transition-none', !more && '-rotate-90')} /> More
-                    details
+            ) : (
+                <button type="button" onClick={onBack} className="-mt-1 mb-1 w-fit text-[13px] font-semibold text-brand-600 hover:underline">
+                    ‹ Back to search
                 </button>
-                {more && (
-                    <div className="grid gap-3 rounded-lg border p-3">
-                        <Field label="Email" htmlFor="nc-email">
-                            <Input id="nc-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-                        </Field>
-                        <Field label="Company" htmlFor="nc-company">
-                            <Input id="nc-company" value={company} onChange={(e) => setCompany(e.target.value)} maxLength={190} />
-                        </Field>
-                        <Field label="Source" htmlFor="nc-source" hint="Where they came from, e.g. Expo stand, referral.">
-                            <Input id="nc-source" value={source} onChange={(e) => setSource(e.target.value)} maxLength={60} />
-                        </Field>
-                        <Field label="Tags" htmlFor="nc-tags">
-                            <TagInput id="nc-tags" value={tags} onChange={setTags} />
-                        </Field>
-                    </div>
+            )}
+            <form
+                className="grid gap-y-2"
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    void submit();
+                }}
+                onChange={() => (setError(null), setBad(null))}
+            >
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                    <label className={label}>
+                        <span>
+                            Name <small className="font-normal text-bad">· required</small>
+                        </span>
+                        <Input
+                            ref={nameRef}
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            placeholder="e.g. Layla Al Mansoori"
+                            dir="auto"
+                            className={errClass('name')}
+                        />
+                    </label>
+                    <label className={label}>
+                        <span>
+                            WhatsApp number <small className="font-normal text-bad">· required</small>
+                        </span>
+                        <Input
+                            ref={phoneRef}
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
+                            readOnly={!!pre}
+                            placeholder="050 123 4567 or +971 50 123 4567"
+                            inputMode="tel"
+                            className={errClass('phone')}
+                        />
+                    </label>
+                </div>
+                {error && (
+                    <p role="alert" className="text-[13px] text-bad">
+                        {error}
+                    </p>
                 )}
-            </div>
-            <TemplatePicker wabaAccountId={wabaAccountId} value={selection} onChange={setSelection} idPrefix="nc" />
-            <TopicAndDeal topic={topic} onTopic={setTopic} deal={deal} onDeal={setDeal} />
-            <FormError message={error} />
+                {needOptIn ? (
+                    <>
+                        <label className={cn(label, 'mt-1')}>
+                            <span>
+                                How did they agree to be contacted on WhatsApp? <small className="font-normal text-bad">· required</small>
+                            </span>
+                            <select
+                                ref={viaRef}
+                                className={cn(field, errClass('via'))}
+                                value={via}
+                                onChange={(e) => setVia(e.target.value as PermissionVia | '')}
+                            >
+                                <option value="">Choose…</option>
+                                {PERMISSION_VIA.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                        {p.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        {via === 'other' && (
+                            <Input
+                                ref={noteRef}
+                                value={viaNote}
+                                onChange={(e) => setViaNote(e.target.value)}
+                                placeholder="Say how, e.g. asked at the exhibition stand"
+                                className={errClass('note')}
+                            />
+                        )}
+                        <p className="text-[12px] text-muted-foreground">
+                            Meta only allows a business to message first when the person shared their number and agreed to hear from you. This is saved on the
+                            contact with your name and the time.
+                        </p>
+                    </>
+                ) : (
+                    <p className="mt-2.5 text-[12px] text-muted-foreground">
+                        Permission on record: {perm ? `${perm.via_label} · ${fmtDay(perm.at, now)}` : 'the customer wrote to you or opted in to marketing'}.
+                    </p>
+                )}
+                {!pre && (
+                    <details className="mt-3 rounded-lg border border-line-2 px-3 py-2">
+                        <summary className="cursor-pointer text-[13px] font-semibold text-ink-2">
+                            More details <small className="font-normal text-muted-foreground">· optional</small>
+                        </summary>
+                        <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-2">
+                            <label className={label}>
+                                Email
+                                <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@company.com" type="email" />
+                            </label>
+                            <label className={label}>
+                                Company
+                                <Input value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Company" />
+                            </label>
+                            <label className={label}>
+                                Source
+                                <Input value={source} onChange={(e) => setSource(e.target.value)} maxLength={60} />
+                            </label>
+                            <label className={label}>
+                                Tags
+                                <Input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="Comma separated" />
+                            </label>
+                        </div>
+                    </details>
+                )}
+                <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-2">
+                    <label className={label}>
+                        Template
+                        <select className={field} value={t?.id ?? ''} onChange={(e) => setTpl(e.target.value)} disabled={templates.length === 0}>
+                            {templates.length === 0 && <option value="">No approved utility template</option>}
+                            {templates.map((x) => (
+                                <option key={x.id} value={x.id}>
+                                    {x.name} · {x.language}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    <label className={label}>
+                        {'{{2}}'} Enquiry topic
+                        <Input id="nc-topic" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. your website project" maxLength={120} />
+                    </label>
+                </div>
+                <label className="mt-2 flex items-center gap-2 text-[13px]">
+                    <input type="checkbox" checked={deal} onChange={(e) => setDeal(e.target.checked)} className="size-4 accent-[var(--brand-500)]" /> Create a
+                    CRM deal for this enquiry <span className="text-muted-foreground">(leave off for billing, support or hiring)</span>
+                </label>
+                <button type="submit" hidden />
+            </form>
             <DialogFooter>
-                <Button onClick={submit} disabled={pending}>
-                    <SendIcon /> {pending ? 'Sending…' : 'Save and send'}
+                <Button variant="outline" onClick={onCancel}>
+                    Cancel
+                </Button>
+                <Button disabled={busy} onClick={() => void submit()}>
+                    {busy ? 'Sending…' : 'Send template'} <SendIcon />
                 </Button>
             </DialogFooter>
-        </div>
+        </>
     );
 }

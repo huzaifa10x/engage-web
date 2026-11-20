@@ -21,7 +21,8 @@ test('workspace dates: the date format setting, its warning, and date fields tha
 
         // A date field follows the format: typed month first, shown month first, calendar picks the same way.
         await page.goto('/contacts');
-        await page.getByRole('button', { name: 'Export' }).click();
+        await page.getByRole('button', { name: 'More', exact: true }).click();
+        await page.getByRole('menuitem', { name: 'Export' }).click();
         const from = page.getByRole('textbox', { name: 'Added from' });
         await expect(from).toHaveAttribute('placeholder', 'MM/DD/YYYY');
         await from.fill('05/01/2026');
@@ -38,6 +39,7 @@ test('workspace dates: the date format setting, its warning, and date fields tha
     }
 
     await page.goto('/contacts');
-    await page.getByRole('button', { name: 'Export' }).click();
+    await page.getByRole('button', { name: 'More', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Export' }).click();
     await expect(page.getByRole('textbox', { name: 'Added from' })).toHaveAttribute('placeholder', 'DD/MM/YYYY');
 });

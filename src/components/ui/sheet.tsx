@@ -14,7 +14,13 @@ function Sheet(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
  * A panel that slides in from the right over the current page (which stays visible, lightly dimmed,
  * behind it). Escape, the close button or a click outside closes it and returns to the page as it was.
  */
-function SheetContent({ className, children, closeLabel = 'Close', ...props }: React.ComponentProps<typeof DialogPrimitive.Content> & { closeLabel?: string }) {
+function SheetContent({
+    className,
+    children,
+    closeLabel = 'Close',
+    hideClose = false,
+    ...props
+}: React.ComponentProps<typeof DialogPrimitive.Content> & { closeLabel?: string; /** The content draws its own close button. */ hideClose?: boolean }) {
     return (
         <DialogPrimitive.Portal>
             <DialogPrimitive.Overlay
@@ -31,10 +37,12 @@ function SheetContent({ className, children, closeLabel = 'Close', ...props }: R
                 {...props}
             >
                 {children}
-                <DialogPrimitive.Close className="absolute top-3 right-3 inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
-                    <XIcon className="size-4" />
-                    <span className="sr-only">{closeLabel}</span>
-                </DialogPrimitive.Close>
+                {!hideClose && (
+                    <DialogPrimitive.Close className="absolute top-3 right-3 inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
+                        <XIcon className="size-4" />
+                        <span className="sr-only">{closeLabel}</span>
+                    </DialogPrimitive.Close>
+                )}
             </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
     );

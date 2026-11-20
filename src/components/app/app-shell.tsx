@@ -40,7 +40,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const fullBleed = pathname.startsWith('/inbox');
     // Chatbots & Flows has its own section menu beside the app sidebar, flush with it.
-    const flush = pathname === '/chatbots' || pathname.startsWith('/chatbots/');
+    // Contacts & CRM (3.5) spans the page under its own header and tabs.
+    const chatbotsPage = pathname === '/chatbots' || pathname.startsWith('/chatbots/');
+    const flush = chatbotsPage || pathname === '/contacts' || pathname.startsWith('/contacts/');
     // Opening Chatbots & Flows folds the main menu to icons so the section's own menu (its submenu)
     // stays open with room for the work; the toggle shows the full menu again for this visit only,
     // and the person's own choice for every other page is left alone.
@@ -49,7 +51,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const [chatOpen, setChatOpen] = useState(false);
     const [pinned, setPinned] = useStored<boolean>('engage.inbox.menu-pinned', false);
     const chatFold = fullBleed && chatOpen && !pinned;
-    const section = flush ? 'chatbots' : chatFold ? 'inbox' : null;
+    const section = chatbotsPage ? 'chatbots' : chatFold ? 'inbox' : null;
     if (section === null && expandedIn !== null) setExpandedIn(null); // leaving the section: next visit folds again
     const rail = section !== null && expandedIn !== section;
     const menuHidden = section !== null ? rail : collapsed;

@@ -18,7 +18,7 @@ import { api, ApiError, errorMessage } from '@/lib/api';
 import { date, dateTime } from '@/lib/format';
 import { P } from '@/lib/permissions';
 import { AED } from '@/lib/promise';
-import { keys, useAssignees, useStages } from '@/lib/queries';
+import { keys, useAssignees, useNextSteps, useStages } from '@/lib/queries';
 import type { CrmStage, Enquiry, NextStep } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -82,18 +82,24 @@ export function CloseEnquiryDialog({
     open,
     onOpenChange,
     onDone,
+    onWon,
 }: {
     enquiry: Enquiry;
     stage: Pick<CrmStage, 'id' | 'name' | 'group'> | null;
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onDone?: () => void;
+    /** A real Won: the card shows one small tick burst. */
+    onWon?: () => void;
 }) {
     const qc = useQueryClient();
     const [ref, setRef] = useState('');
     const [lost, setLost] = useState('');
     const [other, setOther] = useState('');
-    const [cancelStep, setCancelStep] = useState(true);
+    // 3.5: tick only the tasks to cancel; by default they stay open (an onboarding call after a win).
+    const [cancel, setCancel] = useState<string[]>([]);
+    const steps = useNextSteps(open ? enquiry.contact_id : null);
+    const openSteps = (steps.data ?? []).filter((s) => s.enquiry_id === enquiry.id && s.status === 'open');
     const [error, setError] = useState<string | null>(null);
     const [loaded, setLoaded] = useState<string | null>(null);
     const key = `${enquiry.id}:${stage?.id}`;
@@ -102,7 +108,7 @@ export function CloseEnquiryDialog({
         setRef('');
         setLost('');
         setOther('');
-        setCancelStep(true);
+        setCancel([]);
         setError(null);
     }
     if (!open && loaded !== null) setLoaded(null);
@@ -126,14 +132,16 @@ export function CloseEnquiryDialog({
         setError(null);
         try {
             await move.mutateAsync({ stageId: stage.id, reason });
-            if (cancelStep && enquiry.next_step) {
-                await api(`next-steps/${enquiry.next_step.id}`, {
-                    method: 'PATCH',
-                    body: { status: 'cancelled', cancel_reason: `Enquiry moved to ${stage.name}` },
-                });
-                invalidateEnquiry(qc, enquiry.contact_id);
+            for (const id of cancel) {
+                await api(`next-steps/${id}`, { method: 'PATCH', body: { status: 'cancelled', cancel_reason: `Deal closed as ${stage.name}` } });
             }
-            toast.success(won ? `${stage.name} · ${needsRef ? `reference ${reason}` : 'verified payment'}` : `${stage.name} · ${reason}`);
+            if (cancel.length) invalidateEnquiry(qc, enquiry.contact_id);
+            const kept = openSteps.length - cancel.length;
+            toast.success(
+                `Deal ${won ? 'won' : 'lost'} · ${won ? (needsRef ? `reference ${reason}` : 'verified payment') : reason}` +
+                    (openSteps.length ? ` · ${kept} task${kept === 1 ? '' : 's'} kept open${cancel.length ? ` · ${cancel.length} cancelled` : ''}` : ''),
+            );
+            if (won) onWon?.();
             onOpenChange(false);
             onDone?.();
         } catch (e) {
@@ -196,11 +204,31 @@ export function CloseEnquiryDialog({
                             />
                         </div>
                     )}
-                    {enquiry.next_step && (
-                        <label className="flex items-center gap-2">
-                            <Checkbox checked={cancelStep} onCheckedChange={(v) => setCancelStep(v === true)} />
-                            Cancel the open next step: {enquiry.next_step.title} ({dateTime(enquiry.next_step.due_at)})
-                        </label>
+                    {openSteps.length > 0 && (
+                        <div className="grid gap-1.5">
+                            <p className="text-muted-foreground">
+                                This deal has {openSteps.length} open task{openSteps.length > 1 ? 's' : ''}. Keep {openSteps.length > 1 ? 'them' : 'it'} if the
+                                work still needs doing. Tick only the tasks to cancel; tasks for the customer or other deals are not affected.
+                            </p>
+                            {openSteps.map((st) => (
+                                <label key={st.id} className="flex items-start gap-2 rounded-md border px-3 py-2">
+                                    <Checkbox
+                                        className="mt-0.5"
+                                        checked={cancel.includes(st.id)}
+                                        onCheckedChange={(v) => setCancel((c) => (v === true ? [...c, st.id] : c.filter((x) => x !== st.id)))}
+                                    />
+                                    <span>
+                                        <b className="font-semibold">
+                                            {st.type_label} · {dateTime(st.due_at)}
+                                        </b>
+                                        <span className="block text-[12px] text-muted-foreground">
+                                            {st.assigned?.name ?? ''}
+                                            {st.title ? ` · ${st.title}` : ''}
+                                        </span>
+                                    </span>
+                                </label>
+                            ))}
+                        </div>
                     )}
                     {error && (
                         <p role="alert" className="text-[12.5px] text-bad">

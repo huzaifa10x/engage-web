@@ -323,6 +323,8 @@ export function MessageBubble({
                     message.origin === 'automation' && 'bg-[#e7f3ff]',
                     message.origin === 'app_echo' && 'bg-[#e8f5e0]',
                     message.status === 'failed' && 'bg-bad-bg ring-1 ring-bad',
+                    // Still sending: dimmed until WhatsApp accepts it.
+                    message.status === 'queued' && 'opacity-60',
                 )}
             >
                 {!grouped && (
@@ -351,6 +353,17 @@ export function MessageBubble({
                         {quoted ? (quoted.body ?? `${quoted.type} message`) : 'Replying to an earlier message'}
                     </div>
                 )}
+                {authorLabel && (
+                    <p
+                        className={cn(
+                            'mb-0.5 flex items-center gap-1 text-[11px] font-semibold',
+                            message.origin === 'automation' ? 'text-info' : 'text-brand-600',
+                        )}
+                    >
+                        {message.origin === 'automation' && <BotIcon className="size-3" />}
+                        {authorLabel}
+                    </p>
+                )}
                 <Body message={message} />
                 {message.raw_body && <RawText raw={message.raw_body} />}
                 {message.status === 'failed' && <FailureNote message={message} onRetry={onRetry} onTemplate={onTemplate} />}
@@ -370,12 +383,6 @@ export function MessageBubble({
                             <ShieldCheckIcon className="size-3" /> Consent reply ·
                         </span>
                     )}
-                    {message.origin === 'automation' && message.automation !== 'consent' && (
-                        <span className="inline-flex items-center gap-0.5" title="Sent automatically (chatbot or auto-reply)">
-                            <BotIcon className="size-3" /> Bot ·
-                        </span>
-                    )}
-                    {authorLabel && <span>{authorLabel} ·</span>}
                     {message.edited_at && <span>edited ·</span>}
                     <span>{clockTime(message.timestamp)}</span>
                     {outbound && <StatusTicks message={message} />}
