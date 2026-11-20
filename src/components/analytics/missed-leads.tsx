@@ -53,7 +53,7 @@ function Versus({ current, base, lowerBetter }: { current: number; base: number 
  * The weekly missed-leads report (3.3, the pilot kit): per enquiry, Monday to Sunday, against the
  * reply promise in business minutes. Emailed to Owners every Monday.
  */
-export function MissedLeadsCard() {
+export function MissedLeadsCard({ className }: { className?: string } = {}) {
     const { can } = useSession();
     const qc = useQueryClient();
     const [weeksAgo, setWeeksAgo] = useState(0);
@@ -84,7 +84,7 @@ export function MissedLeadsCard() {
     const num = (v: string) => (v === '' ? null : Math.max(0, Math.floor(Number(v))));
 
     return (
-        <Card id="missed-leads" className="grid gap-4 p-5">
+        <Card id="missed-leads" className={cn('grid gap-4 p-5', className)}>
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                     <p className="text-sm font-semibold">Weekly missed-leads report</p>

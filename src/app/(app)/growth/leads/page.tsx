@@ -4,6 +4,7 @@ import { DownloadIcon, SearchIcon, TargetIcon } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 
+import { MissedLeadsCard } from '@/components/analytics/missed-leads';
 import { DateField } from '@/components/app/date-field';
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSelectedNumber } from '@/components/app/number-switcher';
@@ -28,7 +29,7 @@ import { cn } from '@/lib/utils';
 
 const ALL = '__all__';
 
-type Tab = 'all' | 'new' | 'returning' | 'clicks' | 'conversions';
+type Tab = 'all' | 'new' | 'returning' | 'clicks' | 'conversions' | 'missed';
 
 // Leads are paid-advertising leads only: Meta Click-to-WhatsApp ads and boosted posts, and taps on
 // your website from Google Ads, Meta ads or another paid campaign. Ordinary chats stay in Chat and Contacts.
@@ -242,9 +243,9 @@ function LeadsPage() {
     const full = me.growth?.tier === 'full';
     const allowed = can(P.InboxView) && full;
     const seesAll = can(P.GrowthView);
-    const [tab, setTab] = useState<Tab>('all');
-    // Tracking Setup links here with ?ad=<id> to show one ad's leads.
+    // Tracking Setup links here with ?ad=<id> to show one ad's leads; the Monday email with ?tab=missed.
     const params = useSearchParams();
+    const [tab, setTab] = useState<Tab>(() => (params.get('tab') === 'missed' ? 'missed' : 'all'));
     // Insights › Marketing links here with the clicked period, source, campaign and funnel step.
     const [filters, setFilters] = useState<LeadFilters>(() => {
         const v = (k: string) => params.get(k) ?? undefined;
@@ -270,7 +271,7 @@ function LeadsPage() {
     // The number chosen in the top bar filters the leads and the counts (CN-02).
     const [selectedNumber] = useSelectedNumber();
     const numberId = filters.phone_number_id ?? selectedNumber ?? undefined;
-    const listTab = tab === 'clicks' || tab === 'conversions' ? 'all' : tab;
+    const listTab = tab === 'clicks' || tab === 'conversions' || tab === 'missed' ? 'all' : tab;
     const query: LeadFilters = { ...filters, phone_number_id: numberId, tab: listTab };
     const leads = useLeads(query, allowed && listTab === tab);
     // Meta conversions per ad: only workspaces with Conversions to Meta (null otherwise, no tab).
@@ -293,6 +294,9 @@ function LeadsPage() {
 
     if (!can(P.InboxView)) return <Forbidden />;
     if (!full) {
+        // The pilot kit's weekly report works without Growth Hub's lead sources (the Monday email links here).
+        if (can(P.AnalyticsView) && tab === 'missed') return <MissedLeadsCard />;
+
         return (
             <EmptyState
                 icon={<TargetIcon className="size-5" />}
@@ -377,6 +381,7 @@ function LeadsPage() {
                             ...(seesAll && conversions.data !== null && conversions.data !== undefined
                                 ? ([['conversions', 'Meta conversions', undefined]] as const)
                                 : []),
+                            ...(can(P.AnalyticsView) ? ([['missed', 'Missed leads', undefined]] as const) : []),
                         ] as [Tab, string, number | undefined][]
                     ).map(([key, label, n]) => (
                         <button
@@ -396,7 +401,9 @@ function LeadsPage() {
                     ))}
                 </div>
 
-                {tab === 'clicks' ? (
+                {tab === 'missed' ? (
+                    <MissedLeadsCard className="rounded-none border-0 shadow-none" />
+                ) : tab === 'clicks' ? (
                     <UnmatchedClicks />
                 ) : tab === 'conversions' ? (
                     <>
