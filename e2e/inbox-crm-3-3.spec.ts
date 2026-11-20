@@ -50,7 +50,7 @@ test('inbox: the wait clock, Booked with a reference, and the contact record sli
     await enquiry.getByRole('button', { name: 'Open contact' }).click();
     const sheet = page.getByRole('dialog', { name });
     await expect(sheet).toBeVisible();
-    await expect(sheet.getByRole('region', { name: 'Enquiries and history' })).toContainText('Reference INV-2209');
+    await expect(sheet.getByRole('region', { name: 'Deals' })).toContainText('Reference INV-2209');
     await sheet.getByRole('button', { name: 'Close contact' }).click();
     await expect(sheet).toBeHidden();
     await expect(page).toHaveURL(new RegExp(`/inbox\\?c=${id}`));

@@ -315,6 +315,74 @@ export type Contact = {
     /** CRM pipeline stage; null = no stage yet. */
     stage?: StageRef | null;
     stage_changed_at?: string | null;
+    /** The contact record (3.5). */
+    company?: string | null;
+    job_title?: string | null;
+    city?: string | null;
+    country?: string | null;
+    language?: string | null;
+    owner?: { id: string; name: string } | null;
+    lifecycle?: { key: LifecycleKey; label: string };
+    /** null key: customers have no lead status. `automatic` false when a teammate picked it. */
+    lead_status?: { key: LeadStatusKey | null; label: string | null; automatic: boolean };
+    /** How the customer agreed to be contacted, when a teammate started the chat. */
+    contact_permission?: { via: PermissionVia; via_label: string; note: string | null; by: string | null; by_name: string | null; at: string } | null;
+};
+
+export type LifecycleKey = 'subscriber' | 'lead' | 'opportunity' | 'customer' | 'other';
+export type LeadStatusKey = 'new' | 'attempted' | 'connected' | 'open_deal' | 'bad_timing' | 'unqualified';
+export type PermissionVia = 'form' | 'call' | 'in_person' | 'email' | 'other';
+
+export type ContactFieldChange = {
+    id: string;
+    field: string;
+    label: string;
+    from: string | null;
+    to: string | null;
+    by: { id: string | null; name: string } | null;
+    source: string;
+    at: string;
+};
+
+export type ContactDuplicate = { id: string; display_name: string; match: 'phone' | 'email' | 'whatsapp_id' };
+
+/** Start conversation search (3.5): what starting a chat with this person will do. */
+export type StartCandidate = {
+    id: string;
+    display_name: string;
+    phone: string | null;
+    company: string | null;
+    lifecycle: { key: LifecycleKey; label: string };
+    opted_out: boolean;
+    owner: { id: string; name: string; is_me: boolean } | null;
+    conversation: { id: string; status: 'open' | 'closed'; window_expires_at: string | null; window_open: boolean } | null;
+    has_permission: boolean;
+    action: 'open_chat' | 'send_template' | 'start_chat' | 'no_phone';
+    last_inbound_at: string | null;
+};
+
+export type ResolutionReason = 'resolved' | 'not_lead' | 'no_action';
+
+/** One closure of a chat (Inbox › Resolved). */
+export type Resolution = {
+    id: string;
+    conversation_id: string;
+    contact_id: string | null;
+    reason: ResolutionReason;
+    reason_label: string;
+    resolved_by: { id: string; name: string } | null;
+    resolved_at: string;
+    reopened_at: string | null;
+    reopen_how: 'customer' | 'agent' | 'flag' | 'message' | null;
+    reopened_by: { id: string; name: string } | null;
+    flag: { by: { id: string; name: string }; note: string; at: string } | null;
+    contact?: { id: string; display_name: string; last_inbound_at: string | null } | null;
+    later_closures?: number;
+};
+
+export type ResolutionReview = {
+    days: number;
+    agents: { membership_id: string; name: string; resolved: number; not_lead: number; no_action: number; flagged: number }[];
 };
 
 export type StageColor = 'grey' | 'info' | 'good' | 'warn' | 'bad' | 'brand';
@@ -631,6 +699,8 @@ export type Conversation = {
     assigned_name?: string | null;
     /** The reply promise (3.3): business time waited and left on the limit; paused outside business hours. Null unless it needs a reply. */
     promise?: ReplyPromiseClock | null;
+    /** The closure the chat is in now (closed chats only). */
+    resolution?: Resolution | null;
     contact?: Contact;
     /** `status` is "disconnected" once the number was offboarded: the chat stays readable, nothing can be sent. */
     phone_number?: {

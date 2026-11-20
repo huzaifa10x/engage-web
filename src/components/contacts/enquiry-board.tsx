@@ -1,8 +1,8 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { CalendarClockIcon, SearchIcon } from 'lucide-react';
-import { useState } from 'react';
+import { CalendarClockIcon, CheckIcon, SearchIcon } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/app/page-header';
@@ -22,8 +22,6 @@ import { cn } from '@/lib/utils';
 import { useOpenContact } from './contact-sheet';
 import { CloseEnquiryDialog, invalidateEnquiry, money } from './enquiry-card';
 
-const GROUP_TONE = { open: 'info', won: 'good', lost: 'bad' } as const;
-
 function Stat({ value, label, tone }: { value: string; label: string; tone?: 'good' | 'warn' }) {
     return (
         <div className="rounded-lg border bg-card px-4 py-3">
@@ -33,17 +31,83 @@ function Stat({ value, label, tone }: { value: string; label: string; tone?: 'go
     );
 }
 
-function Card({ enquiry, draggable, onDragStart }: { enquiry: Enquiry; draggable: boolean; onDragStart: (e: React.DragEvent) => void }) {
+/** Column dot: Won green, Lost grey, open stages from the tag palette (status colours stay for status). */
+function stageDot(stage: { name: string; group?: string | null }): string {
+    if (stage.group === 'won') return 'var(--good)';
+    if (stage.group === 'lost') return 'var(--faint)';
+
+    let h = 0;
+    for (const ch of stage.name.toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+
+    return OPEN_DOTS[h % OPEN_DOTS.length];
+}
+
+// Open stages: blues, violets and teals only, so no open stage reads as Won (green) or as a warning.
+const OPEN_DOTS = ['#2b5fa8', '#7c4dcc', '#0e8a8a', '#4d5b8c', '#5b8def', '#9a6bd8'];
+
+/** A short tick burst on a card that was just won. */
+function WonBurst() {
+    return (
+        <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+            style={{ animation: 'won-fade 1.2s ease-out forwards' }}
+        >
+            {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
+                <span
+                    key={a}
+                    className="absolute size-1.5 rounded-full bg-good"
+                    style={{ '--a': `${a}deg`, animation: 'won-ray 700ms ease-out forwards' } as React.CSSProperties}
+                />
+            ))}
+            <span
+                className="inline-flex size-8 items-center justify-center rounded-full bg-good text-white shadow-raised"
+                style={{ animation: 'won-pop 420ms ease-out forwards' }}
+            >
+                <CheckIcon className="size-4" />
+            </span>
+        </span>
+    );
+}
+
+function Card({
+    enquiry,
+    draggable,
+    onDragStart,
+    onDragEnd,
+    dragging,
+    burst,
+}: {
+    enquiry: Enquiry;
+    draggable: boolean;
+    onDragStart: (e: React.DragEvent) => void;
+    onDragEnd: () => void;
+    dragging: boolean;
+    burst: boolean;
+}) {
     const openContact = useOpenContact();
     const step = enquiry.next_step;
 
     return (
         <li
             draggable={draggable}
-            onDragStart={onDragStart}
-            className={cn('grid gap-1 rounded-md border bg-card p-2.5 text-[12.5px] shadow-xs', draggable && 'cursor-grab active:cursor-grabbing')}
+            onDragStart={(e) => {
+                // The browser snapshots the card for the drag right after this handler: lift and tilt it
+                // for the snapshot, then put the card back.
+                const el = e.currentTarget;
+                el.classList.add('-rotate-1', 'shadow-raised');
+                requestAnimationFrame(() => el.classList.remove('-rotate-1', 'shadow-raised'));
+                onDragStart(e);
+            }}
+            onDragEnd={onDragEnd}
+            className={cn(
+                'relative grid gap-1 rounded-md border bg-card p-2.5 text-[12.5px] transition-opacity duration-150',
+                draggable && 'cursor-grab active:cursor-grabbing',
+                dragging && 'opacity-40',
+            )}
             aria-label={enquiry.title ?? `Enquiry ${enquiry.number}`}
         >
+            {burst && <WonBurst />}
             <p className="leading-snug font-semibold">{enquiry.title ?? `Enquiry ${enquiry.number}`}</p>
             {enquiry.contact && (
                 <button
@@ -112,6 +176,20 @@ export function EnquiryBoardView() {
     const [over, setOver] = useState<string | null>(null);
     const [closing, setClosing] = useState<{ enquiry: Enquiry; stage: CrmStage } | null>(null);
     const canMove = can(P.StagesChange);
+    // Won tick burst: the card moved to a Won stage shows a short burst once the board has it there.
+    const pendingWon = useRef<string | null>(null);
+    const [burst, setBurst] = useState<string | null>(null);
+    useEffect(() => {
+        const id = pendingWon.current;
+        if (!id || !board.data) return;
+        if (board.data.stages.some((st) => st.group === 'won' && st.enquiries.some((x) => x.id === id))) {
+            pendingWon.current = null;
+            setBurst(id);
+            const t = setTimeout(() => setBurst(null), 1300);
+
+            return () => clearTimeout(t);
+        }
+    }, [board.data]);
 
     const drop = async (stage: EnquiryBoard['stages'][number]) => {
         const e = dragging;
@@ -119,6 +197,7 @@ export function EnquiryBoardView() {
         setOver(null);
         if (!e || e.stage?.id === stage.id) return;
         if ((stage.group ?? 'open') !== 'open') {
+            if (stage.group === 'won') pendingWon.current = e.id;
             setClosing({ enquiry: e, stage });
 
             return;
@@ -241,7 +320,9 @@ export function EnquiryBoardView() {
                         >
                             <header className="mb-2 px-1">
                                 <p className="flex items-center gap-1.5 text-[13px] font-semibold">
-                                    {stage.name} <Badge tone={GROUP_TONE[stage.group ?? 'open']}>{stage.group ?? 'open'}</Badge>
+                                    <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: stageDot(stage) }} aria-hidden />
+                                    {stage.name}
+                                    {(stage.group ?? 'open') !== 'open' && <span className="sr-only">({stage.group})</span>}
                                 </p>
                                 <p className="text-[11.5px] text-muted-foreground">
                                     {stage.count} · {AED(stage.value)}
@@ -257,6 +338,9 @@ export function EnquiryBoardView() {
                                             ev.dataTransfer.effectAllowed = 'move';
                                             setDragging(e);
                                         }}
+                                        onDragEnd={() => (setDragging(null), setOver(null))}
+                                        dragging={dragging?.id === e.id}
+                                        burst={burst === e.id}
                                     />
                                 ))}
                                 {stage.enquiries.length === 0 && (

@@ -13,7 +13,7 @@ import { useContact } from '@/lib/queries';
 import type { Contact } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-import { ContactDialog } from './contact-dialog';
+import { ContactRecordSheet } from './contact-record';
 import { RecordConsentDialog } from './record-consent-dialog';
 import { StageBadge } from './stage-badge';
 
@@ -58,30 +58,45 @@ export function ContactSheetHeader({ contact }: { contact: Contact }) {
     );
 }
 
-type Opener = (contact: Contact | string) => void;
+type Opener = (contact: Contact | string, options?: { list?: string[] }) => void;
 const ContactSheetContext = createContext<Opener | null>(null);
 
 /**
  * Opening a contact anywhere (the contacts list, the deals board, the inbox, reports) slides its
  * record in over the current page: view or edit it there, close it, and the page is just as it was.
+ * Opened from a list (Contacts), it steps to the previous and next contact of that list.
  */
 export function ContactSheetProvider({ children }: { children: React.ReactNode }) {
     const [target, setTarget] = useState<Contact | string | null>(null);
+    const [list, setList] = useState<string[] | null>(null);
     const [open, setOpen] = useState(false);
+    const [opener, setOpener] = useState<HTMLElement | null>(null);
     const id = typeof target === 'string' ? target : (target?.id ?? null);
     // Always the latest copy: a change saved in the panel shows at once.
     const fetched = useContact(open ? id : null);
-    const contact = fetched.data ?? (typeof target === 'object' ? target : null);
-    const openContact = useCallback<Opener>((c) => {
+    const contact = fetched.data ?? (typeof target === 'object' && target?.id === id ? target : null);
+    const openContact = useCallback<Opener>((c, options) => {
+        setOpener(document.activeElement instanceof HTMLElement ? document.activeElement : null);
         setTarget(c);
+        setList(options?.list ?? null);
         setOpen(true);
     }, []);
     const value = useMemo(() => openContact, [openContact]);
+    const index = list && id ? list.indexOf(id) : -1;
+    const nav =
+        list && index >= 0
+            ? {
+                  index,
+                  total: list.length,
+                  prev: index > 0 ? () => setTarget(list[index - 1]) : null,
+                  next: index < list.length - 1 ? () => setTarget(list[index + 1]) : null,
+              }
+            : null;
 
     return (
         <ContactSheetContext.Provider value={value}>
             {children}
-            {contact && <ContactDialog variant="sheet" open={open} onOpenChange={setOpen} contact={contact} />}
+            {contact && <ContactRecordSheet open={open} onOpenChange={setOpen} contact={contact} nav={nav} returnFocus={opener} />}
         </ContactSheetContext.Provider>
     );
 }

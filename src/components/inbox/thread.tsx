@@ -1,13 +1,12 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeftIcon, BotIcon, HandIcon, Loader2Icon, UploadCloudIcon, UserRoundIcon } from 'lucide-react';
+import { ArrowLeftIcon, BotIcon, HandIcon, Loader2Icon, StickyNoteIcon, UploadCloudIcon, UserRoundIcon } from 'lucide-react';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { useSession } from '@/components/app/session';
 import { ContactLink } from '@/components/contacts/contact-sheet';
-import { Avatar } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -22,20 +21,56 @@ import {
     sendToConversation,
     setConversationAutoReply,
     type SendPayload,
+    addConversationNote,
     useConversation,
+    useConversationNotes,
     useMembers,
     usePhoneNumbers,
     useThread,
 } from '@/lib/queries';
-import type { Message } from '@/lib/types';
+import type { ConversationNote, Message } from '@/lib/types';
+import { WINDOW_BADGE, windowState } from '@/lib/inbox';
+import { cn } from '@/lib/utils';
 
 import { Composer, type ComposerHandle } from './composer';
 import { ContactPanel } from './contact-panel';
 import { useNow } from './conversation-list';
 import { MessageBubble } from './message-bubble';
 import { NotesButton, SnoozeMenu } from './thread-tools';
+import { ResolveMenu } from './resolve-menu';
+import { RingAvatar } from './window-ring';
 import { TemplateDialog } from './template-dialog';
 import { WaitChip } from './wait-chip';
+
+type TimelineItem = { kind: 'message'; at: string; message: Message } | { kind: 'note'; at: string; note: ConversationNote };
+
+/** WhatsApp-style date label: white, centred. */
+function DayLabel({ at }: { at: string }) {
+    return (
+        <div className="my-3 flex justify-center">
+            <span className="rounded-md bg-white px-2.5 py-1 text-[11px] font-semibold text-muted-foreground uppercase">{dayLabel(at)}</span>
+        </div>
+    );
+}
+
+/** A team note in the timeline: never sent, shown to the team only. */
+function NoteLine({ note }: { note: ConversationNote }) {
+    return (
+        <div className="my-2 flex justify-center">
+            <div className="max-w-[min(34rem,90%)] rounded-lg border border-dashed border-warn/50 bg-warn-bg px-3 py-1.5 text-[13px] text-ink-2">
+                <p className="flex items-center gap-1 text-[11px] font-semibold text-warn">
+                    <StickyNoteIcon className="size-3" /> Internal note · {note.mine ? 'You' : note.author}
+                    {note.created_at && (
+                        <span className="font-normal text-muted-foreground">
+                            · {new Date(note.created_at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                        </span>
+                    )}
+                </p>
+                <p className="mt-0.5 break-words whitespace-pre-wrap">{note.body}</p>
+            </div>
+        </div>
+    );
+}
 
 /** True while something that contains files is being dragged (not text or a link). */
 const hasFiles = (e: React.DragEvent) => [...e.dataTransfer.types].includes('Files');
@@ -52,7 +87,7 @@ export function Thread({
     /** Opened from a contact's history: scroll to this message and mark it for a moment. */
     focusMessageId?: string | null;
 }) {
-    const { can, membership } = useSession();
+    const { can, membership, feature } = useSession();
     const qc = useQueryClient();
     const conversation = useConversation(conversationId, polling ? 15_000 : false);
     const now = useNow();
@@ -87,12 +122,30 @@ export function Thread({
     const messages = useMemo(() => (thread.data?.pages.flatMap((p) => p.data) ?? []).slice().reverse(), [thread.data]);
     const byWamid = useMemo(() => new Map(messages.filter((m) => m.wamid).map((m) => [m.wamid as string, m])), [messages]);
     const names = useMemo(() => new Map((members.data?.data ?? []).map((m) => [m.id, m.user?.name ?? 'Teammate'])), [members.data]);
+    // Internal notes sit in the timeline between the messages (3.5), from the first message loaded on.
+    const notesAllowed = feature('internal_notes').enabled;
+    const notes = useConversationNotes(conversationId, notesAllowed);
+    const timeline = useMemo(() => {
+        const items: TimelineItem[] = messages.map((m) => ({ kind: 'message', at: m.timestamp ?? '', message: m }));
+        const from = messages[0]?.timestamp ? new Date(messages[0].timestamp).getTime() : 0;
+        for (const n of notes.data ?? []) {
+            if (!n.created_at || (thread.hasNextPage && new Date(n.created_at).getTime() < from)) continue;
+            items.push({ kind: 'note', at: n.created_at, note: n });
+        }
+
+        return items.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+    }, [messages, notes.data, thread.hasNextPage]);
+    const addNote = async (body: string) => {
+        await addConversationNote(conversationId, body, []);
+        pinnedToBottom.current = true;
+        void qc.invalidateQueries({ queryKey: ['inbox', 'notes', conversationId] });
+    };
 
     // Keep the view pinned to the newest message unless the agent scrolled up to read history.
     useEffect(() => {
         const el = scroller.current;
         if (el && pinnedToBottom.current) el.scrollTop = el.scrollHeight;
-    }, [messages.length, conversationId]);
+    }, [timeline.length, conversationId]);
 
     // A link to one message (/inbox?c=…&m=…): load earlier pages until it is there, then show it.
     const focusDone = useRef<string | null>(null);
@@ -243,11 +296,11 @@ export function Thread({
                         </div>
                     </div>
                 )}
-                <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-card px-4 py-2.5">
+                <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-[#f0f2f5] px-4 py-2.5">
                     <Button variant="ghost" size="icon-sm" className="md:hidden" onClick={onBack} aria-label="Back to conversations">
                         <ArrowLeftIcon />
                     </Button>
-                    <Avatar name={contact?.display_name ?? '?'} />
+                    <RingAvatar name={contact?.display_name ?? '?'} expiresAt={c.window.expires_at} now={now} />
                     <div className="min-w-32 flex-1">
                         <p className="truncate text-[14.5px] font-semibold">
                             {contact ? (
@@ -265,11 +318,11 @@ export function Thread({
                     <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-2">
                         <WaitChip conversation={c} fetchedAt={conversation.dataUpdatedAt} now={now} large />
                         {numberGone ? null : c.window.open ? (
-                            <Badge tone="good" dot title="The customer wrote in the last 24 hours: you can send text and media.">
+                            <Badge tone={WINDOW_BADGE[windowState(c.window.expires_at, now).tone]} dot title={windowState(c.window.expires_at, now).label}>
                                 Window open · {timeLeft(c.window.expires_at)}
                             </Badge>
                         ) : (
-                            <Badge tone="warn" dot title="More than 24 hours since the customer last wrote: only approved templates can be sent.">
+                            <Badge tone="grey" dot title="More than 24 hours since the customer last wrote: only approved templates can be sent.">
                                 Window closed · template only
                             </Badge>
                         )}
@@ -278,7 +331,11 @@ export function Thread({
                                 Number disconnected
                             </Badge>
                         )}
-                        {c.status === 'closed' && <Badge tone="grey">Closed</Badge>}
+                        {c.status === 'closed' && (
+                            <Badge tone="grey" title={c.resolution?.resolved_by ? `Resolved by ${c.resolution.resolved_by.name}` : undefined}>
+                                {c.resolution ? c.resolution.reason_label : 'Closed'}
+                            </Badge>
+                        )}
                         {c.handler === 'bot' && (
                             <Badge tone="info" title={c.bot?.node_title ? `The customer is at “${c.bot.node_title}”` : undefined}>
                                 <BotIcon className="size-3" /> Bot{c.bot?.flow_name ? ` · ${c.bot.flow_name}` : ''}
@@ -356,6 +413,7 @@ export function Thread({
                                 {askingConsent ? 'Sending…' : 'Ask for consent'}
                             </Button>
                         )}
+                        {can(P.InboxReply) && !numberGone && <ResolveMenu conversation={c} />}
                         <Button
                             variant="outline"
                             size="sm"
@@ -374,7 +432,7 @@ export function Thread({
                         const el = e.currentTarget;
                         pinnedToBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
                     }}
-                    className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-4 py-4 sm:px-8"
+                    className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-8"
                 >
                     {thread.hasNextPage && (
                         <div className="mb-2 flex justify-center">
@@ -384,10 +442,31 @@ export function Thread({
                         </div>
                     )}
                     {thread.isLoading && <Skeleton className="h-16 w-1/2" />}
-                    {messages.map((m, i) => {
-                        const prev = messages[i - 1];
-                        const newDay =
-                            !prev || (m.timestamp && prev.timestamp && new Date(m.timestamp).toDateString() !== new Date(prev.timestamp).toDateString());
+                    {timeline.map((item, i) => {
+                        const prevItem = timeline[i - 1];
+                        if (item.kind === 'note') {
+                            const n = item.note;
+                            const newDayN = !prevItem || new Date(prevItem.at).toDateString() !== new Date(n.created_at ?? 0).toDateString();
+
+                            return (
+                                <Fragment key={`n-${n.id}`}>
+                                    {newDayN && n.created_at && <DayLabel at={n.created_at} />}
+                                    <NoteLine note={n} />
+                                </Fragment>
+                            );
+                        }
+                        const m = item.message;
+                        const prev = prevItem?.kind === 'message' ? prevItem.message : undefined;
+                        // Bubbles from the same side within 5 minutes are grouped: no tail, tighter spacing.
+                        const grouped =
+                            !!prev &&
+                            prev.direction === m.direction &&
+                            prev.origin === m.origin &&
+                            !!m.timestamp &&
+                            !!prev.timestamp &&
+                            new Date(m.timestamp).getTime() - new Date(prev.timestamp).getTime() < 5 * 60_000 &&
+                            new Date(m.timestamp).toDateString() === new Date(prev.timestamp).toDateString();
+                        const newDay = !prevItem || (m.timestamp && new Date(m.timestamp).toDateString() !== new Date(prevItem.at).toDateString());
                         const author =
                             m.direction === 'outbound' && m.origin === 'agent'
                                 ? m.sent_by_membership_id === membership.id
@@ -399,15 +478,16 @@ export function Thread({
 
                         return (
                             <Fragment key={m.id}>
-                                {newDay && m.timestamp && (
-                                    <div className="my-3 flex justify-center">
-                                        <span className="rounded-md bg-card/90 px-2.5 py-1 text-[11.5px] font-medium text-muted-foreground shadow-xs">
-                                            {dayLabel(m.timestamp)}
-                                        </span>
-                                    </div>
-                                )}
-                                <div id={`msg-${m.id}`} className="rounded-md data-focused:ring-2 data-focused:ring-primary/60 data-focused:ring-offset-2">
+                                {newDay && m.timestamp && <DayLabel at={m.timestamp} />}
+                                <div
+                                    id={`msg-${m.id}`}
+                                    className={cn(
+                                        'rounded-md data-focused:ring-2 data-focused:ring-primary/60 data-focused:ring-offset-2',
+                                        grouped ? '-mt-1' : 'mt-1.5',
+                                    )}
+                                >
                                     <MessageBubble
+                                        grouped={grouped}
                                         message={m}
                                         quoted={m.reply_to_wamid ? (byWamid.get(m.reply_to_wamid) ?? null) : undefined}
                                         authorLabel={author}
@@ -469,6 +549,7 @@ export function Thread({
                     onClearReply={() => setReplyTo(null)}
                     onSend={send}
                     onTemplate={() => (!can(P.InboxReply) ? toast.error(disabledReason ?? 'Not allowed') : setTemplateOpen(true))}
+                    onNote={notesAllowed && can(P.InboxReply) ? addNote : undefined}
                 />
             </div>
 

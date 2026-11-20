@@ -18,6 +18,8 @@ test('contacts: the enquiries and the whole history of a contact, with filters, 
     await page.getByRole('button', { name: `Actions for ${name}` }).click();
     await page.getByRole('menuitem', { name: 'Edit' }).click();
 
+    // The record (3.5) keeps the full history under "Full history and enquiries".
+    await page.getByRole('dialog').getByText('Full history and enquiries').click();
     const section = page.getByRole('dialog').getByRole('region', { name: 'Enquiries and history' });
     const enquiries = section.getByRole('region', { name: 'Enquiries' });
     await expect(enquiries.getByRole('listitem', { name: 'Enquiry 1' })).toContainText('Enquiry 1 · current');

@@ -10,7 +10,7 @@ import { EmptyState, Forbidden } from '@/components/app/page-header';
 import { useSelectedNumber } from '@/components/app/number-switcher';
 import { useSession } from '@/components/app/session';
 import { ConversationList } from '@/components/inbox/conversation-list';
-import { NewConversationDialog } from '@/components/inbox/new-conversation-dialog';
+import { StartConversationDialog } from '@/components/inbox/start-conversation-dialog';
 import { Thread } from '@/components/inbox/thread';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -30,6 +30,8 @@ function Inbox() {
     const [numberId] = useSelectedNumber();
     const [composeOpen, setComposeOpen] = useState(false);
     const selected = params.get('c');
+    // "Start chat" on a contact's record lands here with ?start=<contact id>.
+    const startFor = params.get('start');
     useChatOpen(!!selected);
     const [listWidth, setListWidth] = useStored<number>('engage.inbox.list-width', 384);
     // A WhatsApp Business app number whose chat history import has not finished yet.
@@ -74,8 +76,8 @@ function Inbox() {
                         </TooltipContent>
                     </Tooltip>
                     {can(P.InboxReply) && (
-                        <Button size="icon-sm" variant="ghost" onClick={() => setComposeOpen(true)} aria-label="New conversation">
-                            <MessageSquarePlusIcon />
+                        <Button size="sm" onClick={() => setComposeOpen(true)} aria-label="Start conversation" title="Start conversation">
+                            <MessageSquarePlusIcon /> <span className="hidden sm:inline">New</span>
                         </Button>
                     )}
                 </div>
@@ -117,11 +119,11 @@ function Inbox() {
                     <div className="flex flex-1 items-center justify-center bg-[#efeae2]">
                         <EmptyState
                             title="Select a conversation"
-                            description="Pick a chat on the left, or start a new one with an approved template."
+                            description="Pick a chat on the left, or start one: search first, the person may already have a chat."
                             action={
                                 can(P.InboxReply) ? (
                                     <Button onClick={() => setComposeOpen(true)}>
-                                        <MessageSquarePlusIcon /> New conversation
+                                        <MessageSquarePlusIcon /> Start conversation
                                     </Button>
                                 ) : undefined
                             }
@@ -130,7 +132,16 @@ function Inbox() {
                 )}
             </div>
 
-            <NewConversationDialog open={composeOpen} onOpenChange={setComposeOpen} defaultNumberId={numberId} onStarted={(id) => open(id)} />
+            <StartConversationDialog
+                open={composeOpen || !!startFor}
+                onOpenChange={(o) => {
+                    setComposeOpen(o);
+                    if (!o && startFor) router.replace(selected ? `/inbox?c=${selected}` : '/inbox', { scroll: false });
+                }}
+                defaultNumberId={numberId}
+                contactId={startFor}
+                onStarted={(id) => open(id)}
+            />
         </div>
     );
 }

@@ -1,6 +1,17 @@
 'use client';
 
-import { FileTextIcon, Loader2Icon, MicIcon, PaperclipIcon, SendHorizontalIcon, SquareIcon, Trash2Icon, XIcon } from 'lucide-react';
+import {
+    FileTextIcon,
+    Loader2Icon,
+    MessageSquareIcon,
+    MicIcon,
+    PaperclipIcon,
+    SendHorizontalIcon,
+    SquareIcon,
+    StickyNoteIcon,
+    Trash2Icon,
+    XIcon,
+} from 'lucide-react';
 import { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -9,6 +20,7 @@ import { CannedPicker } from './canned-picker';
 import { EmojiPicker } from './emoji-picker';
 import { errorMessage, upload } from '@/lib/api';
 import { fileSize } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import type { SendPayload } from '@/lib/queries';
 import type { Message, UploadedMedia } from '@/lib/types';
 
@@ -79,7 +91,10 @@ export function Composer({
     canSendTemplate = true,
     conversationId,
     ref,
+    onNote,
 }: {
+    /** Internal note mode (3.5): seen by the team only; omitted when notes are not on the plan. */
+    onNote?: (body: string) => Promise<void>;
     disabledReason: string | null;
     replyTo: Message | null;
     onClearReply: () => void;
@@ -94,10 +109,13 @@ export function Composer({
 }) {
     const [text, setText] = useState(() => (conversationId && typeof window !== 'undefined' ? readDraft(conversationId) : ''));
     const inputRef = useRef<HTMLTextAreaElement>(null);
+    const noteRef = useRef<HTMLTextAreaElement>(null);
     const [attachment, setAttachment] = useState<UploadedMedia | null>(null);
     const [uploading, setUploading] = useState(false);
     const [sending, setSending] = useState(false);
     const [voice, setVoice] = useState(false); // the attachment is a voice recording
+    const [mode, setMode] = useState<'reply' | 'note'>('reply');
+    const [note, setNote] = useState('');
     const [recording, setRecording] = useState<number | null>(null); // seconds, null = not recording
     const fileRef = useRef<HTMLInputElement>(null);
     const recorder = useRef<MediaRecorder | null>(null);
@@ -209,21 +227,82 @@ export function Composer({
         }
     };
 
+    const modes = (
+        <ComposerModes
+            mode={mode}
+            onMode={(m) => {
+                if (m === 'template') return onTemplate();
+                setMode(m);
+                requestAnimationFrame(() => (m === 'note' ? noteRef.current : inputRef.current)?.focus());
+            }}
+            notes={!!onNote}
+            templates={canSendTemplate}
+        />
+    );
+
+    if (mode === 'note' && onNote) {
+        const saveNote = async () => {
+            const body = note.trim();
+            if (!body || sending) return;
+            setSending(true);
+            try {
+                await onNote(body);
+                setNote('');
+            } catch (e) {
+                toast.error(errorMessage(e));
+            } finally {
+                setSending(false);
+            }
+        };
+
+        return (
+            <div className="border-t bg-[#f0f2f5] px-3 py-2">
+                {modes}
+                <div className="flex items-end gap-2">
+                    <textarea
+                        ref={noteRef}
+                        value={note}
+                        onChange={(e) => setNote(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                                e.preventDefault();
+                                void saveNote();
+                            }
+                            if (e.key === 'Escape') setMode('reply');
+                        }}
+                        rows={1}
+                        maxLength={2000}
+                        placeholder="Note for the team. The customer never sees it. Type @ to mention someone in Notes."
+                        aria-label="Internal note"
+                        className="field-sizing-content max-h-40 min-h-9 flex-1 resize-none rounded-md border border-warn/40 bg-warn-bg px-3 py-2 text-sm leading-5 outline-none placeholder:text-warn/70 focus-visible:ring-[3px] focus-visible:ring-warn/20"
+                    />
+                    <Button size="icon" onClick={saveNote} disabled={sending || !note.trim()} aria-label="Add note">
+                        {sending ? <Loader2Icon className="animate-spin" /> : <StickyNoteIcon />}
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
     if (disabledReason) {
         return (
-            <div className="flex flex-wrap items-center gap-3 border-t bg-card px-4 py-3">
-                <p className="flex-1 text-[13px] text-muted-foreground">{disabledReason}</p>
-                {canSendTemplate && (
-                    <Button size="sm" onClick={onTemplate}>
-                        <FileTextIcon /> Send template
-                    </Button>
-                )}
+            <div className="border-t bg-[#f0f2f5] px-4 py-2">
+                {onNote && modes}
+                <div className="flex flex-wrap items-center gap-3 py-1">
+                    <p className="flex-1 text-[13px] text-muted-foreground">{disabledReason}</p>
+                    {canSendTemplate && (
+                        <Button size="sm" onClick={onTemplate}>
+                            <FileTextIcon /> Send template
+                        </Button>
+                    )}
+                </div>
             </div>
         );
     }
 
     return (
-        <div className="border-t bg-card px-3 py-2.5">
+        <div className="border-t bg-[#f0f2f5] px-3 py-2">
+            {onNote && modes}
             {replyTo && (
                 <div className="mb-2 flex items-center gap-2 rounded-md border-l-4 border-brand-500 bg-muted px-3 py-1.5 text-[12.5px]">
                     <span className="min-w-0 flex-1 truncate">Replying to: {replyTo.body ?? `${replyTo.type} message`}</span>
@@ -255,7 +334,7 @@ export function Composer({
                 <Button variant="ghost" size="icon" onClick={() => fileRef.current?.click()} disabled={uploading} aria-label="Attach a file">
                     {uploading ? <Loader2Icon className="animate-spin" /> : <PaperclipIcon />}
                 </Button>
-                {canSendTemplate && (
+                {canSendTemplate && !onNote && (
                     <Button variant="ghost" size="icon" onClick={onTemplate} aria-label="Send a template">
                         <FileTextIcon />
                     </Button>
@@ -318,6 +397,53 @@ export function Composer({
                     </Button>
                 )}
             </div>
+        </div>
+    );
+}
+
+/** Reply / Internal note / Template: what the box below sends. Template opens the template picker. */
+function ComposerModes({
+    mode,
+    onMode,
+    notes,
+    templates,
+}: {
+    mode: 'reply' | 'note';
+    onMode: (m: 'reply' | 'note' | 'template') => void;
+    notes: boolean;
+    templates: boolean;
+}) {
+    const items = [
+        { id: 'reply' as const, label: 'Reply', icon: MessageSquareIcon, show: true },
+        { id: 'note' as const, label: 'Internal note', icon: StickyNoteIcon, show: notes },
+        { id: 'template' as const, label: 'Template', icon: FileTextIcon, show: templates },
+    ].filter((i) => i.show);
+
+    return (
+        <div role="radiogroup" aria-label="Message type" className="mb-1.5 flex gap-1">
+            {items.map((i) => {
+                const on = i.id === mode;
+
+                return (
+                    <button
+                        key={i.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        onClick={() => onMode(i.id)}
+                        className={cn(
+                            'inline-flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[12px] font-semibold transition-colors duration-150 motion-reduce:transition-none',
+                            on
+                                ? i.id === 'note'
+                                    ? 'bg-warn-bg text-warn'
+                                    : 'bg-card text-foreground ring-1 ring-border'
+                                : 'text-muted-foreground hover:bg-card/70 hover:text-foreground',
+                        )}
+                    >
+                        <i.icon className="size-3.5" /> {i.label}
+                    </button>
+                );
+            })}
         </div>
     );
 }

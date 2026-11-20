@@ -1,5 +1,7 @@
 'use client';
 
+import { RingAvatar, TagDots } from '@/components/inbox/window-ring';
+import { LIFECYCLE_TONE } from '@/lib/inbox';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
     Columns3Icon,
@@ -31,7 +33,7 @@ import { CrmSettingsDialog } from '@/components/contacts/crm-settings-dialog';
 import { describeRule, FieldFilter, type FieldFilterValue, formatFieldValue } from '@/components/contacts/field-filter';
 import { ImportContactsDialog } from '@/components/contacts/import-dialog';
 import { SegmentDialog } from '@/components/contacts/segment-dialog';
-import { NewConversationDialog } from '@/components/inbox/new-conversation-dialog';
+import { StartConversationDialog } from '@/components/inbox/start-conversation-dialog';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -114,6 +116,7 @@ function ContactsList() {
 
     const contacts = useContacts(filters);
     const rows = contacts.data?.pages.flatMap((p) => p.data) ?? [];
+    const rowIds = rows.map((r) => r.id);
     const counts = useContactCounts(filters).data;
     const canBulk = can(P.ContactsUpdate);
     const allShown = rows.length > 0 && rows.every((c) => selected.has(c.id));
@@ -402,6 +405,10 @@ function ContactsList() {
                                 )}
                                 <TableHead>Contact</TableHead>
                                 <TableHead>WhatsApp</TableHead>
+                                <TableHead>Company</TableHead>
+                                <TableHead>Lifecycle</TableHead>
+                                <TableHead>Lead status</TableHead>
+                                <TableHead>Owner</TableHead>
                                 <TableHead>Tags</TableHead>
                                 <TableHead>Stage</TableHead>
                                 <TableHead>Consent</TableHead>
@@ -415,7 +422,17 @@ function ContactsList() {
                         </TableHeader>
                         <TableBody>
                             {rows.map((c) => (
-                                <TableRow key={c.id} data-state={selected.has(c.id) ? 'selected' : undefined}>
+                                <TableRow
+                                    key={c.id}
+                                    data-state={selected.has(c.id) ? 'selected' : undefined}
+                                    // Rows are reachable with Tab and open with Enter (3.5).
+                                    tabIndex={0}
+                                    aria-label={`${c.display_name}: press Enter to open`}
+                                    className="cursor-default focus-visible:bg-brand-50 focus-visible:outline-none"
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && e.target === e.currentTarget) openContact(c, { list: rowIds });
+                                    }}
+                                >
                                     {canBulk && (
                                         <TableCell>
                                             <Checkbox
@@ -428,12 +445,19 @@ function ContactsList() {
                                     )}
                                     <TableCell>
                                         <div className="flex items-center gap-3">
-                                            <Avatar name={c.display_name} />
+                                            <RingAvatar
+                                                name={c.display_name}
+                                                expiresAt={
+                                                    c.last_inbound_at ? new Date(new Date(c.last_inbound_at).getTime() + 86_400_000).toISOString() : null
+                                                }
+                                                hasChat={!!c.last_inbound_at}
+                                            />
                                             <div className="min-w-0">
                                                 <button
                                                     type="button"
+                                                    tabIndex={-1}
                                                     className="block max-w-full truncate text-left font-semibold underline-offset-2 hover:text-primary hover:underline"
-                                                    onClick={() => openContact(c)}
+                                                    onClick={() => openContact(c, { list: rowIds })}
                                                     title="Open the contact"
                                                 >
                                                     {c.display_name}
@@ -446,15 +470,20 @@ function ContactsList() {
                                         <div className="font-mono text-[13px]">{c.phone ?? '—'}</div>
                                         {c.username && <div className="text-[12px] text-muted-foreground">@{c.username}</div>}
                                     </TableCell>
+                                    <TableCell className="max-w-40 truncate text-[13px]">{c.company ?? <span className="text-faint">—</span>}</TableCell>
                                     <TableCell>
-                                        <div className="flex max-w-56 flex-wrap gap-1">
-                                            {c.tags.slice(0, 3).map((t) => (
-                                                <Badge key={t} tone="info">
-                                                    {t}
-                                                </Badge>
-                                            ))}
-                                            {c.tags.length > 3 && <Badge tone="grey">+{c.tags.length - 3}</Badge>}
-                                        </div>
+                                        {c.lifecycle && (
+                                            <Badge tone={LIFECYCLE_TONE[c.lifecycle.key]} className="border border-current/15">
+                                                {c.lifecycle.label}
+                                            </Badge>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="text-[13px] whitespace-nowrap text-muted-foreground">{c.lead_status?.label ?? '—'}</TableCell>
+                                    <TableCell className="text-[13px] whitespace-nowrap">
+                                        {c.owner?.name ?? <span className="text-faint">Unassigned</span>}
+                                    </TableCell>
+                                    <TableCell>
+                                        <TagDots tags={c.tags} className="max-w-56" />
                                     </TableCell>
                                     <TableCell>
                                         <StageBadge stage={c.stage} />
@@ -509,7 +538,7 @@ function ContactsList() {
                                                     </DropdownMenuItem>
                                                 )}
                                                 {can(P.ContactsUpdate) && (
-                                                    <DropdownMenuItem onSelect={() => openContact(c)}>
+                                                    <DropdownMenuItem onSelect={() => openContact(c, { list: rowIds })}>
                                                         <PencilIcon /> Edit
                                                     </DropdownMenuItem>
                                                 )}
@@ -541,10 +570,10 @@ function ContactsList() {
             <BulkEditDialog open={bulkEditing} onOpenChange={setBulkEditing} contacts={[...selected.values()]} onDone={() => setSelected(new Map())} />
             <ContactDialog open={adding} onOpenChange={setAdding} contact={null} />
             {messaging && (
-                <NewConversationDialog
+                <StartConversationDialog
                     open
                     onOpenChange={(o) => !o && setMessaging(null)}
-                    contact={messaging}
+                    contactId={messaging.id}
                     onStarted={(id) => router.push(`/inbox?c=${id}`)}
                 />
             )}

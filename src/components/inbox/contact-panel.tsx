@@ -1,5 +1,7 @@
 'use client';
 
+import { ResolveMenu } from './resolve-menu';
+import { WINDOW_BADGE, windowState } from '@/lib/inbox';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { XIcon } from 'lucide-react';
@@ -121,21 +123,22 @@ export function ContactPanel({ conversation, open = false, onClose }: { conversa
             <section className="grid gap-3 border-b px-5 py-4 text-[13px]">
                 <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Service window</span>
-                    <Badge tone={conversation.window.open ? 'good' : 'grey'}>
+                    <Badge tone={WINDOW_BADGE[windowState(conversation.window.expires_at).tone]} title={windowState(conversation.window.expires_at).label}>
                         {conversation.window.open ? `${timeLeft(conversation.window.expires_at)} left` : 'Closed'}
                     </Badge>
                 </div>
                 <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">Conversation</span>
+                    {/* The header's Resolve does it; on narrow screens this panel is the slide-over, so it offers it too. */}
+                    <span className="hidden xl:inline">
+                        <Badge tone={conversation.status === 'open' ? 'info' : 'grey'}>
+                            {conversation.status === 'open' ? 'Open' : (conversation.resolution?.reason_label ?? 'Resolved')}
+                        </Badge>
+                    </span>
                     {can(P.InboxView) && (
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => update.mutate({ status: conversation.status === 'open' ? 'closed' : 'open' })}
-                            disabled={update.isPending}
-                        >
-                            {conversation.status === 'open' ? 'Close' : 'Reopen'}
-                        </Button>
+                        <span className="xl:hidden">
+                            <ResolveMenu conversation={conversation} />
+                        </span>
                     )}
                 </div>
                 <div className="grid gap-1.5">

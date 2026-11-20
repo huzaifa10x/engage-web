@@ -33,7 +33,7 @@ function StatusTicks({ message }: { message: Message }) {
         case 'delivered':
             return <CheckCheckIcon className="size-3.5" aria-label="Delivered" />;
         case 'read':
-            return <CheckCheckIcon className="size-3.5 text-sky-500" aria-label="Read" />;
+            return <CheckCheckIcon className="size-3.5 text-[#53bdeb]" aria-label="Read" />;
         case 'failed':
             return (
                 <span className="inline-flex items-center gap-0.5 font-medium text-bad">
@@ -289,8 +289,11 @@ export function MessageBubble({
     onReply,
     onRetry,
     onTemplate,
+    grouped = false,
 }: {
     message: Message;
+    /** Same sender within 5 minutes of the previous bubble: no tail. */
+    grouped?: boolean;
     quoted?: Message | null;
     authorLabel?: string | null;
     onReply?: (m: Message) => void;
@@ -314,12 +317,35 @@ export function MessageBubble({
             )}
             <div
                 className={cn(
-                    'max-w-[min(34rem,80%)] rounded-lg px-3 py-2 shadow-[0_1px_1px_rgba(15,23,42,.08)]',
-                    outbound ? 'rounded-br-sm bg-[#dcf8c6] text-slate-900' : 'rounded-bl-sm bg-card',
+                    'relative max-w-[min(34rem,80%)] rounded-lg px-2.5 pt-1.5 pb-1 shadow-[0_1px_0.5px_rgba(11,20,26,.13)]',
+                    outbound ? 'bg-[#d9fdd3] text-[#111b21]' : 'bg-white text-[#111b21]',
+                    !grouped && (outbound ? 'rounded-tr-none' : 'rounded-tl-none'),
+                    message.origin === 'automation' && 'bg-[#e7f3ff]',
                     message.origin === 'app_echo' && 'bg-[#e8f5e0]',
-                    message.status === 'failed' && 'ring-1 ring-bad/40',
+                    message.status === 'failed' && 'bg-bad-bg ring-1 ring-bad',
                 )}
             >
+                {!grouped && (
+                    <svg
+                        aria-hidden
+                        viewBox="0 0 8 13"
+                        className={cn(
+                            'absolute top-0 h-[13px] w-2',
+                            outbound ? '-right-2' : '-left-2 -scale-x-100',
+                            message.status === 'failed'
+                                ? 'fill-bad-bg'
+                                : message.origin === 'automation'
+                                  ? 'fill-[#e7f3ff]'
+                                  : message.origin === 'app_echo'
+                                    ? 'fill-[#e8f5e0]'
+                                    : outbound
+                                      ? 'fill-[#d9fdd3]'
+                                      : 'fill-white',
+                        )}
+                    >
+                        <path d="M0 0h8L1.5 8.5C.9 9.3 0 9 0 8z" />
+                    </svg>
+                )}
                 {quoted !== undefined && message.reply_to_wamid && (
                     <div className="mb-1.5 rounded border-l-4 border-brand-500/60 bg-black/5 px-2 py-1 text-[12.5px] opacity-80">
                         {quoted ? (quoted.body ?? `${quoted.type} message`) : 'Replying to an earlier message'}
@@ -328,7 +354,7 @@ export function MessageBubble({
                 <Body message={message} />
                 {message.raw_body && <RawText raw={message.raw_body} />}
                 {message.status === 'failed' && <FailureNote message={message} onRetry={onRetry} onTemplate={onTemplate} />}
-                <div className="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-500">
+                <div className="mt-0.5 flex items-center justify-end gap-1 text-[11px] text-[#667781]">
                     {message.origin === 'history' && (
                         <span className="inline-flex items-center gap-0.5" title="Imported from the WhatsApp Business app's chat history">
                             <HistoryIcon className="size-3" /> Imported
