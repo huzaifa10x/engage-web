@@ -8,7 +8,6 @@ export const P = {
     ContactsExport: 'contacts.export',
     ContactsCreate: 'contacts.create',
     ContactsUpdate: 'contacts.update',
-    ContactsDelete: 'contacts.delete',
     CampaignsView: 'campaigns.view',
     CampaignsCreate: 'campaigns.create',
     CampaignsSend: 'campaigns.send',

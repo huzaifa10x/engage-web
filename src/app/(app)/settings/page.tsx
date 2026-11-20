@@ -31,6 +31,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { DataExportsCard } from '@/components/settings/data-exports-card';
 import { RetentionCard } from '@/components/settings/retention-card';
+import { ContactErasureCard } from '@/components/settings/contact-erasure-card';
 import { WorkspaceDeletionCard } from '@/components/settings/workspace-deletion-card';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { COUNTRIES } from '@/lib/countries';
@@ -440,6 +441,7 @@ export default function SettingsPage() {
                 <div className="grid gap-4">
                     <DataExportsCard />
                     <RetentionCard canManage={can(P.ComplianceManage)} />
+                    <ContactErasureCard />
                     <WorkspaceDeletionCard workspaceName={tenant.data.name} />
                 </div>
             ) : tab === 'hours' ? (
