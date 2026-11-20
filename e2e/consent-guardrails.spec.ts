@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { api, backendPhp, signIn, unique } from './helpers';
 
-test('campaigns: consent counts, the confirmation tick before sending, and “Send only to opted-in contacts”', async ({ page }) => {
+test('campaigns: consent counts and the confirmation tick before sending (soft consent, no opted-in-only switch)', async ({ page }) => {
     await signIn(page);
     const tag = unique('Consent').replace(' ', '');
     const ids = [] as string[];
@@ -33,16 +33,16 @@ test('campaigns: consent counts, the confirmation tick before sending, and “Se
     const consent = dialog.getByRole('region', { name: 'Marketing consent' });
     await expect(consent).toContainText('2 opted in · 2 unknown consent · 1 opted out (excluded)');
     const warning = consent.getByRole('alert');
-    await expect(warning).toContainText('2 contacts have no consent record. Meta’s policy requires opt-in before you send marketing messages.');
+    await expect(warning).toContainText('2 contacts have no consent record. Send marketing only to people who agreed to hear from your business.');
     const send = dialog.getByRole('button', { name: /^Send to / });
     await expect(send).toBeDisabled();
     await warning.getByLabel('I confirm these contacts agreed to receive messages from my business').check();
     await expect(send).toBeEnabled();
 
-    // Only opted-in contacts: no confirmation needed, two recipients.
-    await consent.getByRole('switch', { name: 'Send only to opted-in contacts' }).click();
-    await expect(consent.getByRole('alert')).toHaveCount(0);
-    await expect(dialog).toContainText(/5\s*match\s*·\s*2\s*eligible/);
+    // No opted-in-only switch and no policy claim: everyone not opted out is eligible.
+    await expect(consent.getByRole('switch')).toHaveCount(0);
+    await expect(dialog).not.toContainText('policy requires opt-in');
+    await expect(dialog).toContainText(/5\s*match\s*·\s*4\s*eligible/);
 
     // The consent history on the contact.
     await page.keyboard.press('Escape');

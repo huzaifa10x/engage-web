@@ -72,14 +72,12 @@ export function AbTestSettings({
     wabaAccountId,
     category,
     audience,
-    optedInOnly,
 }: {
     value: AbState;
     onChange: (v: AbState) => void;
     wabaAccountId: string | null;
     category: string | null;
     audience: CampaignAudience | undefined;
-    optedInOnly: boolean;
 }) {
     const set = (patch: Partial<AbState>) => onChange({ ...value, ...patch });
     const eligible = audience?.eligible ?? 0;
@@ -212,7 +210,7 @@ export function AbTestSettings({
                             {consent && (
                                 <p>
                                     Consent per variant: about {Math.round(consent.opted_in * share).toLocaleString()} opted in
-                                    {!optedInOnly && ` · ${Math.round(consent.unknown * share).toLocaleString()} unknown consent`}.
+                                    {` · ${Math.round(consent.unknown * share).toLocaleString()} unknown consent`}.
                                 </p>
                             )}
                             {perVariant < value.minSample && (

@@ -18,7 +18,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { ApiError, errorMessage } from '@/lib/api';
 import { clockTime, isoToZoned, workspaceDates, zonedToIso } from '@/lib/format';
 import {
@@ -49,7 +48,7 @@ const OBJECTIVES: [CampaignObjective, string][] = [
 ];
 
 const CATEGORIES: [string, string, string][] = [
-    ['MARKETING', 'Marketing', 'Offers, news, re-engagement. Goes to opted-in contacts unless you include the others.'],
+    ['MARKETING', 'Marketing', 'Offers, news, re-engagement. Goes to everyone not opted out; you confirm those with no consent record.'],
     ['UTILITY', 'Utility', 'Order updates, reminders, account notices about something the customer did.'],
     ['AUTHENTICATION', 'Authentication', 'One-time passcodes only.'],
 ];
@@ -101,13 +100,11 @@ export function CampaignDialog({
     const [segmentId, setSegmentId] = useState<string | null>(null);
     const [tag, setTag] = useState<string | null>(null);
     const [fieldFilter, setFieldFilter] = useState<FieldFilterValue | null>(null);
-    // Marketing goes to opted-in contacts; the sender may also include those with no recorded opt-in.
     const fields = useContactFields(open).data ?? [];
     const [uploading, setUploading] = useState(false);
     const [uploadNote, setUploadNote] = useState<string | null>(null);
     const [csvConsent, setCsvConsent] = useState(false);
-    // Marketing guardrails: send only to recorded opt-ins (saved on the campaign), and the sender's confirmation.
-    const [optedInOnly, setOptedInOnly] = useState(false);
+    // Soft consent (Batch 7): contacts with no consent record are sent to once the sender ticks the confirmation.
     const [consentConfirmed, setConsentConfirmed] = useState(false);
     const [selection, setSelection] = useState<TemplateSelection>(emptySelection);
     const [restore, setRestore] = useState<Campaign | null>(null); // draft whose template still has to be looked up
@@ -133,7 +130,6 @@ export function CampaignDialog({
         setPreviews(null);
         setUploadNote(null);
         setCsvConsent(false);
-        setOptedInOnly(campaign?.opted_in_only ?? false);
         setConsentConfirmed(false);
         setAb(
             campaign?.ab_test
@@ -184,7 +180,6 @@ export function CampaignDialog({
             template_id: selection.template?.id ?? null,
             phone_number_id: from?.id ?? null,
             filter: fieldFilter ? JSON.stringify(fieldFilter) : null,
-            opted_in_only: optedInOnly ? 1 : null,
         },
         open,
     );
@@ -197,7 +192,7 @@ export function CampaignDialog({
     const dailyLeft = a && a.messaging_limit !== null ? (a.messaging_remaining ?? Math.max(0, a.messaging_limit - (a.messaging_used ?? 0))) : null;
     const overTier = Boolean(a && dailyLeft !== null && a.eligible > dailyLeft);
     const redQuality = marketing && a?.quality_rating === 'RED';
-    const unknownConsent = marketing && !optedInOnly ? (a?.consent?.unknown ?? 0) : 0;
+    const unknownConsent = marketing ? (a?.consent?.unknown ?? 0) : 0;
     const needsConfirmation = unknownConsent > 0;
     const needsMedia = ['IMAGE', 'VIDEO', 'DOCUMENT'].includes(selection.template?.variables.header_format ?? '');
     const variables = () => ({
@@ -280,7 +275,6 @@ export function CampaignDialog({
             objective,
             media_id: selection.media?.id ?? campaign?.media_id ?? null,
             variables: variables(),
-            opted_in_only: optedInOnly,
             ab_test: abTest,
         };
 
@@ -537,18 +531,11 @@ export function CampaignDialog({
                                 </span>{' '}
                                 · {a.consent.opted_out.toLocaleString()} opted out (excluded)
                             </p>
-                            <label className="flex items-center justify-between gap-3">
-                                <span>
-                                    Send only to opted-in contacts
-                                    <span className="block text-[12px] text-muted-foreground">Contacts with no consent record are left out.</span>
-                                </span>
-                                <Switch checked={optedInOnly} onCheckedChange={(v) => setOptedInOnly(v)} aria-label="Send only to opted-in contacts" />
-                            </label>
                             {needsConfirmation && (
                                 <div role="alert" className="grid gap-2 rounded-md border border-warn/30 bg-warn-bg px-3 py-2 text-ink-2">
                                     <p>
-                                        {unknownConsent.toLocaleString()} contacts have no consent record. Meta’s policy requires opt-in before you send
-                                        marketing messages. Sending without it can lead to blocks and a lower quality rating.
+                                        {unknownConsent.toLocaleString()} contacts have no consent record. Send marketing only to people who agreed to hear from
+                                        your business.
                                     </p>
                                     <label className="flex items-start gap-2 font-medium">
                                         <input
@@ -633,14 +620,7 @@ export function CampaignDialog({
                 </Section>
 
                 <Section step="D" title="A/B test">
-                    <AbTestSettings
-                        value={ab}
-                        onChange={setAb}
-                        wabaAccountId={from?.waba_account_id ?? null}
-                        category={category}
-                        audience={a}
-                        optedInOnly={optedInOnly}
-                    />
+                    <AbTestSettings value={ab} onChange={setAb} wabaAccountId={from?.waba_account_id ?? null} category={category} audience={a} />
                 </Section>
 
                 {canSend && (
