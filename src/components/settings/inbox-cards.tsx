@@ -110,6 +110,8 @@ function useSaveInboxSettings() {
                 window_warning_minutes: base.window_warning_minutes,
             }),
         );
+        // The reply promise is on only while business hours are set.
+        void qc.invalidateQueries({ queryKey: ['reply-promise'] });
         toast.success(`${label} saved`);
     };
 }

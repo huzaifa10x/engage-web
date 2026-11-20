@@ -736,6 +736,8 @@ export type ReplyPromiseClock = { limit_minutes: number; waited_seconds: number;
 
 export type ReplyPromiseSettings = {
     enabled: boolean;
+    /** True while business hours are off: the promise counts open time only, so it can't be on. */
+    needs_business_hours?: boolean;
     limit_minutes: number;
     ladder: { minutes: number; to: 'agent' | 'manager' | 'owner' }[];
     owner_whatsapp: { phone: string | null; template: { name: string; language: string } | null; ready: boolean };

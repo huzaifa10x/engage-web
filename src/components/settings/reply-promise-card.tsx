@@ -55,6 +55,7 @@ export function ReplyPromiseCard({ canManage }: { canManage: boolean }) {
     if (!v) return <Skeleton className="h-64" />;
     const set = (patch: Partial<ReplyPromiseSettings>) => setDraft({ ...v, ...patch });
     const off = !canManage;
+    const noHours = query.data?.needs_business_hours === true;
 
     return (
         <Card>
@@ -69,9 +70,19 @@ export function ReplyPromiseCard({ canManage }: { canManage: boolean }) {
                         reply WhatsApp accepted counts. Needs reply is sorted by time left, and the team is told while a chat still waits.
                     </CardDescription>
                 </div>
-                <Switch checked={v.enabled} disabled={off} aria-label="Use the reply promise" onCheckedChange={(enabled) => set({ enabled })} />
+                <Switch
+                    checked={v.enabled}
+                    disabled={off || (noHours && !v.enabled)}
+                    aria-label="Use the reply promise"
+                    onCheckedChange={(enabled) => set({ enabled })}
+                />
             </CardHeader>
             <CardContent className="grid gap-4 text-[13px]">
+                {noHours && (
+                    <p role="status" className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-900">
+                        Set your business hours first (above). The reply promise counts only time when you are open, so it stays off until they are set.
+                    </p>
+                )}
                 <div className="grid gap-3 sm:grid-cols-2">
                     <div className="grid gap-1.5">
                         <Label htmlFor="promise-limit">Waiting limit (business minutes)</Label>
