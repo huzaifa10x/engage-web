@@ -1024,6 +1024,7 @@ export function Thread({
                     toast.success('Template queued for sending');
                 }}
                 noMarketing={contact?.consent_state === 'opted_out' || !!contact?.marketing_opted_out}
+                unknownConsent={contact?.consent_state === 'unknown'}
             />
             {contact && dialog === 'edit' && <EditContactDialog contact={contact} open onOpenChange={(o) => !o && setDialog(null)} />}
             {contact && dialog === 'deal' && (

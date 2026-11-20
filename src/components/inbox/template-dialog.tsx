@@ -19,6 +19,7 @@ export function TemplateDialog({
     wabaAccountId,
     onSend,
     noMarketing = false,
+    unknownConsent = false,
 }: {
     open: boolean;
     onOpenChange: (o: boolean) => void;
@@ -26,16 +27,21 @@ export function TemplateDialog({
     onSend: (payload: SendPayload) => Promise<void>;
     /** The contact opted out (STOP) or stopped marketing: only utility and authentication templates. */
     noMarketing?: boolean;
+    /** No consent record: marketing is allowed once the sender confirms the contact agreed. */
+    unknownConsent?: boolean;
 }) {
     const [selection, setSelection] = useState<TemplateSelection>(emptySelection);
     const [error, setError] = useState<string | null>(null);
     const [pending, setPending] = useState(false);
+    const [agreed, setAgreed] = useState(false);
+    const askAgreed = unknownConsent && !noMarketing && selection.template?.category === 'MARKETING';
 
     const submit = async () => {
         const problem = selectionError(selection);
         if (problem) return setError(problem);
         if (noMarketing && selection.template?.category === 'MARKETING')
             return setError('This contact does not receive marketing messages. Choose a utility or authentication template.');
+        if (askAgreed && !agreed) return setError('Confirm the contact agreed to receive messages from your business.');
 
         setPending(true);
         setError(null);
@@ -67,6 +73,20 @@ export function TemplateDialog({
                 )}
                 <FormError message={error} />
                 <TemplatePicker wabaAccountId={wabaAccountId} value={selection} onChange={setSelection} />
+                {askAgreed && (
+                    <div role="alert" className="grid gap-1.5 rounded-md border border-warn/30 bg-warn-bg px-3 py-2 text-[12.5px] text-ink-2">
+                        <p>No consent record for this contact. Send marketing only if they agreed to hear from your business.</p>
+                        <label className="flex items-start gap-2 font-semibold">
+                            <input
+                                type="checkbox"
+                                className="mt-0.5 accent-[var(--brand-500)]"
+                                checked={agreed}
+                                onChange={(e) => setAgreed(e.target.checked)}
+                            />
+                            They agreed to receive messages from us
+                        </label>
+                    </div>
+                )}
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>
                         Cancel

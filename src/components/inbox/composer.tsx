@@ -72,8 +72,8 @@ export type ComposerHandle = { attach: (file: File) => void; focus: () => void }
 export function templateBlock(t: MessageTemplate, contact: Contact | undefined): string | null {
     if (t.status !== 'APPROVED' || !t.sendable)
         return t.status === 'PENDING' ? 'Pending Meta approval · cannot be sent yet' : 'Not approved by Meta · cannot be sent';
+    // Soft consent rule: opted out is blocked; unknown is allowed after a warning and a tick; opted in is allowed.
     if (t.category === 'MARKETING' && (contact?.consent_state === 'opted_out' || contact?.marketing_opted_out)) return 'Contact opted out of marketing';
-    if (t.category === 'MARKETING' && contact?.consent_state !== 'opted_in') return 'Requires marketing opt-in';
 
     return null;
 }
@@ -622,9 +622,11 @@ function TemplatePane({
     const [vars, setVars] = useState<string[]>([]);
     const [header, setHeader] = useState<string[]>([]);
     const [busy, setBusy] = useState(false);
+    const [agreed, setAgreed] = useState(false);
 
     const choose = (t: MessageTemplate) => {
         setPicked(t);
+        setAgreed(false);
         const first = (contact?.name ?? contact?.profile_name ?? '').split(' ')[0] ?? '';
         const topic = (dealTitle ?? '').split(' · ')[0].toLowerCase();
         setVars(t.variables.body.map((_, i) => (i === 0 ? first : i === 1 ? topic : '')));
@@ -635,6 +637,8 @@ function TemplatePane({
     const missing = !!picked && (vars.some((v) => !v.trim()) || header.some((v) => !v.trim()));
     const body = picked ? templateBody(picked) : '';
     const marketing = picked?.category === 'MARKETING';
+    // Marketing to a contact with no consent record: allowed once the sender confirms they agreed.
+    const unknownConsent = marketing && contact?.consent_state !== 'opted_in';
 
     return (
         <div className="grid gap-3 rounded-lg border bg-muted/60 p-2.5 sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
@@ -731,6 +735,20 @@ function TemplatePane({
                                 );
                             })}
                         </div>
+                        {unknownConsent && (
+                            <div role="alert" className="grid gap-1.5 rounded-md border border-warn/30 bg-warn-bg px-3 py-2 text-[12px] text-ink-2">
+                                <p>No consent record for this contact. Send marketing only if they agreed to hear from your business.</p>
+                                <label className="flex items-start gap-2 font-semibold">
+                                    <input
+                                        type="checkbox"
+                                        className="mt-0.5 accent-[var(--brand-500)]"
+                                        checked={agreed}
+                                        onChange={(e) => setAgreed(e.target.checked)}
+                                    />
+                                    They agreed to receive messages from us
+                                </label>
+                            </div>
+                        )}
                         <div className="flex flex-wrap items-center gap-2">
                             <span className="flex-1 text-[11px] text-muted-foreground">
                                 {marketing
@@ -745,7 +763,7 @@ function TemplatePane({
                             ) : (
                                 <Button
                                     size="sm"
-                                    disabled={missing || busy}
+                                    disabled={missing || busy || (unknownConsent && !agreed)}
                                     onClick={async () => {
                                         setBusy(true);
                                         try {
