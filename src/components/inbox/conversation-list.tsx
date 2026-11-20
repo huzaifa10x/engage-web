@@ -16,6 +16,7 @@ import { useSearchParams } from 'next/navigation';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { ResolvedList } from '@/components/inbox/resolved-list';
+import { WaitClock } from '@/components/inbox/wait-clock';
 import { OwnerAvatar, RingAvatar } from '@/components/inbox/window-ring';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -38,7 +39,7 @@ const TABS: { id: InboxView; label: string }[] = [
 ];
 const LEGACY: Record<string, InboxView> = { needs_reply: 'needs', me: 'mine', any: 'all', others: 'all' };
 const SORTS: { id: Sort; label: string; hint?: string }[] = [
-    { id: 'priority', label: 'Priority', hint: 'Window urgency, then backlog' },
+    { id: 'priority', label: 'Priority', hint: 'Least time left to reply first' },
     { id: 'newest', label: 'Newest activity' },
     { id: 'waiting', label: 'Longest waiting', hint: 'Backlog view' },
 ];
@@ -131,7 +132,7 @@ export function WindowChip({ conversation: c, now, big = false }: { conversation
 }
 
 /** Exactly one status chip, chosen by the chat's state; an overdue follow-up is its own chip. */
-function CardChips({ c, now }: { c: Conversation; now: number }) {
+function CardChips({ c, now, fetchedAt }: { c: Conversation; now: number; fetchedAt: number }) {
     const state = c.status === 'closed' ? 'resolved' : c.snoozed_until ? 'snoozed' : c.state === 'needs_reply' ? 'needs' : 'waiting';
     const over =
         (c.next_step?.overdue ?? 0) > 0 && state !== 'resolved' ? (
@@ -143,7 +144,11 @@ function CardChips({ c, now }: { c: Conversation; now: number }) {
         return (
             <>
                 <WindowChip conversation={c} now={now} />
-                {c.needs_reply_since && <Chip>Waiting {dur(now - new Date(c.needs_reply_since).getTime())}</Chip>}
+                {c.promise ? (
+                    <WaitClock conversation={c} fetchedAt={fetchedAt} now={now} />
+                ) : (
+                    c.needs_reply_since && <Chip>Waiting {dur(now - new Date(c.needs_reply_since).getTime())}</Chip>
+                )}
                 {over}
             </>
         );
@@ -520,7 +525,15 @@ export function ConversationList({
                         </li>
                     )}
                     {rows.map((c) => (
-                        <QueueCard key={c.id} c={c} now={now} selected={c.id === selectedId} onSelect={() => onSelect(c.id)} showNumber={!phoneNumberId} />
+                        <QueueCard
+                            key={c.id}
+                            c={c}
+                            now={now}
+                            fetchedAt={list.dataUpdatedAt}
+                            selected={c.id === selectedId}
+                            onSelect={() => onSelect(c.id)}
+                            showNumber={!phoneNumberId}
+                        />
                     ))}
                     {list.hasNextPage && (
                         <li className="p-3">
@@ -535,7 +548,21 @@ export function ConversationList({
     );
 }
 
-function QueueCard({ c, now, selected, onSelect, showNumber }: { c: Conversation; now: number; selected: boolean; onSelect: () => void; showNumber: boolean }) {
+function QueueCard({
+    c,
+    now,
+    fetchedAt,
+    selected,
+    onSelect,
+    showNumber,
+}: {
+    c: Conversation;
+    now: number;
+    fetchedAt: number;
+    selected: boolean;
+    onSelect: () => void;
+    showNumber: boolean;
+}) {
     const name = c.contact?.display_name ?? 'WhatsApp user';
     const who = c.last_message_by && c.last_message_by.kind !== 'customer' ? (c.last_message_by.name ?? 'Auto') : null;
     const unread = c.unread_count > 0;
@@ -575,7 +602,7 @@ function QueueCard({ c, now, selected, onSelect, showNumber }: { c: Conversation
                         {c.last_message_preview}
                     </span>
                     <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1">
-                        <CardChips c={c} now={now} />
+                        <CardChips c={c} now={now} fetchedAt={fetchedAt} />
                         <span className="flex-1" />
                         <OwnerAvatar name={c.assigned_name} />
                     </span>

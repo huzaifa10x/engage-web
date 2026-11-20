@@ -77,6 +77,7 @@ import { EditContactDialog, FlagDialog, NewDealDialog, SnoozeDialog, StepDialog 
 import { MessageBubble } from './message-bubble';
 import { reopenChat, resolveChat, ResolveMenu } from './resolve-menu';
 import { TemplateDialog } from './template-dialog';
+import { WaitClock } from './wait-clock';
 import { OwnerAvatar, RingAvatar } from './window-ring';
 
 type TimelineItem =
@@ -866,9 +867,12 @@ export function Thread({
                         {numberGone ? <Chip tone="bad">Number disconnected</Chip> : <WindowChip conversation={c} now={now} big />}
                         <Chip tone={state === 'needs_reply' ? 'bad' : state === 'waiting' ? 'info' : 'grey'}>
                             {REPLY_LABEL[state]}
-                            {state === 'needs_reply' && c.needs_reply_since ? ` · ${dur(now - new Date(c.needs_reply_since).getTime(), true)}` : ''}
+                            {state === 'needs_reply' && c.needs_reply_since && !c.promise
+                                ? ` · ${dur(now - new Date(c.needs_reply_since).getTime(), true)}`
+                                : ''}
                             {state === 'snoozed' && c.snoozed_until ? ` until ${fmtWhen(c.snoozed_until, now)}` : ''}
                         </Chip>
+                        <WaitClock conversation={c} fetchedAt={conversation.dataUpdatedAt} now={now} />
                         <span className="h-4 w-px bg-border" aria-hidden />
                         {automation}
                         <span className="hidden h-4 w-px bg-border sm:block" aria-hidden />

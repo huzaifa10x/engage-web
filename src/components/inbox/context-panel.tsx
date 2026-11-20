@@ -37,6 +37,7 @@ import {
     useResolutions,
     useStages,
     useTags,
+    useWaitAlerts,
 } from '@/lib/queries';
 import type { Conversation, ConversationEvent, Enquiry, NextStep } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -412,6 +413,8 @@ function PanelBody({ c, now, onClose }: { c: Conversation; now: number; onClose:
                 </ol>
             </Section>
 
+            <WaitAlertsSection conversationId={c.id} now={now} />
+
             <Section title="Activity">
                 <ol className="grid gap-1.5 border-l-2 border-line-2 pl-3">
                     {activity.length === 0 && <li className="text-muted-foreground">No activity yet</li>}
@@ -460,6 +463,7 @@ function SalesCard({ c, now, owners }: { c: Conversation; now: number; owners: A
         return [...openOnes, ...(won ? [won] : [])];
     }, [stages.data]);
     const lostStage = (stages.data ?? []).find((s) => s.group === 'lost' && !s.archived) ?? null;
+    const wonStage = pipe.find((s) => s.group === 'won') ?? null;
     const [closing, setClosing] = useState<(typeof pipe)[number] | null>(null);
     const [newDeal, setNewDeal] = useState(false);
     const [editDeal, setEditDeal] = useState(false);
@@ -708,17 +712,34 @@ function SalesCard({ c, now, owners }: { c: Conversation; now: number; owners: A
                             })}
                         </ol>
                         {!lost && d.group !== 'won' && canMove && (
-                            <p className="-mt-0.5 mb-2.5 text-center text-[11px] text-muted-foreground">
-                                Tap a stage to move the deal
-                                {lostStage && (
-                                    <>
-                                        {' · '}
-                                        <button type="button" className="font-semibold hover:underline" onClick={() => setClosing(lostStage)}>
-                                            Mark as lost
-                                        </button>
-                                    </>
-                                )}
-                            </p>
+                            <>
+                                {/* Booked / Not booked: shortcuts to the Won and Lost stages (pilot kit). Won still needs proof. */}
+                                <span className="mb-1.5 flex gap-1.5">
+                                    {wonStage && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="flex-1"
+                                            onClick={() => setClosing(wonStage)}
+                                            title={`Moves the deal to ${wonStage.name}`}
+                                        >
+                                            <CheckIcon /> Booked
+                                        </Button>
+                                    )}
+                                    {lostStage && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="flex-1"
+                                            onClick={() => setClosing(lostStage)}
+                                            title={`Moves the deal to ${lostStage.name}`}
+                                        >
+                                            Not booked
+                                        </Button>
+                                    )}
+                                </span>
+                                <p className="mb-2.5 text-center text-[11px] text-muted-foreground">or tap a stage to move the deal</p>
+                            </>
                         )}
                         {d.group === 'won' ? (
                             main ? (
@@ -827,4 +848,30 @@ export function burst(el: HTMLElement | null) {
         '<span style="position:absolute;left:-11px;top:-11px;width:22px;height:22px;border-radius:50%;background:var(--good);color:#fff;display:flex;align-items:center;justify-content:center;animation:won-pop 450ms cubic-bezier(.2,.8,.2,1) forwards"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg></span>';
     el.appendChild(b);
     setTimeout(() => b.remove(), 700);
+}
+
+const ROLE_LABEL = { agent: 'Assigned agent', manager: 'Managers', owner: 'Owner' } as const;
+const CHANNEL_LABEL = { app: 'in-app', email: 'email', whatsapp: 'WhatsApp' } as const;
+
+/** The reply promise's alert log for this chat: who was told at 30, 45 and 60 minutes, and how. */
+function WaitAlertsSection({ conversationId, now }: { conversationId: string; now: number }) {
+    const alerts = useWaitAlerts(conversationId);
+    const rows = alerts.data ?? [];
+
+    return (
+        <Section title="Wait alerts" badge={<Chip tone={rows.length ? 'bad' : 'grey'}>{rows.length}</Chip>} open={rows.length > 0}>
+            <ol className="grid gap-1.5 border-l-2 border-bad/40 pl-3">
+                {rows.length === 0 && <li className="text-muted-foreground">No alerts for this chat</li>}
+                {rows.map((a) => (
+                    <li key={a.id}>
+                        {a.minutes} min → {a.recipients.map((r) => r.name?.split(' ')[0] ?? 'Teammate').join(', ') || ROLE_LABEL[a.role]}
+                        <small className="block text-[11px] text-muted-foreground">
+                            {fmtWhen(a.created_at, now)} · {a.channels.map((x) => CHANNEL_LABEL[x]).join(' + ')}
+                            {a.whatsapp_error && a.role === 'owner' ? ` · WhatsApp not sent: ${a.whatsapp_error}` : ''}
+                        </small>
+                    </li>
+                ))}
+            </ol>
+        </Section>
+    );
 }
