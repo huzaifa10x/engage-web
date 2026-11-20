@@ -52,9 +52,11 @@ test('contacts: select several, edit them together after a review step', async (
     await expect(bar).toBeHidden(); // selection cleared
 
     const rows = page.getByRole('row');
-    await expect(rows.filter({ hasText: `${prefix} 1` })).toContainText('Open day');
     await expect(rows.filter({ hasText: `${prefix} 1` })).toContainText('Opted in');
-    await expect(rows.filter({ hasText: `${prefix} 3` })).not.toContainText('Open day');
+    await expect(rows.filter({ hasText: `${prefix} 3` })).not.toContainText('Opted in');
+    // Tags show on the contact panel (the 3.5 table has no Tags column).
+    await rows.filter({ hasText: `${prefix} 1` }).click();
+    await expect(page.getByRole('dialog').getByText('Open day')).toBeVisible();
 });
 
 test('leads: a custom date range is checked and applied', async ({ page }) => {
@@ -177,7 +179,7 @@ test('campaigns: before sending, the page says how many people won’t receive t
     // One replied STOP, one stopped marketing in WhatsApp; the other two have Unknown consent. The two test
     // templates exist only here, so the templates are marked freshly synced: a background sync with the
     // Meta stand-in would otherwise mark them deleted halfway through the test.
-    await api(page, 'POST', `contacts/${ids[0]}/consent`, { state: 'opted_out', notify: false });
+    await api(page, 'POST', `contacts/${ids[0]}/consent`, { method: 'phone_call', state: 'opted_out', notify: false });
     backendPhp(
         `app(App\\Domain\\Tenancy\\TenantContext::class)->bypass(function () { App\\Domain\\Messaging\\Models\\Contact::query()->whereKey('${ids[1]}')->update(['marketing_opted_out' => true]); $t = App\\Domain\\Messaging\\Models\\Contact::query()->whereKey('${ids[1]}')->value('tenant_id'); foreach (App\\Domain\\WhatsApp\\Models\\PhoneNumber::query()->where('tenant_id', $t)->get() as $n) { Illuminate\\Support\\Facades\\Cache::put('templates:synced:' . $n->waba_account_id, now()->toIso8601String(), 600); foreach (['e2e_offer' => 'MARKETING', 'e2e_order' => 'UTILITY'] as $name => $cat) { App\\Domain\\Templates\\Models\\MessageTemplate::query()->firstOrCreate(['waba_account_id' => $n->waba_account_id, 'name' => $name, 'language' => 'en'], ['tenant_id' => $n->tenant_id, 'status' => 'APPROVED', 'category' => $cat, 'components' => [['type' => 'BODY', 'text' => 'Hello there']]]); } } });`,
     );
@@ -221,27 +223,32 @@ test('inbox: ask for marketing consent sends Subscribe / Unsubscribe; only the c
         .not.toBe('');
 
     await page.goto(`/inbox?c=${conversationId}`);
-    const panel = page.getByRole('complementary').filter({ hasText: 'Consent' }).last();
-    await panel.getByRole('button', { name: 'Ask for marketing consent' }).click();
-    await expect(page.getByText('Consent question sent.')).toBeVisible();
-    await expect(panel).toContainText('waiting for the customer to tap Subscribe or Unsubscribe');
-    await expect(panel).toContainText('Unknown'); // nothing recorded yet
+    const panel = page.getByRole('complementary', { name: 'Customer context' });
+    await panel.getByText('Marketing consent').click();
+    await panel.getByRole('button', { name: 'Ask for marketing opt-in' }).click();
+    await expect(page.getByText('Opt-in request sent · consent changes only if the customer taps Yes')).toBeVisible();
+    await expect(panel).toContainText('Asked'); // nothing recorded yet
+    await expect(panel).toContainText('Unknown');
 
-    // The customer agrees: recorded as an opt-in, and the waiting note goes away.
+    // The customer agrees: recorded as an opt-in.
     customerSays('Subscribe', from, name);
     await expect(panel).toContainText('Opted in', { timeout: 20_000 });
-    await expect(panel).not.toContainText('waiting for the customer');
-    await expect(panel.getByRole('button', { name: 'Ask for marketing consent' })).toBeHidden();
-    // Its confirmation is labelled as the consent reply, not as the chatbot.
-    await expect(page.getByText('Consent reply ·').first()).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Ask for marketing opt-in' })).toBeHidden();
 
     // An opt-out recorded by the team sends nothing to the customer.
     const before = (await api<{ data: unknown[] }>(page, 'GET', `conversations/${conversationId}/messages`)).data.length;
-    await panel.getByRole('button', { name: 'Opt out' }).click();
-    await expect(page.getByText('Opt-out recorded. Nothing was sent to the customer.')).toBeVisible();
+    await panel.getByRole('button', { name: 'Record opt-out' }).click();
+    // How it was obtained is required (3.3).
+    const record = page.getByRole('dialog', { name: 'Record consent' });
+    await record.getByRole('button', { name: 'Save consent' }).click();
+    await expect(record).toContainText('Say how the consent was obtained.');
+    await record.getByLabel(/How was it obtained/).click();
+    await page.getByRole('option', { name: 'Phone call' }).click();
+    await record.getByRole('button', { name: 'Save consent' }).click();
+    await expect(page.getByText(/Consent saved · Opted out · Phone call\. Nothing was sent to the customer\./)).toBeVisible();
     await expect(panel).toContainText('Opted out');
     expect((await api<{ data: unknown[] }>(page, 'GET', `conversations/${conversationId}/messages`)).data.length).toBe(before);
-    await expect(panel).toContainText('You can ask again once they write to you');
+    await expect(panel).toContainText('Only they can opt back in');
 });
 
 test('start rules: a rule can be deleted, keeping or deleting its flow; reviews show where they wait', async ({ page }) => {

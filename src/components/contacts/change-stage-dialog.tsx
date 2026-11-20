@@ -16,7 +16,7 @@ import { keys, useStages } from '@/lib/queries';
 import type { Contact, CrmStage, StageRef } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-import type { Enquiry } from './contact-timeline';
+import type { Enquiry } from '@/lib/types';
 import { StageBadge } from './stage-badge';
 
 /** Where a stage change is made. "contact" (the Contacts & CRM edit form) is Owner and Admin only. */
@@ -44,7 +44,7 @@ export function invalidateStage(qc: ReturnType<typeof useQueryClient>, contactId
 
 /**
  * What a move to this stage still needs (item 4): a lost reason, or for Won without a verified
- * payment, a reference from someone allowed to approve Won. null when it needs nothing more.
+ * payment, a reference from anyone who replies to customers (3.3). null when it needs nothing more.
  */
 export function stageRequirement(
     stage: Pick<CrmStage, 'group'> | null | undefined,
@@ -54,12 +54,16 @@ export function stageRequirement(
     if (stage?.group === 'lost') return { kind: 'lost', label: 'Why was it lost?', hint: 'For example: chose another company, too expensive, dates changed.' };
     if (stage?.group !== 'won' || enquiry?.verified_paid) return null;
     if (canApproveWon)
-        return { kind: 'reference', label: 'Reference', hint: 'No verified payment on this enquiry yet: add the invoice or receipt number that proves it.' };
+        return {
+            kind: 'reference',
+            label: 'Reference',
+            hint: 'No verified payment on this enquiry yet: add the invoice, receipt or contract number (at least 3 characters).',
+        };
 
     return {
         kind: 'blocked',
         label: '',
-        hint: 'Won needs a verified payment (Stripe, WooCommerce or an authorised person). Ask someone allowed to approve Won.',
+        hint: 'Won needs a verified payment (Stripe, WooCommerce or an authorised person), or a reference from a teammate who replies to customers.',
     };
 }
 
@@ -108,9 +112,9 @@ export function ChangeStageDialog({
     const need = stageRequirement(
         stages.find((s) => s.id === choice),
         enquiry.data,
-        can(P.StagesApproveWon),
+        can(P.InboxReply) || can(P.StagesApproveWon),
     );
-    const ready = need === null || (need.kind !== 'blocked' && reason.trim() !== '');
+    const ready = need === null || (need.kind === 'lost' ? reason.trim() !== '' : need.kind === 'reference' && reason.trim().length >= 3);
 
     const move = useMoveStage(contact, via, () => {
         toast.success('Stage updated · saved to Contacts & CRM');

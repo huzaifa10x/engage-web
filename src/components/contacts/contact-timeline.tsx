@@ -11,33 +11,14 @@ import { Badge, type Tone } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+
+import { EnquiryCard } from './enquiry-card';
 import { api, errorMessage } from '@/lib/api';
 import { dateTime } from '@/lib/format';
 import { P } from '@/lib/permissions';
 
-export type Enquiry = {
-    id: string;
-    number: number;
-    current: boolean;
-    started_at: string;
-    started_by: 'customer' | 'agent' | 'system';
-    start_reason: 'first_message' | 'quiet_period' | 'ad_click' | 'manual' | 'backfill' | 'imported';
-    imported: boolean;
-    source: 'ad' | 'link' | 'website' | 'direct';
-    source_label: string;
-    source_confidence: 'verified' | 'partial' | 'unknown';
-    confidence_label: string;
-    owner: { id: string; name: string } | null;
-    stage: { id: string; name: string | null; group?: 'open' | 'won' | 'lost' } | null;
-    /** Sent back with a stage change, so two people can't overwrite each other. */
-    stage_version: number;
-    lost_reason: string | null;
-    /** A verified payment (store order paid) belongs to this enquiry: Won is allowed. */
-    verified_paid: boolean;
-    last_activity_at: string | null;
-    messages: number;
-    payments: { type: string; id: string; number: string; status: string; total: number; currency: string; paid: boolean }[];
-};
+export type { Enquiry } from '@/lib/types';
+import type { Enquiry } from '@/lib/types';
 
 export type TimelineEntry = {
     id: string;
@@ -231,28 +212,25 @@ export function ContactTimeline({ contactId }: { contactId: string }) {
                 ) : (
                     <ul className="grid gap-2">
                         {enquiries.data.map((q) => (
-                            <li key={q.id} className="grid gap-1 rounded-md border px-3 py-2 text-[12.5px]" aria-label={`Enquiry ${q.number}`}>
-                                <div className="flex flex-wrap items-center gap-2">
+                            <li key={q.id} className="grid gap-1" aria-label={`Enquiry ${q.number}`}>
+                                <div className="flex flex-wrap items-center gap-2 text-[12px] text-muted-foreground">
                                     <button
                                         type="button"
-                                        className="font-semibold underline-offset-2 hover:underline"
+                                        className="font-semibold text-foreground underline-offset-2 hover:underline"
                                         onClick={() => setEnquiryId(enquiryId === q.id ? null : q.id)}
                                         aria-pressed={enquiryId === q.id}
+                                        title="Show only this enquiry's history"
                                     >
                                         Enquiry {q.number}
                                         {q.current ? ' · current' : ''}
                                     </button>
-                                    <span>{q.source_label}</span>
-                                    <Badge tone={confidenceTone(q.source_confidence)}>{q.confidence_label}</Badge>
+                                    <span>
+                                        Started {dateTime(q.started_at)} ({REASONS[q.start_reason]}) · {q.owner ? `Owner: ${q.owner.name}` : 'No owner yet'} ·{' '}
+                                        {q.messages} messages
+                                    </span>
                                     {q.imported && <Badge tone="grey">Imported</Badge>}
-                                    {q.stage?.name && <Badge tone="info">{q.stage.name}</Badge>}
                                 </div>
-                                <p className="text-muted-foreground">
-                                    Started {dateTime(q.started_at)} ({REASONS[q.start_reason]}) · {q.owner ? `Owner: ${q.owner.name}` : 'No owner yet'} ·{' '}
-                                    {q.messages} messages
-                                    {q.payments.length > 0 &&
-                                        ` · ${q.payments.map((p) => `order ${p.number}: ${p.currency} ${p.total.toLocaleString()}${p.paid ? ' paid' : ''}`).join(', ')}`}
-                                </p>
+                                <EnquiryCard enquiry={q} />
                             </li>
                         ))}
                     </ul>

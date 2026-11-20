@@ -17,6 +17,9 @@ import { StageBadge } from './stage-badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
+
+import { ContactSheetHeader } from './contact-sheet';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -111,7 +114,18 @@ export function CustomFieldInput({ field, value, onChange }: { field: ContactFie
 }
 
 /** Create (phone required) or edit (phone is the identity and cannot change) a contact. */
-export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; onOpenChange: (o: boolean) => void; contact?: Contact | null }) {
+export function ContactDialog({
+    open,
+    onOpenChange,
+    contact,
+    variant = 'dialog',
+}: {
+    open: boolean;
+    onOpenChange: (o: boolean) => void;
+    contact?: Contact | null;
+    /** "sheet": the record slides in over the current page (opening a contact anywhere). */
+    variant?: 'dialog' | 'sheet';
+}) {
     const qc = useQueryClient();
     const editing = !!contact;
     const [formError, setFormError] = useState<string | null>(null);
@@ -136,7 +150,7 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
     const stageNeed = stageRequirement(
         stages.find((s) => s.id === stageId),
         enquiry.data,
-        can(P.StagesApproveWon),
+        can(P.InboxReply) || can(P.StagesApproveWon),
     );
     if (open && loaded !== (contact?.id ?? null)) {
         setLoaded(contact?.id ?? null);
@@ -212,6 +226,156 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
         }
     });
 
+    const sections = (
+        <>
+            {editing && contact && (
+                <section className="grid gap-2 rounded-lg border p-3.5" aria-label="Stage">
+                    <div className="flex items-center gap-2">
+                        <h3 className="text-[13.5px] font-semibold">Stage</h3>
+                        <StageBadge stage={contact.stage} />
+                    </div>
+                    <StageHistory contactId={contact.id} />
+                </section>
+            )}
+            {editing && contact && (
+                <section className="grid gap-2 rounded-lg border p-3.5" aria-label="Consent">
+                    <h3 className="text-[13.5px] font-semibold">Consent history</h3>
+                    <ConsentHistory contactId={contact.id} />
+                </section>
+            )}
+            {editing && contact && <AcquisitionCard contact={contact} />}
+        </>
+    );
+    const form = (
+        <form id="contact-form" onSubmit={onSubmit} className="grid gap-4" noValidate>
+            <FormError message={formError} />
+            <Field
+                label="WhatsApp number"
+                htmlFor="c-phone"
+                error={formState.errors.phone?.message}
+                hint={
+                    editing
+                        ? undefined
+                        : 'With the country code, e.g. +971 50 123 4567. A number starting with 0 is read in your workspace country (Settings › Company).'
+                }
+            >
+                <Input id="c-phone" inputMode="tel" disabled={editing} aria-invalid={!!formState.errors.phone} {...register('phone')} />
+            </Field>
+            <Field label="Name" htmlFor="c-name" error={formState.errors.name?.message}>
+                <Input id="c-name" {...register('name')} />
+            </Field>
+            <Field label="Email" htmlFor="c-email" error={formState.errors.email?.message}>
+                <Input id="c-email" type="email" aria-invalid={!!formState.errors.email} {...register('email')} />
+            </Field>
+            {editsStage && stages.length > 0 && (
+                <Field label="Stage" htmlFor="c-stage" hint="Saved with the contact and kept in the stage history">
+                    <Select value={stageId} onValueChange={setStageId}>
+                        <SelectTrigger id="c-stage">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value={NO_STAGE}>No stage</SelectItem>
+                            {stages.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                    {s.name}
+                                </SelectItem>
+                            ))}
+                            {contact?.stage?.archived && (
+                                <SelectItem value={contact.stage.id} disabled>
+                                    {contact.stage.name} (archived)
+                                </SelectItem>
+                            )}
+                        </SelectContent>
+                    </Select>
+                </Field>
+            )}
+            {editsStage &&
+                stageNeed &&
+                stageId !== (contact?.stage?.id ?? NO_STAGE) &&
+                (stageNeed.kind === 'blocked' ? (
+                    <p role="alert" className="rounded-md bg-warn-bg px-3 py-2 text-[12.5px] text-warn">
+                        {stageNeed.hint}
+                    </p>
+                ) : (
+                    <Field label={stageNeed.label} htmlFor="c-stage-reason" hint={stageNeed.hint}>
+                        <Input id="c-stage-reason" value={stageReason} maxLength={200} onChange={(e) => setStageReason(e.target.value)} />
+                    </Field>
+                ))}
+            <Field label="Tags" htmlFor="c-tags" hint="Used to build segments and campaign audiences">
+                <TagInput id="c-tags" value={tags} onChange={setTags} suggestions={(tagList.data ?? []).map((t) => t.name)} />
+            </Field>
+            {fields.data && fields.data.length === 0 && (
+                <p className="text-[12.5px] text-muted-foreground">
+                    Need more details on contacts? Add custom fields under Contacts → Segments, tags & fields.
+                </p>
+            )}
+            {(fields.data ?? []).length > 0 && (
+                <div className="grid gap-3 sm:grid-cols-2">
+                    {(fields.data ?? []).map((f) => (
+                        <Field
+                            key={f.id}
+                            label={f.rules?.required ? `${f.label} *` : f.label}
+                            htmlFor={`c-f-${f.key}`}
+                            error={fieldErrors[f.key]}
+                            className={f.type === 'multi_select' ? 'sm:col-span-2' : undefined}
+                        >
+                            <CustomFieldInput field={f} value={attributes[f.key]} onChange={(v) => setAttributes({ ...attributes, [f.key]: v })} />
+                        </Field>
+                    ))}
+                </div>
+            )}
+            {!editing && (
+                <div className="flex items-start gap-2">
+                    <Controller
+                        control={control}
+                        name="opted_in"
+                        render={({ field }) => (
+                            <Checkbox id="c-optin" checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} className="mt-0.5" />
+                        )}
+                    />
+                    <Label htmlFor="c-optin" className="leading-snug font-normal text-muted-foreground">
+                        This person agreed to receive WhatsApp messages from us (recorded in their consent history).
+                    </Label>
+                </div>
+            )}
+        </form>
+    );
+    const footer = (
+        <>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+                {variant === 'sheet' ? 'Close' : 'Cancel'}
+            </Button>
+            <Button type="submit" form="contact-form" disabled={formState.isSubmitting}>
+                {formState.isSubmitting ? 'Saving…' : editing ? 'Save' : 'Add contact'}
+            </Button>
+        </>
+    );
+
+    // Opening an existing contact slides the record in over the current page (3.3): view and edit it
+    // there, then close to be back where you were. Adding a contact stays a dialog.
+    if (variant === 'sheet' && contact) {
+        return (
+            <Sheet open={open} onOpenChange={onOpenChange}>
+                <SheetContent aria-describedby={undefined} closeLabel="Close contact">
+                    <ContactSheetHeader contact={contact} />
+                    <div className="min-h-0 flex-1 overflow-y-auto">
+                        <div className="grid gap-4 p-5">
+                            <section className="rounded-lg border bg-card p-3.5" aria-label="Enquiries and history">
+                                <ContactTimeline contactId={contact.id} />
+                            </section>
+                            <section className="grid gap-3 rounded-lg border bg-card p-3.5" aria-label="Details">
+                                <h3 className="text-[13.5px] font-semibold">Details</h3>
+                                {form}
+                            </section>
+                            {sections}
+                        </div>
+                    </div>
+                    <div className="flex shrink-0 justify-end gap-2 border-t bg-card px-5 py-3">{footer}</div>
+                </SheetContent>
+            </Sheet>
+        );
+    }
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-h-[90vh] overflow-y-auto">
@@ -221,127 +385,14 @@ export function ContactDialog({ open, onOpenChange, contact }: { open: boolean; 
                         {editing ? 'The WhatsApp number identifies the contact and cannot be changed.' : 'Contacts who message you are added automatically.'}
                     </DialogDescription>
                 </DialogHeader>
-                {editing && contact && (
-                    <section className="grid gap-2 rounded-lg border p-3.5" aria-label="Stage">
-                        <div className="flex items-center gap-2">
-                            <h3 className="text-[13.5px] font-semibold">Stage</h3>
-                            <StageBadge stage={contact.stage} />
-                        </div>
-                        <StageHistory contactId={contact.id} />
-                    </section>
-                )}
-                {editing && contact && (
-                    <section className="grid gap-2 rounded-lg border p-3.5" aria-label="Consent">
-                        <h3 className="text-[13.5px] font-semibold">Consent history</h3>
-                        <ConsentHistory contactId={contact.id} />
-                    </section>
-                )}
-                {editing && contact && <AcquisitionCard contact={contact} />}
+                {sections}
                 {editing && contact && (
                     <section className="rounded-lg border p-3.5" aria-label="Enquiries and history">
                         <ContactTimeline contactId={contact.id} />
                     </section>
                 )}
-                <form id="contact-form" onSubmit={onSubmit} className="grid gap-4" noValidate>
-                    <FormError message={formError} />
-                    <Field
-                        label="WhatsApp number"
-                        htmlFor="c-phone"
-                        error={formState.errors.phone?.message}
-                        hint={
-                            editing
-                                ? undefined
-                                : 'With the country code, e.g. +971 50 123 4567. A number starting with 0 is read in your workspace country (Settings › Company).'
-                        }
-                    >
-                        <Input id="c-phone" inputMode="tel" disabled={editing} aria-invalid={!!formState.errors.phone} {...register('phone')} />
-                    </Field>
-                    <Field label="Name" htmlFor="c-name" error={formState.errors.name?.message}>
-                        <Input id="c-name" {...register('name')} />
-                    </Field>
-                    <Field label="Email" htmlFor="c-email" error={formState.errors.email?.message}>
-                        <Input id="c-email" type="email" aria-invalid={!!formState.errors.email} {...register('email')} />
-                    </Field>
-                    {editsStage && stages.length > 0 && (
-                        <Field label="Stage" htmlFor="c-stage" hint="Saved with the contact and kept in the stage history">
-                            <Select value={stageId} onValueChange={setStageId}>
-                                <SelectTrigger id="c-stage">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value={NO_STAGE}>No stage</SelectItem>
-                                    {stages.map((s) => (
-                                        <SelectItem key={s.id} value={s.id}>
-                                            {s.name}
-                                        </SelectItem>
-                                    ))}
-                                    {contact?.stage?.archived && (
-                                        <SelectItem value={contact.stage.id} disabled>
-                                            {contact.stage.name} (archived)
-                                        </SelectItem>
-                                    )}
-                                </SelectContent>
-                            </Select>
-                        </Field>
-                    )}
-                    {editsStage &&
-                        stageNeed &&
-                        stageId !== (contact?.stage?.id ?? NO_STAGE) &&
-                        (stageNeed.kind === 'blocked' ? (
-                            <p role="alert" className="rounded-md bg-warn-bg px-3 py-2 text-[12.5px] text-warn">
-                                {stageNeed.hint}
-                            </p>
-                        ) : (
-                            <Field label={stageNeed.label} htmlFor="c-stage-reason" hint={stageNeed.hint}>
-                                <Input id="c-stage-reason" value={stageReason} maxLength={200} onChange={(e) => setStageReason(e.target.value)} />
-                            </Field>
-                        ))}
-                    <Field label="Tags" htmlFor="c-tags" hint="Used to build segments and campaign audiences">
-                        <TagInput id="c-tags" value={tags} onChange={setTags} suggestions={(tagList.data ?? []).map((t) => t.name)} />
-                    </Field>
-                    {fields.data && fields.data.length === 0 && (
-                        <p className="text-[12.5px] text-muted-foreground">
-                            Need more details on contacts? Add custom fields under Contacts → Segments, tags & fields.
-                        </p>
-                    )}
-                    {(fields.data ?? []).length > 0 && (
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            {(fields.data ?? []).map((f) => (
-                                <Field
-                                    key={f.id}
-                                    label={f.rules?.required ? `${f.label} *` : f.label}
-                                    htmlFor={`c-f-${f.key}`}
-                                    error={fieldErrors[f.key]}
-                                    className={f.type === 'multi_select' ? 'sm:col-span-2' : undefined}
-                                >
-                                    <CustomFieldInput field={f} value={attributes[f.key]} onChange={(v) => setAttributes({ ...attributes, [f.key]: v })} />
-                                </Field>
-                            ))}
-                        </div>
-                    )}
-                    {!editing && (
-                        <div className="flex items-start gap-2">
-                            <Controller
-                                control={control}
-                                name="opted_in"
-                                render={({ field }) => (
-                                    <Checkbox id="c-optin" checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} className="mt-0.5" />
-                                )}
-                            />
-                            <Label htmlFor="c-optin" className="leading-snug font-normal text-muted-foreground">
-                                This person agreed to receive WhatsApp messages from us (recorded in their consent history).
-                            </Label>
-                        </div>
-                    )}
-                </form>
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>
-                        Cancel
-                    </Button>
-                    <Button type="submit" form="contact-form" disabled={formState.isSubmitting}>
-                        {formState.isSubmitting ? 'Saving…' : editing ? 'Save' : 'Add contact'}
-                    </Button>
-                </DialogFooter>
+                {form}
+                <DialogFooter>{footer}</DialogFooter>
             </DialogContent>
         </Dialog>
     );

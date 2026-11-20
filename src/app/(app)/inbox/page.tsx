@@ -1,15 +1,17 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { Loader2Icon, MessageSquarePlusIcon, RadioIcon, WifiOffIcon } from 'lucide-react';
+import { ActivityIcon, Loader2Icon, MessageSquarePlusIcon, PlusIcon, RadioIcon, WifiOffIcon } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 
+import { useChatOpen } from '@/components/app/app-shell';
 import { EmptyState, Forbidden } from '@/components/app/page-header';
 import { useSelectedNumber } from '@/components/app/number-switcher';
 import { useSession } from '@/components/app/session';
-import { ConversationList } from '@/components/inbox/conversation-list';
-import { NewConversationDialog } from '@/components/inbox/new-conversation-dialog';
+import { ConversationList, type InboxView } from '@/components/inbox/conversation-list';
+import { InboxHealthPanel } from '@/components/inbox/inbox-health';
+import { StartConversationDialog } from '@/components/inbox/start-conversation-dialog';
 import { Thread } from '@/components/inbox/thread';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -29,6 +31,14 @@ function Inbox() {
     const [numberId] = useSelectedNumber();
     const [composeOpen, setComposeOpen] = useState(false);
     const selected = params.get('c');
+    const closure = params.get('ev');
+    const [health, setHealth] = useState(false);
+    const order = useRef<string[]>([]);
+    const view = useRef<InboxView>('needs');
+    const search = useRef<HTMLInputElement>(null);
+    // "Start chat" on a contact's record lands here with ?start=<contact id>.
+    const startFor = params.get('start');
+    useChatOpen(!!selected);
     const [listWidth, setListWidth] = useStored<number>('engage.inbox.list-width', 384);
     // A WhatsApp Business app number whose chat history import has not finished yet.
     const syncing = (usePhoneNumbers().data ?? []).find(
@@ -48,7 +58,45 @@ function Inbox() {
     const realtime = useInboxRealtime(me.active_tenant_id ?? '', notify);
     const polling = realtime !== 'live';
 
-    const open = (id: string | null) => router.replace(id ? `/inbox?c=${id}` : '/inbox', { scroll: false });
+    const open = useCallback(
+        (id: string | null, ev?: string | null) => router.replace(id ? `/inbox?c=${id}${ev ? `&ev=${ev}` : ''}` : '/inbox', { scroll: false }),
+        [router],
+    );
+    const onOrder = useCallback((ids: string[]) => void (order.current = ids), []);
+    const onViewChange = useCallback((v: InboxView) => void (view.current = v), []);
+    // After resolving in Needs reply, the next chat in the queue opens (the resolved one leaves the list).
+    const onResolved = useCallback(() => {
+        if (view.current !== 'needs' || !selected) return;
+        const ids = order.current;
+        const i = ids.indexOf(selected);
+        if (i < 0) return;
+        const next = ids.filter((x) => x !== selected)[Math.min(i, ids.length - 2)];
+        if (next) open(next);
+    }, [selected, open]);
+
+    // ⌘K search · J / K move through the list.
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                search.current?.focus();
+                return;
+            }
+            const el = document.activeElement as HTMLElement | null;
+            if (e.metaKey || e.ctrlKey || e.altKey || (el && (/INPUT|TEXTAREA|SELECT/.test(el.tagName) || el.isContentEditable))) return;
+            if (document.querySelector('[role="dialog"],[role="menu"]')) return;
+            const k = e.key.toLowerCase();
+            if (k !== 'j' && k !== 'k') return;
+            const ids = order.current;
+            if (ids.length === 0) return;
+            e.preventDefault();
+            const i = selected ? ids.indexOf(selected) : -1;
+            const next = ids[Math.min(ids.length - 1, Math.max(0, i + (k === 'j' ? 1 : -1)))];
+            if (next && next !== selected) open(next);
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [selected, open]);
 
     if (!can(P.InboxView)) return <Forbidden />;
 
@@ -58,22 +106,46 @@ function Inbox() {
                 className={cn('w-full shrink-0 flex-col md:flex md:w-(--list-width)', selected ? 'hidden' : 'flex')}
                 style={{ '--list-width': `${listWidth}px` } as React.CSSProperties}
             >
-                <div className="flex items-center gap-2 border-r border-b bg-card px-3 py-2.5">
-                    <h1 className="flex-1 text-[15px] font-semibold">Team Inbox</h1>
+                <div className="flex items-center gap-2 border-r bg-card px-4 pt-3.5 pb-2.5">
+                    <h1 className="flex-1 text-[17px] font-semibold">Team Inbox</h1>
                     <Tooltip>
                         <TooltipTrigger asChild>
-                            <span className={cn('inline-flex items-center gap-1 text-[11.5px]', realtime === 'live' ? 'text-good' : 'text-muted-foreground')}>
-                                {realtime === 'live' ? <RadioIcon className="size-3.5" /> : <WifiOffIcon className="size-3.5" />}
-                                {realtime === 'live' ? 'Live' : realtime === 'connecting' ? 'Connecting' : 'Refreshing'}
-                            </span>
+                            <span
+                                className={cn('inline-flex size-2 rounded-full', realtime === 'live' ? 'bg-good' : 'bg-faint')}
+                                aria-label={realtime === 'live' ? 'Live' : 'Refreshing'}
+                            />
                         </TooltipTrigger>
                         <TooltipContent>
-                            {realtime === 'live' ? 'New messages appear instantly.' : 'Realtime is not connected; the inbox refreshes every few seconds.'}
+                            {realtime === 'live' ? (
+                                <>
+                                    <RadioIcon className="mr-1 inline size-3" /> Live · new messages appear instantly.
+                                </>
+                            ) : (
+                                <>
+                                    <WifiOffIcon className="mr-1 inline size-3" /> Realtime is not connected; the inbox refreshes every few seconds.
+                                </>
+                            )}
                         </TooltipContent>
                     </Tooltip>
+                    <Button
+                        variant={health ? 'secondary' : 'ghost'}
+                        size="icon-sm"
+                        onClick={() => setHealth((h) => !h)}
+                        aria-pressed={health}
+                        aria-label="Inbox health"
+                        title="Inbox health"
+                    >
+                        <ActivityIcon />
+                    </Button>
                     {can(P.InboxReply) && (
-                        <Button size="icon-sm" variant="ghost" onClick={() => setComposeOpen(true)} aria-label="New conversation">
-                            <MessageSquarePlusIcon />
+                        <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => setComposeOpen(true)}
+                            aria-label="Start a new conversation"
+                            title="Start a new conversation"
+                        >
+                            <PlusIcon />
                         </Button>
                     )}
                 </div>
@@ -93,7 +165,16 @@ function Inbox() {
                     </div>
                 )}
                 <div className="min-h-0 flex-1">
-                    <ConversationList phoneNumberId={numberId} selectedId={selected} onSelect={(c) => open(c.id)} polling={polling} />
+                    <ConversationList
+                        phoneNumberId={numberId}
+                        selectedId={selected}
+                        selectedClosure={closure}
+                        onSelect={(id, ev) => open(id, ev)}
+                        polling={polling}
+                        onOrder={onOrder}
+                        searchRef={search}
+                        onViewChange={onViewChange}
+                    />
                 </div>
             </div>
 
@@ -110,16 +191,25 @@ function Inbox() {
 
             <div className={cn('min-h-0 min-w-0 flex-1', selected ? 'flex' : 'hidden md:flex')}>
                 {selected ? (
-                    <Thread key={selected} conversationId={selected} polling={polling} onBack={() => open(null)} focusMessageId={params.get('m')} />
+                    <Thread
+                        key={selected}
+                        conversationId={selected}
+                        polling={polling}
+                        onBack={() => open(null)}
+                        focusMessageId={params.get('m')}
+                        closureId={closure}
+                        onResolved={onResolved}
+                        initialMode={params.get('compose') === 'template' ? 'template' : 'reply'}
+                    />
                 ) : (
                     <div className="flex flex-1 items-center justify-center bg-[#efeae2]">
                         <EmptyState
-                            title="Select a conversation"
-                            description="Pick a chat on the left, or start a new one with an approved template."
+                            title="No conversation selected"
+                            description="Pick one from the list."
                             action={
                                 can(P.InboxReply) ? (
                                     <Button onClick={() => setComposeOpen(true)}>
-                                        <MessageSquarePlusIcon /> New conversation
+                                        <MessageSquarePlusIcon /> Start conversation
                                     </Button>
                                 ) : undefined
                             }
@@ -128,7 +218,17 @@ function Inbox() {
                 )}
             </div>
 
-            <NewConversationDialog open={composeOpen} onOpenChange={setComposeOpen} defaultNumberId={numberId} onStarted={(id) => open(id)} />
+            {health && <InboxHealthPanel phoneNumberId={numberId} onClose={() => setHealth(false)} />}
+            <StartConversationDialog
+                open={composeOpen || !!startFor}
+                onOpenChange={(o) => {
+                    setComposeOpen(o);
+                    if (!o && startFor) router.replace(selected ? `/inbox?c=${selected}` : '/inbox', { scroll: false });
+                }}
+                defaultNumberId={numberId}
+                contactId={startFor}
+                onStarted={(id) => open(id)}
+            />
         </div>
     );
 }

@@ -15,10 +15,15 @@ test('contacts: the enquiries and the whole history of a contact, with filters, 
         await page.getByLabel('Search contacts').press('Enter');
         await expect(page.getByRole('row')).toHaveCount(2, { timeout: 3000 });
     }).toPass({ timeout: 30_000 });
-    await page.getByRole('button', { name: `Actions for ${name}` }).click();
-    await page.getByRole('menuitem', { name: 'Edit' }).click();
+    await page.getByRole('row').filter({ hasText: name }).click();
+    await page
+        .getByRole('dialog')
+        .getByRole('link', { name: /Open full record/ })
+        .click();
 
-    const section = page.getByRole('dialog').getByRole('region', { name: 'Enquiries and history' });
+    // The full record (3.5) keeps the whole history under "Full history and enquiries".
+    await page.getByText('Full history and enquiries').click();
+    const section = page.getByRole('region', { name: 'Enquiries and history' });
     const enquiries = section.getByRole('region', { name: 'Enquiries' });
     await expect(enquiries.getByRole('listitem', { name: 'Enquiry 1' })).toContainText('Enquiry 1 · current');
     await expect(enquiries.getByRole('listitem', { name: 'Enquiry 1' })).toContainText('Direct');
@@ -30,7 +35,9 @@ test('contacts: the enquiries and the whole history of a contact, with filters, 
     await history.getByRole('button', { name: 'Tags' }).click();
     await expect(history).toContainText('Nothing here yet.');
     await history.getByRole('button', { name: 'Messages' }).click();
-    await expect(history.getByRole('list', { name: 'Events' }).getByRole('listitem')).toHaveCount(1);
+    // Only messages now (a live chatbot on the number may have answered too).
+    await expect(history.getByRole('list', { name: 'Events' })).toContainText('Wrote a message');
+    await expect(history.getByRole('list', { name: 'Events' })).not.toContainText('Enquiry 1 started');
 
     await enquiries.getByRole('button', { name: 'New enquiry' }).click();
     await enquiries.getByLabel('Note').fill('Called for a June rental');
@@ -42,7 +49,7 @@ test('contacts: the enquiries and the whole history of a contact, with filters, 
 
     // "Wrote a message" opens the chat at that exact message.
     await history.getByRole('button', { name: 'Messages' }).click();
-    await history.getByRole('link', { name: 'Open message' }).click();
+    await history.getByRole('listitem').filter({ hasText: 'Wrote a message' }).getByRole('link', { name: 'Open message' }).first().click();
     await expect(page).toHaveURL(/\/inbox\?c=[0-9a-f-]+&m=[0-9a-f-]+/);
     const focused = page.locator('[id^="msg-"][data-focused="true"]');
     await expect(focused).toContainText('Hi, I need an SUV next week');

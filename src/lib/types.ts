@@ -310,11 +310,86 @@ export type Contact = {
     marketing_opted_out: boolean;
     last_inbound_at: string | null;
     created_at: string | null;
+    /** 3.5 Contacts list sorted by activity: the latest message, edit or creation. */
+    last_activity_at?: string | null;
     /** Growth Hub: where this lead came from. null when Growth Hub is off. Agents get status + label only. */
     acquisition?: Acquisition | null;
     /** CRM pipeline stage; null = no stage yet. */
     stage?: StageRef | null;
     stage_changed_at?: string | null;
+    /** The contact record (3.5). */
+    company?: string | null;
+    job_title?: string | null;
+    city?: string | null;
+    country?: string | null;
+    language?: string | null;
+    owner?: { id: string; name: string } | null;
+    lifecycle?: { key: LifecycleKey; label: string };
+    /** null key: customers have no lead status. `automatic` false when a teammate picked it. */
+    lead_status?: { key: LeadStatusKey | null; label: string | null; automatic: boolean };
+    /** How the customer agreed to be contacted, when a teammate started the chat. */
+    /** Open deals (enquiries in an open stage) and their value. */
+    open_deals?: { count: number; value: number };
+    last_human_reply_at?: string | null;
+    /** The contact's latest chat. */
+    chat?: { id: string; state: 'needs_reply' | 'waiting' | 'snoozed' | 'resolved'; window_expires_at: string | null } | null;
+    contact_permission?: { via: PermissionVia; via_label: string; note: string | null; by: string | null; by_name: string | null; at: string } | null;
+};
+
+export type LifecycleKey = 'subscriber' | 'lead' | 'opportunity' | 'customer' | 'other';
+export type LeadStatusKey = 'new' | 'attempted' | 'connected' | 'open_deal' | 'bad_timing' | 'unqualified';
+export type PermissionVia = 'form' | 'call' | 'in_person' | 'email' | 'other';
+
+export type ContactFieldChange = {
+    id: string;
+    field: string;
+    label: string;
+    from: string | null;
+    to: string | null;
+    by: { id: string | null; name: string } | null;
+    source: string;
+    at: string;
+};
+
+export type ContactDuplicate = { id: string; display_name: string; match: 'phone' | 'email' | 'whatsapp_id' };
+
+/** Start conversation search (3.5): what starting a chat with this person will do. */
+export type StartCandidate = {
+    id: string;
+    display_name: string;
+    phone: string | null;
+    company: string | null;
+    lifecycle: { key: LifecycleKey; label: string };
+    opted_out: boolean;
+    owner: { id: string; name: string; is_me: boolean } | null;
+    conversation: { id: string; status: 'open' | 'closed'; window_expires_at: string | null; window_open: boolean } | null;
+    has_permission: boolean;
+    action: 'open_chat' | 'send_template' | 'start_chat' | 'no_phone';
+    last_inbound_at: string | null;
+};
+
+export type ResolutionReason = 'resolved' | 'not_lead' | 'no_action';
+
+/** One closure of a chat (Inbox › Resolved). */
+export type Resolution = {
+    id: string;
+    conversation_id: string;
+    contact_id: string | null;
+    reason: ResolutionReason;
+    reason_label: string;
+    resolved_by: { id: string; name: string } | null;
+    resolved_at: string;
+    reopened_at: string | null;
+    reopen_how: 'customer' | 'agent' | 'flag' | 'message' | null;
+    reopened_by: { id: string; name: string } | null;
+    flag: { by: { id: string; name: string }; note: string; at: string } | null;
+    contact?: { id: string; display_name: string; last_inbound_at: string | null } | null;
+    later_closures?: number;
+};
+
+export type ResolutionReview = {
+    days: number;
+    agents: { membership_id: string; name: string; resolved: number; not_lead: number; no_action: number; flagged: number }[];
 };
 
 export type StageColor = 'grey' | 'info' | 'good' | 'warn' | 'bad' | 'brand';
@@ -324,7 +399,7 @@ export type StageGroup = 'open' | 'won' | 'lost';
 
 export type StageRef = { id: string; name: string; color: StageColor; archived: boolean; group?: StageGroup };
 
-export type CrmStage = StageRef & { position: number; contacts?: number };
+export type CrmStage = StageRef & { position: number; contacts?: number; enquiries?: number };
 
 export type StageEvent = {
     id: string;
@@ -627,6 +702,25 @@ export type Conversation = {
     after_hours?: boolean;
     /** The wait started from a paid ad (top of the Needs reply queue). */
     ad_lead?: boolean;
+    /** The assignee's name, for the wait clock ("Waiting 0:42 · Ahmed"). */
+    assigned_name?: string | null;
+    /** The reply promise (3.3): business time waited and left on the limit; paused outside business hours. Null unless it needs a reply. */
+    promise?: ReplyPromiseClock | null;
+    /** The closure the chat is in now (closed chats only). */
+    resolution?: Resolution | null;
+    /** Who wrote the last message: the card's "You:", "Auto:", "Sara:" prefix. */
+    last_message_by?: { kind: 'customer' | 'you' | 'agent' | 'auto'; name: string | null } | null;
+    /** The contact's earliest open next step, and how many are open and overdue. */
+    next_step?: {
+        id: string;
+        type: string;
+        type_label: string;
+        title: string;
+        due_at: string;
+        enquiry_id: string | null;
+        open: number;
+        overdue: number;
+    } | null;
     contact?: Contact;
     /** `status` is "disconnected" once the number was offboarded: the chat stays readable, nothing can be sent. */
     phone_number?: {
@@ -636,6 +730,139 @@ export type Conversation = {
         status?: 'pending' | 'connected' | 'disconnected' | (string & {});
     };
     created_at: string | null;
+};
+
+export type ReplyPromiseClock = { limit_minutes: number; waited_seconds: number; left_seconds: number; due_at: string; over: boolean; paused: boolean };
+
+export type ReplyPromiseSettings = {
+    enabled: boolean;
+    limit_minutes: number;
+    ladder: { minutes: number; to: 'agent' | 'manager' | 'owner' }[];
+    owner_whatsapp: { phone: string | null; template: { name: string; language: string } | null; ready: boolean };
+    avg_booking_value: number | null;
+    baseline: MissedLeadsBaseline | null;
+};
+
+export type MissedLeadsBaseline = {
+    enquiries?: number | null;
+    in_time?: number | null;
+    over?: number | null;
+    median_reply_minutes?: number | null;
+    note?: string | null;
+    entered_at?: string;
+    entered_by?: string | null;
+};
+
+export type WaitAlert = {
+    id: string;
+    level: number;
+    minutes: number;
+    role: 'agent' | 'manager' | 'owner';
+    recipients: { id: string; name: string | null }[];
+    channels: ('app' | 'email' | 'whatsapp')[];
+    whatsapp_error: string | null;
+    episode: string;
+    created_at: string;
+};
+
+export type MissedLeadsReport = {
+    week: { from: string; to: string; weeks_ago: number; complete: boolean };
+    limit_minutes: number;
+    enquiries: number;
+    in_time: number;
+    over: number;
+    pending: number;
+    waited_over: {
+        enquiry_id: string;
+        enquiry_number: number;
+        title: string | null;
+        contact_id: string;
+        customer: string;
+        conversation_id: string | null;
+        started_at: string;
+        waited_seconds: number;
+        answered: boolean;
+        owner: string | null;
+    }[];
+    staff: { membership_id: string; name: string; replies: number; median_seconds: number; within_limit: number }[];
+    by_confidence: { key: 'verified' | 'partial' | 'unknown'; label: string; enquiries: number }[];
+    by_ad: { label: string; enquiries: number; verified: number; partial: number; unknown: number }[];
+    avg_booking_value: number | null;
+    aed_at_stake: number | null;
+    aed_protected: number;
+    verified_payments: number;
+    booked_without_payment: number;
+    baseline: MissedLeadsBaseline | null;
+};
+
+export type NextStep = {
+    id: string;
+    contact_id: string;
+    enquiry_id: string | null;
+    type: 'call' | 'message' | 'meeting' | 'quote' | 'other';
+    type_label: string;
+    title: string;
+    due_at: string;
+    overdue: boolean;
+    assigned: { id: string; name: string } | null;
+    status: 'open' | 'done' | 'cancelled';
+    done_at: string | null;
+    cancel_reason: string | null;
+    created_at: string | null;
+};
+
+/** One buying conversation of a contact (its card, stage, value and money). */
+export type Enquiry = {
+    id: string;
+    contact_id: string;
+    number: number;
+    current?: boolean;
+    title: string | null;
+    value: number | null;
+    value_period: 'once' | 'month' | 'year' | null;
+    expected_close_on: string | null;
+    details_version: number;
+    started_at: string;
+    started_by: string;
+    start_reason: string;
+    imported: boolean;
+    source: string;
+    source_label: string;
+    source_confidence: 'verified' | 'partial' | 'unknown';
+    confidence_label: string;
+    owner: { id: string; name: string } | null;
+    stage: { id: string; name: string; group: StageGroup; color?: StageColor } | null;
+    group: StageGroup;
+    open: boolean;
+    stage_version: number;
+    lost_reason: string | null;
+    verified_paid: boolean;
+    paid_total: number;
+    won: { reference: string | null; verified: boolean; by: string | null; at: string } | null;
+    next_step: NextStep | null;
+    last_activity_at: string | null;
+    updated_at: string | null;
+    updated_by: string | null;
+    messages: number;
+    bookings: unknown[];
+    payments: {
+        type: string;
+        id: string;
+        number: string;
+        status: string;
+        total: number;
+        currency: string;
+        paid: boolean;
+        paid_at?: string | null;
+        by?: string | null;
+    }[];
+    contact?: { id: string; name: string; deleted: boolean; chat_id?: string | null } | null;
+};
+
+export type EnquiryBoard = {
+    stages: (CrmStage & { enquiries: Enquiry[]; count: number; value: number })[];
+    stats: { open_value: number; open_count: number; open_valued: number; won_marked_30d: number; paid_verified_30d: number; open_without_next_step: number };
+    truncated: boolean;
 };
 
 export type MessageStatus = 'queued' | 'accepted' | 'sent' | 'delivered' | 'read' | 'failed' | 'received' | 'deleted';
@@ -671,7 +898,19 @@ export type Message = {
     wamid: string | null;
     reply_to_wamid: string | null;
     /** `hint` is a plain-language explanation of Meta's error code, `detail` Meta's own longer text. */
-    error: { code: string; title: string | null; detail?: string | null; hint?: string | null } | null;
+    /**
+     * `plain` a short reason for the inbox, `known` whether we know the code (unknown: show the details),
+     * `action` what to offer: retry (temporary errors only) or template (131047).
+     */
+    error: {
+        code: string;
+        title: string | null;
+        detail?: string | null;
+        hint?: string | null;
+        plain?: string | null;
+        known?: boolean;
+        action?: 'retry' | 'template' | null;
+    } | null;
     sent_by_membership_id: string | null;
     timestamp: string | null;
     sent_at: string | null;
@@ -1551,4 +1790,35 @@ export type ResponseTimes = {
     numbers: (ResponseStat & { id: string; display: string | null })[];
 };
 
-export type ConversationCounts = { needs_reply: number; needs_reply_mine: number; after_hours: number; unassigned: number };
+export type ConversationCounts = { needs_reply: number; needs_reply_mine: number; needs_reply_unassigned?: number; after_hours: number; unassigned: number };
+
+export type ConversationEvent = {
+    id: string;
+    type: string;
+    at: string;
+    actor: 'customer' | 'agent' | 'system';
+    actor_name: string | null;
+    data: Record<string, unknown>;
+};
+
+export type InboxHealth = {
+    days: number;
+    expired: number;
+    in_time: number;
+    pending: number;
+    decided: number;
+    rate: number | null;
+    human_first_response: { median_seconds: number | null; count: number };
+    automation_first_response: { median_seconds: number | null; count: number };
+    sales: { open: number; open_with_next_step: number; open_value: number; open_valued: number };
+};
+
+export type ContactFunnel = { all: number; subscriber: number; lead: number; opportunity: number; customer: number; other: number; duplicates: number };
+
+export type CrmSync = {
+    provider: 'none' | 'hubspot' | 'zoho';
+    providers_available: string[];
+    stage_map: { stage: StageRef & { group: StageGroup }; hubspot: string; zoho: string }[];
+    hubspot_stages: string[];
+    zoho_stages: string[];
+};

@@ -156,3 +156,58 @@
         }
     }
 }
+
+/* Inbox & CRM 3.5 motion: short and purposeful, nothing pulses. Reduced motion turns these off (above). */
+@keyframes won-pop {
+    0% {
+        transform: scale(0.4);
+        opacity: 0;
+    }
+    45% {
+        transform: scale(1.15);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+@keyframes won-ray {
+    0% {
+        transform: rotate(var(--a)) translateY(0) scale(1);
+        opacity: 1;
+    }
+    100% {
+        transform: rotate(var(--a)) translateY(-26px) scale(0.4);
+        opacity: 0;
+    }
+}
+@keyframes won-fade {
+    0%,
+    70% {
+        opacity: 1;
+    }
+    100% {
+        opacity: 0;
+    }
+}
+/* A record field just saved: a short green wash. */
+@keyframes saved {
+    0% {
+        background: var(--good-bg);
+    }
+    100% {
+        background: transparent;
+    }
+}
+/* The contact panel slides in from the right. */
+@keyframes peek-in {
+    from {
+        transform: translateX(24px);
+        opacity: 0;
+    }
+    to {
+        transform: none;
+        opacity: 1;
+    }
+}

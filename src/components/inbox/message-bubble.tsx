@@ -33,7 +33,7 @@ function StatusTicks({ message }: { message: Message }) {
         case 'delivered':
             return <CheckCheckIcon className="size-3.5" aria-label="Delivered" />;
         case 'read':
-            return <CheckCheckIcon className="size-3.5 text-sky-500" aria-label="Read" />;
+            return <CheckCheckIcon className="size-3.5 text-[#53bdeb]" aria-label="Read" />;
         case 'failed':
             return (
                 <span className="inline-flex items-center gap-0.5 font-medium text-bad">
@@ -226,16 +226,81 @@ function RawText({ raw }: { raw: string }) {
     );
 }
 
+/**
+ * Why a message was not sent (3.3): a plain reason, Meta's code, Retry only for temporary errors,
+ * "Choose template" when the 24-hour window closed, and Meta's own details for codes we don't know.
+ * A failed reply never counts as answering: the chat is back in Needs reply.
+ */
+function FailureNote({ message, onRetry, onTemplate }: { message: Message; onRetry?: (m: Message) => Promise<void>; onTemplate?: () => void }) {
+    const [busy, setBusy] = useState(false);
+    const [details, setDetails] = useState(false);
+    const e = message.error;
+    const reason = e?.plain ?? e?.hint ?? e?.title ?? 'WhatsApp did not accept this message.';
+    const human = message.origin === 'agent' || message.origin === 'api';
+
+    return (
+        <div className="mt-1.5 rounded border border-bad/30 bg-bad-bg px-2 py-1.5 text-[12.5px] text-bad" role="alert">
+            <p className="font-semibold">
+                Not sent: {reason}
+                {e?.code && /^\d+$/.test(e.code) ? <span className="font-normal text-ink-2"> · Meta code {e.code}</span> : null}
+            </p>
+            {e?.plain && e.hint && <p className="mt-0.5 text-ink-2">{e.hint}</p>}
+            {human && <p className="mt-0.5 text-ink-2">A failed reply doesn’t count, so the chat is back in Needs reply unless another reply was accepted.</p>}
+            {(e?.known === false || details) && (e?.title || e?.detail) && (
+                <p className="mt-0.5 font-mono text-[11.5px] break-words text-ink-2">{[e?.title, e?.detail].filter(Boolean).join(' · ')}</p>
+            )}
+            <div className="mt-1 flex flex-wrap gap-1.5">
+                {e?.action === 'retry' && human && onRetry && (
+                    <button
+                        type="button"
+                        disabled={busy}
+                        className="rounded border border-bad/40 bg-card px-2 py-0.5 font-semibold hover:bg-white disabled:opacity-60"
+                        onClick={async () => {
+                            setBusy(true);
+                            try {
+                                await onRetry(message);
+                            } finally {
+                                setBusy(false);
+                            }
+                        }}
+                    >
+                        {busy ? 'Sending…' : 'Retry'}
+                    </button>
+                )}
+                {e?.action === 'template' && onTemplate && (
+                    <button type="button" className="rounded border border-bad/40 bg-card px-2 py-0.5 font-semibold hover:bg-white" onClick={onTemplate}>
+                        Choose template
+                    </button>
+                )}
+                {e?.known !== false && (e?.title || e?.detail) && (
+                    <button type="button" className="px-1 py-0.5 underline-offset-2 hover:underline" onClick={() => setDetails(!details)}>
+                        {details ? 'Hide details' : 'Details'}
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export function MessageBubble({
     message,
     quoted,
     authorLabel,
     onReply,
+    onRetry,
+    onTemplate,
+    grouped = false,
 }: {
     message: Message;
+    /** Same sender within 5 minutes of the previous bubble: no tail. */
+    grouped?: boolean;
     quoted?: Message | null;
     authorLabel?: string | null;
     onReply?: (m: Message) => void;
+    /** Send a failed reply again (offered only for temporary errors). */
+    onRetry?: (m: Message) => Promise<void>;
+    /** Open the template picker (the 24-hour window closed: 131047). */
+    onTemplate?: () => void;
 }) {
     const outbound = message.direction === 'outbound';
 
@@ -252,29 +317,57 @@ export function MessageBubble({
             )}
             <div
                 className={cn(
-                    'max-w-[min(34rem,80%)] rounded-lg px-3 py-2 shadow-[0_1px_1px_rgba(15,23,42,.08)]',
-                    outbound ? 'rounded-br-sm bg-[#dcf8c6] text-slate-900' : 'rounded-bl-sm bg-card',
+                    'relative max-w-[min(34rem,80%)] rounded-lg px-2.5 pt-1.5 pb-1 shadow-[0_1px_0.5px_rgba(11,20,26,.13)]',
+                    outbound ? 'bg-[#d9fdd3] text-[#111b21]' : 'bg-white text-[#111b21]',
+                    !grouped && (outbound ? 'rounded-tr-none' : 'rounded-tl-none'),
+                    message.origin === 'automation' && 'bg-[#e7f3ff]',
                     message.origin === 'app_echo' && 'bg-[#e8f5e0]',
-                    message.status === 'failed' && 'ring-1 ring-bad/40',
+                    message.status === 'failed' && 'bg-bad-bg ring-1 ring-bad',
+                    // Still sending: dimmed until WhatsApp accepts it.
+                    message.status === 'queued' && 'opacity-60',
                 )}
             >
+                {!grouped && (
+                    <svg
+                        aria-hidden
+                        viewBox="0 0 8 13"
+                        className={cn(
+                            'absolute top-0 h-[13px] w-2',
+                            outbound ? '-right-2' : '-left-2 -scale-x-100',
+                            message.status === 'failed'
+                                ? 'fill-bad-bg'
+                                : message.origin === 'automation'
+                                  ? 'fill-[#e7f3ff]'
+                                  : message.origin === 'app_echo'
+                                    ? 'fill-[#e8f5e0]'
+                                    : outbound
+                                      ? 'fill-[#d9fdd3]'
+                                      : 'fill-white',
+                        )}
+                    >
+                        <path d="M0 0h8L1.5 8.5C.9 9.3 0 9 0 8z" />
+                    </svg>
+                )}
                 {quoted !== undefined && message.reply_to_wamid && (
                     <div className="mb-1.5 rounded border-l-4 border-brand-500/60 bg-black/5 px-2 py-1 text-[12.5px] opacity-80">
                         {quoted ? (quoted.body ?? `${quoted.type} message`) : 'Replying to an earlier message'}
                     </div>
                 )}
+                {authorLabel && (
+                    <p
+                        className={cn(
+                            'mb-0.5 flex items-center gap-1 text-[11px] font-semibold',
+                            message.origin === 'automation' ? 'text-info' : 'text-brand-600',
+                        )}
+                    >
+                        {message.origin === 'automation' && <BotIcon className="size-3" />}
+                        {authorLabel}
+                    </p>
+                )}
                 <Body message={message} />
                 {message.raw_body && <RawText raw={message.raw_body} />}
-                {message.status === 'failed' && (
-                    <div className="mt-1.5 rounded border border-bad/30 bg-bad-bg px-2 py-1.5 text-[12.5px] text-bad" role="alert">
-                        <p className="font-semibold">
-                            Not sent{message.error?.title ? `: ${message.error.title}` : ''}
-                            {message.error?.code ? ` (${message.error.code})` : ''}
-                        </p>
-                        {(message.error?.hint ?? message.error?.detail) && <p className="mt-0.5 text-ink-2">{message.error?.hint ?? message.error?.detail}</p>}
-                    </div>
-                )}
-                <div className="mt-1 flex items-center justify-end gap-1 text-[11px] text-slate-500">
+                {message.status === 'failed' && <FailureNote message={message} onRetry={onRetry} onTemplate={onTemplate} />}
+                <div className="mt-0.5 flex items-center justify-end gap-1 text-[11px] text-[#667781]">
                     {message.origin === 'history' && (
                         <span className="inline-flex items-center gap-0.5" title="Imported from the WhatsApp Business app's chat history">
                             <HistoryIcon className="size-3" /> Imported
@@ -290,12 +383,6 @@ export function MessageBubble({
                             <ShieldCheckIcon className="size-3" /> Consent reply ·
                         </span>
                     )}
-                    {message.origin === 'automation' && message.automation !== 'consent' && (
-                        <span className="inline-flex items-center gap-0.5" title="Sent automatically (chatbot or auto-reply)">
-                            <BotIcon className="size-3" /> Bot ·
-                        </span>
-                    )}
-                    {authorLabel && <span>{authorLabel} ·</span>}
                     {message.edited_at && <span>edited ·</span>}
                     <span>{clockTime(message.timestamp)}</span>
                     {outbound && <StatusTicks message={message} />}

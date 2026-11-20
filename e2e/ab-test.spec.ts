@@ -8,7 +8,7 @@ test('campaigns: an A/B test splits the audience, shows each variant’s results
     for (const i of [1, 2, 3, 4]) {
         const phone = `+97155${Math.floor(1_000_000 + Math.random() * 8_999_999)}`;
         const id = (await api<{ data: { id: string } }>(page, 'POST', 'contacts', { phone, name: `${tag} ${i}`, tags: [tag] })).data.id;
-        await api(page, 'POST', `contacts/${id}/consent`, { state: 'opted_in', note: 'Signed up at the front desk', notify: false });
+        await api(page, 'POST', `contacts/${id}/consent`, { method: 'form', state: 'opted_in', note: 'Signed up at the front desk', notify: false });
     }
     backendPhp(
         `app(App\\Domain\\Tenancy\\TenantContext::class)->bypass(function () { $t = App\\Domain\\Messaging\\Models\\Contact::query()->where('name', '${tag} 1')->value('tenant_id'); foreach (App\\Domain\\WhatsApp\\Models\\PhoneNumber::query()->where('tenant_id', $t)->get() as $n) { Illuminate\\Support\\Facades\\Cache::put('templates:synced:' . $n->waba_account_id, now()->toIso8601String(), 600); foreach (['e2e_ab_one' => 'Hello there', 'e2e_ab_two' => 'Hi, a deal for you'] as $name => $text) { App\\Domain\\Templates\\Models\\MessageTemplate::query()->updateOrCreate(['waba_account_id' => $n->waba_account_id, 'name' => $name, 'language' => 'en'], ['tenant_id' => $n->tenant_id, 'status' => 'APPROVED', 'category' => 'MARKETING', 'components' => [['type' => 'BODY', 'text' => $text]]]); } } });`,

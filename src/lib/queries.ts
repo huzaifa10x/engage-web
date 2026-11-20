@@ -4,6 +4,23 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import { api, upload } from './api';
 import type {
+    ContactFunnel,
+    ConversationEvent,
+    CrmSync,
+    InboxHealth,
+    ContactDuplicate,
+    ContactFieldChange,
+    LeadStatusKey,
+    PermissionVia,
+    Resolution,
+    ResolutionReason,
+    ResolutionReview,
+    StartCandidate,
+    EnquiryBoard,
+    MissedLeadsReport,
+    NextStep,
+    ReplyPromiseSettings,
+    WaitAlert,
     ConsentHistoryEntry,
     FollowUps,
     FollowUpSettings,
@@ -236,6 +253,12 @@ export type ConversationFilters = {
     state?: 'needs_reply' | 'waiting';
     /** "Arrived after hours" (still needing a reply). */
     after_hours?: boolean;
+    /** 3.5: All lists snoozed chats too. */
+    include_snoozed?: boolean;
+    window?: 'open' | 'closed';
+    followup?: boolean;
+    tag?: string;
+    sort?: 'priority' | 'newest' | 'waiting';
 };
 
 /** Inbox teams: named groups of teammates a conversation or a chatbot handover can go to. */
@@ -252,16 +275,19 @@ export const saveInboxTeam = (team: { id?: string; name: string; member_ids: str
 
 export const deleteInboxTeam = (id: string) => api<void>(`inbox/teams/${id}`, { method: 'DELETE' });
 
-export const useConversations = (filters: ConversationFilters, refetchInterval: number | false = false) =>
+export const useConversations = (filters: ConversationFilters, refetchInterval: number | false = false, enabled = true) =>
     useInfiniteQuery({
         queryKey: keys.conversations(filters),
         refetchInterval,
+        enabled,
         queryFn: ({ pageParam }) =>
             api<CursorPage<Conversation>>('conversations', {
                 query: {
                     ...filters,
                     unread: filters.unread ? 1 : undefined,
                     after_hours: filters.after_hours ? 1 : undefined,
+                    include_snoozed: filters.include_snoozed ? 1 : undefined,
+                    followup: filters.followup ? 1 : undefined,
                     cursor: pageParam,
                     per_page: 30,
                 },
@@ -308,6 +334,11 @@ export type ContactFilters = {
     source?: string;
     filter?: string;
     stage_id?: string;
+    lifecycle?: 'subscriber' | 'lead' | 'opportunity' | 'customer' | 'other';
+    owner?: string;
+    duplicates?: 1;
+    /** 3.5: newest activity first (page numbers as the cursor). */
+    sort?: 'activity';
 };
 
 export type ContactCounts = { matching: number; total: number; sources: { value: string; count: number }[] };
@@ -351,7 +382,7 @@ export function sendToConversation(conversationId: string, payload: SendPayload,
     }).then((r) => r.data);
 }
 
-export function startConversation(payload: SendPayload & { phone_number_id: string; contact_id?: string; to?: string }, idempotencyKey: string) {
+export function startConversation(payload: StartPayload, idempotencyKey: string) {
     return api<{ data: Message }>('messages', { method: 'POST', body: payload, headers: { 'Idempotency-Key': idempotencyKey } }).then((r) => r.data);
 }
 
@@ -905,3 +936,193 @@ export const useStageHistory = (contactId: string | undefined, enabled = true) =
         queryFn: () => api<Data<StageEvent[]>>(`contacts/${contactId}/stage-history`).then((r) => r.data),
         enabled: enabled && !!contactId,
     });
+
+// ── Inbox & CRM 3.3: reply promise, enquiries board, next steps ──────────────────────────
+
+export const useContact = (id: string | null) =>
+    useQuery({ queryKey: ['contacts', id, 'record'], queryFn: () => api<Data<Contact>>(`contacts/${id}`).then((r) => r.data), enabled: !!id });
+
+export const useReplyPromise = (enabled = true) =>
+    useQuery({ queryKey: ['reply-promise'], queryFn: () => api<Data<ReplyPromiseSettings>>('tenant/reply-promise').then((r) => r.data), enabled });
+
+export const useWaitAlerts = (conversationId: string | null, enabled = true) =>
+    useQuery({
+        queryKey: ['inbox', 'wait-alerts', conversationId],
+        queryFn: () => api<Data<WaitAlert[]>>(`conversations/${conversationId}/wait-alerts`).then((r) => r.data),
+        enabled: enabled && !!conversationId,
+    });
+
+export const useMissedLeads = (weeksAgo: number, enabled = true) =>
+    useQuery({
+        queryKey: ['reports', 'missed-leads', weeksAgo],
+        queryFn: () => api<Data<MissedLeadsReport>>('reports/missed-leads', { query: { weeks_ago: weeksAgo } }).then((r) => r.data),
+        enabled,
+    });
+
+export type BoardFilters = { owner?: string | null; filter?: 'no_next_step' | 'overdue' | null; search?: string | null };
+export const useEnquiryBoard = (f: BoardFilters, enabled = true) =>
+    useQuery({
+        queryKey: ['enquiries', 'board', f],
+        queryFn: () =>
+            api<Data<EnquiryBoard>>('enquiries/board', { query: { owner: f.owner ?? null, filter: f.filter ?? null, search: f.search ?? null } }).then(
+                (r) => r.data,
+            ),
+        enabled,
+    });
+
+export const useNextSteps = (contactId: string | null, all = false) =>
+    useQuery({
+        queryKey: ['contacts', contactId, 'next-steps', all],
+        queryFn: () => api<Data<NextStep[]>>(`contacts/${contactId}/next-steps`, { query: { all: all ? 1 : null } }).then((r) => r.data),
+        enabled: !!contactId,
+    });
+
+// ── Inbox & CRM 3.5: resolutions, the contact record, start conversation ────────────────
+
+export type ResolutionFilters = {
+    agent?: string | null;
+    reason?: ResolutionReason | null;
+    days?: number;
+    phone_number_id?: string | null;
+    conversation_id?: string | null;
+};
+
+export const useResolutions = (f: ResolutionFilters, refetchInterval: number | false = false) =>
+    useQuery({
+        queryKey: ['inbox', 'resolutions', f],
+        refetchInterval,
+        queryFn: () =>
+            api<Data<Resolution[]>>('resolutions', {
+                query: {
+                    agent: f.agent ?? null,
+                    reason: f.reason ?? null,
+                    days: f.days ?? 7,
+                    phone_number_id: f.phone_number_id ?? null,
+                    conversation_id: f.conversation_id ?? null,
+                },
+            }).then((r) => r.data),
+    });
+
+export const useResolutionReview = (days = 7, enabled = true) =>
+    useQuery({
+        queryKey: ['inbox', 'resolutions', 'review', days],
+        queryFn: () => api<Data<ResolutionReview>>('resolutions/review', { query: { days } }).then((r) => r.data),
+        enabled,
+    });
+
+export const resolveConversation = (id: string, reason: ResolutionReason) =>
+    api<Data<Conversation>>(`conversations/${id}`, { method: 'PATCH', body: { status: 'closed', reason } }).then((r) => r.data);
+
+export const undoResolve = (id: string) =>
+    api<Data<Conversation>>(`conversations/${id}`, { method: 'PATCH', body: { status: 'open', undo: true } }).then((r) => r.data);
+
+export const flagResolution = (id: string, note: string) =>
+    api<Data<Resolution>>(`resolutions/${id}/flag`, { method: 'POST', body: { note } }).then((r) => r.data);
+
+export const useContactChanges = (contactId: string | null) =>
+    useQuery({
+        queryKey: ['contacts', contactId, 'changes'],
+        queryFn: () => api<Data<ContactFieldChange[]>>(`contacts/${contactId}/changes`).then((r) => r.data),
+        enabled: !!contactId,
+    });
+
+export const useContactDuplicates = (contactId: string | null) =>
+    useQuery({
+        queryKey: ['contacts', contactId, 'duplicates'],
+        queryFn: () => api<Data<ContactDuplicate[]>>(`contacts/${contactId}/duplicates`).then((r) => r.data),
+        enabled: !!contactId,
+        staleTime: 60_000,
+    });
+
+export type ContactRecordPatch = Partial<{
+    name: string | null;
+    email: string | null;
+    company: string | null;
+    job_title: string | null;
+    city: string | null;
+    country: string | null;
+    language: string | null;
+    lead_status: LeadStatusKey | null;
+    owner_membership_id: string | null;
+    tags: string[];
+    phone: string | null;
+    source_detail: string | null;
+}>;
+
+export const updateContactRecord = (id: string, body: ContactRecordPatch) =>
+    api<Data<Contact>>(`contacts/${id}`, { method: 'PATCH', body }).then((r) => r.data);
+
+export const useStartSearch = (q: string, phoneNumberId: string | null, enabled = true) =>
+    useQuery({
+        queryKey: ['contacts', 'start-search', q, phoneNumberId],
+        queryFn: () => api<Data<StartCandidate[]>>('contacts/search', { query: { q: q || null, phone_number_id: phoneNumberId } }).then((r) => r.data),
+        enabled,
+        staleTime: 5_000,
+        placeholderData: (prev) => prev,
+    });
+
+export type StartPayload = SendPayload & {
+    phone_number_id: string;
+    contact_id?: string;
+    to?: string;
+    new_contact?: { name: string; email?: string | null; company?: string | null; source?: string | null; tags?: string[] };
+    permission?: { via: PermissionVia; note?: string | null };
+    topic?: string | null;
+    create_enquiry?: boolean;
+};
+
+export type ContactChat = {
+    id: string;
+    phone_number_id: string;
+    status: 'open' | 'closed';
+    window_expires_at: string | null;
+    window_open: boolean;
+    assigned_membership_id: string | null;
+    last_message_at: string | null;
+};
+
+export const useContactConversations = (contactId: string | null) =>
+    useQuery({
+        queryKey: ['contacts', contactId, 'conversations'],
+        queryFn: () => api<Data<ContactChat[]>>(`contacts/${contactId}/conversations`).then((r) => r.data),
+        enabled: !!contactId,
+    });
+
+// ── Inbox & CRM 3.5 (prototype) ─────────────────────────────────────────────────────────
+
+export const useConversationEvents = (id: string | null, refetchInterval: number | false = false) =>
+    useQuery({
+        queryKey: ['inbox', 'events', id],
+        queryFn: () => api<Data<ConversationEvent[]>>(`conversations/${id}/events`).then((r) => r.data),
+        enabled: !!id,
+        refetchInterval,
+    });
+
+export const markUnread = (id: string) => api<Data<Conversation>>(`conversations/${id}/unread`, { method: 'POST' }).then((r) => r.data);
+
+export const sendTyping = (id: string, typing: boolean) => api(`conversations/${id}/typing`, { method: 'POST', body: { typing } });
+
+export const useInboxHealth = (phoneNumberId: string | null, enabled = true) =>
+    useQuery({
+        queryKey: ['inbox', 'health', phoneNumberId],
+        queryFn: () => api<Data<InboxHealth>>('inbox/health', { query: { phone_number_id: phoneNumberId } }).then((r) => r.data),
+        enabled,
+        refetchInterval: enabled ? 60_000 : false,
+    });
+
+export const useContactFunnel = () =>
+    useQuery({ queryKey: ['contacts', 'funnel'], queryFn: () => api<Data<ContactFunnel>>('contacts/funnel').then((r) => r.data) });
+
+export const useCrmSync = () => useQuery({ queryKey: ['crm', 'sync'], queryFn: () => api<Data<CrmSync>>('crm/sync').then((r) => r.data) });
+
+export const saveCrmStageMap = (stage_map: Record<string, { hubspot: string; zoho: string }>) =>
+    api<Data<CrmSync>>('crm/sync', { method: 'PUT', body: { stage_map } }).then((r) => r.data);
+
+export const setCurrentEnquiry = (contactId: string, enquiryId: string) =>
+    api(`contacts/${contactId}/current-enquiry`, { method: 'POST', body: { enquiry_id: enquiryId } });
+
+export const assignConversation = (id: string, membershipId: string | null) =>
+    api<Data<Conversation>>(`conversations/${id}`, { method: 'PATCH', body: { assigned_membership_id: membershipId } }).then((r) => r.data);
+
+export const reopenConversation = (id: string) =>
+    api<Data<Conversation>>(`conversations/${id}`, { method: 'PATCH', body: { status: 'open' } }).then((r) => r.data);

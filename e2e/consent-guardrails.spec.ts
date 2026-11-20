@@ -11,9 +11,9 @@ test('campaigns: consent counts, the confirmation tick before sending, and “Se
         ids.push((await api<{ data: { id: string } }>(page, 'POST', 'contacts', { phone, name: `${tag} ${i}`, tags: [tag] })).data.id);
     }
     // 2 opted in, 2 unknown, 1 opted out.
-    await api(page, 'POST', `contacts/${ids[0]}/consent`, { state: 'opted_in', note: 'Signed up at the front desk', notify: false });
-    await api(page, 'POST', `contacts/${ids[1]}/consent`, { state: 'opted_in', note: 'Signed up at the front desk', notify: false });
-    await api(page, 'POST', `contacts/${ids[4]}/consent`, { state: 'opted_out', notify: false });
+    await api(page, 'POST', `contacts/${ids[0]}/consent`, { method: 'form', state: 'opted_in', note: 'Signed up at the front desk', notify: false });
+    await api(page, 'POST', `contacts/${ids[1]}/consent`, { method: 'form', state: 'opted_in', note: 'Signed up at the front desk', notify: false });
+    await api(page, 'POST', `contacts/${ids[4]}/consent`, { method: 'form', state: 'opted_out', notify: false });
     backendPhp(
         `app(App\\Domain\\Tenancy\\TenantContext::class)->bypass(function () { $t = App\\Domain\\Messaging\\Models\\Contact::query()->whereKey('${ids[0]}')->value('tenant_id'); foreach (App\\Domain\\WhatsApp\\Models\\PhoneNumber::query()->where('tenant_id', $t)->get() as $n) { Illuminate\\Support\\Facades\\Cache::put('templates:synced:' . $n->waba_account_id, now()->toIso8601String(), 600); App\\Domain\\Templates\\Models\\MessageTemplate::query()->updateOrCreate(['waba_account_id' => $n->waba_account_id, 'name' => 'e2e_consent_offer', 'language' => 'en'], ['tenant_id' => $n->tenant_id, 'status' => 'APPROVED', 'category' => 'MARKETING', 'components' => [['type' => 'BODY', 'text' => 'Hello there']]]); } });`,
     );

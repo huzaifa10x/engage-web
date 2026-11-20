@@ -10,6 +10,7 @@ import { useSelectedNumber } from '@/components/app/number-switcher';
 import { useSession } from '@/components/app/session';
 import { StageBadge } from '@/components/contacts/stage-badge';
 import { type ConversionPeriod, ConversionsByAd, useConversionResults } from '@/components/growth/conversions-by-ad';
+import { ContactLink } from '@/components/contacts/contact-sheet';
 import { LeadDetails } from '@/components/growth/lead-details';
 import { StatusChip } from '@/components/growth/source-chip';
 import { Badge } from '@/components/ui/badge';
@@ -496,7 +497,11 @@ function LeadsPage() {
                                         return (
                                             <TableRow key={l.id} className="cursor-pointer" onClick={() => setOpenId(l.id)}>
                                                 <TableCell>
-                                                    <p className="font-semibold">{l.contact.display_name}</p>
+                                                    <p className="font-semibold">
+                                                        <ContactLink contact={l.contact} className="font-semibold text-foreground">
+                                                            {l.contact.display_name}
+                                                        </ContactLink>
+                                                    </p>
                                                     <p className="font-mono text-[12px] text-muted-foreground">{l.contact.phone}</p>
                                                 </TableCell>
                                                 <TableCell>
