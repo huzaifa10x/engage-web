@@ -60,9 +60,9 @@ import type {
     MemberNotification,
     AutoReplySettings,
     BillingPayments,
-    BillingPreview,
+    BillingPortalFlow,
+    BillingReturn,
     PaymentMethod,
-    PaymentStep,
     CampaignPreview,
     Billing,
     BillingInvoice,
@@ -581,47 +581,45 @@ export const requestConsent = (conversationId: string) =>
 
 export const useBilling = (enabled = true) => useQuery({ queryKey: ['billing'], queryFn: () => api<Data<Billing>>('billing').then((r) => r.data), enabled });
 
+/** The billing summary; the return page polls it while Stripe's webhook confirms a change. */
+export const fetchBillingSummary = () => api<Data<Billing>>('billing/summary').then((r) => r.data);
+
 export const useInvoices = (enabled = true) =>
     useQuery({ queryKey: ['billing', 'invoices'], queryFn: () => api<Data<BillingInvoice[]>>('billing/invoices').then((r) => r.data), enabled });
 
 export const updateBillingDetails = (body: { legal_name: string | null; country: string; tax_trn: string | null; billing_email: string | null }) =>
     api<Data<Billing>>('billing/details', { method: 'PUT', body }).then((r) => r.data);
 
-/** Buy or switch plan with a saved card (no redirect). */
-export const subscribeToPlan = (plan: string, interval: 'monthly' | 'yearly', paymentMethod?: string | null) =>
-    api<Data<PaymentStep>>('billing/subscribe', { method: 'POST', body: { plan, interval, payment_method: paymentMethod ?? null } }).then((r) => r.data);
-
-/** After the in-page payment step: ask the server to read the result from Stripe now. */
-export const refreshBilling = (abandon = false) =>
-    api<Data<{ status: 'active' | 'pending' | 'failed' }>>('billing/refresh', { method: 'POST', body: { abandon } }).then((r) => r.data.status);
-
-export const usePaymentMethods = (enabled = true) =>
-    useQuery({ queryKey: ['billing', 'payment-methods'], queryFn: () => api<Data<PaymentMethod[]>>('billing/payment-methods').then((r) => r.data), enabled });
-
-export const createSetupIntent = () =>
-    api<Data<{ client_secret: string }>>('billing/payment-methods/setup-intent', { method: 'POST' }).then((r) => r.data.client_secret);
-
-export const setDefaultPaymentMethod = (id: string) =>
-    api<Data<PaymentMethod[]>>(`billing/payment-methods/${id}/default`, { method: 'PUT' }).then((r) => r.data);
-
-export const removePaymentMethod = (id: string) => api<Data<PaymentMethod[]>>(`billing/payment-methods/${id}`, { method: 'DELETE' }).then((r) => r.data);
-
-/** The billing summary for a plan the customer is about to choose: Stripe's own calculation, nothing is charged. */
-export const previewPlan = (plan: string, interval: 'monthly' | 'yearly') =>
-    api<Data<BillingPreview>>('billing/preview', { method: 'POST', body: { plan, interval } }).then((r) => r.data);
+/** The card renewals are charged to, read from Stripe (brand, last 4, expiry). Cards are never stored by engageX. */
+export const usePaymentMethod = (enabled = true) =>
+    useQuery({
+        queryKey: ['billing', 'payment-method'],
+        queryFn: () => api<Data<PaymentMethod | null>>('billing/payment-method').then((r) => r.data),
+        enabled,
+    });
 
 export const usePayments = (enabled = true) =>
     useQuery({ queryKey: ['billing', 'payments'], queryFn: () => api<Data<BillingPayments>>('billing/payments').then((r) => r.data), enabled });
 
-export const payInvoice = (id: string) => api<Data<PaymentStep>>(`billing/invoices/${id}/pay`, { method: 'POST' }).then((r) => r.data);
+/** Upgrade from Free (or a trial): the URL of a Stripe Checkout page. */
+export const startCheckout = (plan: string, interval: 'monthly' | 'yearly') =>
+    api<Data<{ url: string }>>('billing/checkout', { method: 'POST', body: { plan, interval } }).then((r) => r.data.url);
 
-export const refreshInvoice = (id: string) => api<Data<BillingInvoice[]>>(`billing/invoices/${id}/refresh`, { method: 'POST' }).then((r) => r.data);
+/**
+ * The URL of a Stripe Customer Portal page for one task: switch plan or period (update), add a card and
+ * pay an open invoice (card), cancel at the end of the period (cancel), or undo a scheduled change (manage).
+ */
+export const openBillingPortal = (flow: BillingPortalFlow, plan?: string, interval?: 'monthly' | 'yearly') =>
+    api<Data<{ url: string }>>('billing/portal', { method: 'POST', body: { flow, plan: plan ?? null, interval: interval ?? null } }).then((r) => r.data.url);
 
-export const cancelSubscription = () => api<Data<Billing>>('billing/cancel', { method: 'POST' }).then((r) => r.data);
+/** Back from Stripe: check the Checkout session (grants nothing), or pay an open invoice with the new card. */
+export const confirmBillingReturn = (body: { session_id?: string; flow?: BillingPortalFlow }) =>
+    api<Data<BillingReturn>>('billing/return', { method: 'POST', body }).then((r) => r.data);
 
-export const resumeSubscription = () => api<Data<Billing>>('billing/resume', { method: 'POST' }).then((r) => r.data);
+/** A fresh link to Stripe's PDF of an invoice. */
+export const invoicePdfUrl = (id: string) => api<Data<{ url: string }>>(`billing/invoices/${id}/pdf`).then((r) => r.data.url);
 
-/** Paid plan: ends at the end of the paid period, then Free. Trial: Free straight away. */
+/** A trial moves to Free straight away. (A paid plan is cancelled in the Stripe portal instead.) */
 export const switchToFree = () => api<Data<Billing>>('billing/switch-to-free', { method: 'POST' }).then((r) => r.data);
 
 // ── Auto reply ───────────────────────────────────────────────────────────────────────────

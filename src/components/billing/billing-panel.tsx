@@ -1,8 +1,9 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { CheckIcon, CreditCardIcon, DownloadIcon, PlusIcon, Trash2Icon, WalletIcon } from 'lucide-react';
-import { useState } from 'react';
+import { CalendarClockIcon, CheckIcon, CreditCardIcon, DownloadIcon, ExternalLinkIcon, WalletIcon } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Field, FormError } from '@/components/app/field';
@@ -18,31 +19,25 @@ import { ApiError, errorMessage } from '@/lib/api';
 import { COUNTRIES, VAT_COUNTRY } from '@/lib/countries';
 import { date } from '@/lib/format';
 import {
-    cancelSubscription,
+    invoicePdfUrl,
     keys,
-    payInvoice,
-    refreshBilling,
-    refreshInvoice,
-    removePaymentMethod,
-    resumeSubscription,
-    setDefaultPaymentMethod,
-    subscribeToPlan,
+    openBillingPortal,
+    startCheckout,
     switchToFree,
     updateBillingDetails,
     useBilling,
     useInvoices,
-    usePaymentMethods,
+    usePaymentMethod,
     usePayments,
 } from '@/lib/queries';
-import { getStripe } from '@/lib/stripe';
-import type { Billing, BillingPlan } from '@/lib/types';
+import type { Billing, BillingPlan, BillingPortalFlow } from '@/lib/types';
 
-import { AddCardDialog } from './add-card-dialog';
-import { PlanChangeDialog } from './plan-change-dialog';
 import { PlanUsage } from './plan-usage';
 
 const money = (minor: number, currency: string) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency, minimumFractionDigits: minor % 100 === 0 ? 0 : 2 }).format(minor / 100);
+
+const period = (interval: 'monthly' | 'yearly' | null | undefined) => (interval === 'yearly' ? 'Annual' : 'Monthly');
 
 const INVOICE: Record<string, { label: string; tone: Tone }> = {
     paid: { label: 'Paid', tone: 'good' },
@@ -51,6 +46,20 @@ const INVOICE: Record<string, { label: string; tone: Tone }> = {
     uncollectible: { label: 'Unpaid', tone: 'bad' },
     refunded: { label: 'Refunded', tone: 'info' },
     partially_refunded: { label: 'Partly refunded', tone: 'info' },
+};
+
+const PAYMENT: Record<string, { label: string; tone: Tone }> = {
+    succeeded: { label: 'Paid', tone: 'good' },
+    pending: { label: 'Processing', tone: 'warn' },
+    failed: { label: 'Failed', tone: 'bad' },
+    refunded: { label: 'Refunded', tone: 'info' },
+    partially_refunded: { label: 'Partly refunded', tone: 'info' },
+};
+
+const STATUS: Record<string, { label: string; tone: Tone }> = {
+    active: { label: 'Active', tone: 'good' },
+    trialing: { label: 'Trial', tone: 'brand' },
+    past_due: { label: 'Payment failed', tone: 'bad' },
 };
 
 /** Company name, country and VAT TRN exactly as they should be printed on invoices. */
@@ -93,7 +102,9 @@ function DetailsForm({ billing, canManage }: { billing: Billing; canManage: bool
             <CardHeader>
                 <div>
                     <CardTitle>Billing details</CardTitle>
-                    <CardDescription>These appear on your invoices. Your country decides whether VAT is charged.</CardDescription>
+                    <CardDescription>
+                        These appear on your invoices. Stripe also asks for them at checkout and in the billing portal; changes made there show here.
+                    </CardDescription>
                 </div>
             </CardHeader>
             <CardContent className="grid gap-4">
@@ -155,6 +166,7 @@ function DetailsForm({ billing, canManage }: { billing: Billing; canManage: bool
     );
 }
 
+/** One plan. Its button opens Stripe: Checkout for a first paid plan, the portal to switch. */
 function PlanCard({
     plan,
     yearly,
@@ -163,6 +175,7 @@ function PlanCard({
     busy,
     onChoose,
     onSwitchFree,
+    onCancel,
 }: {
     plan: BillingPlan;
     yearly: boolean;
@@ -171,17 +184,86 @@ function PlanCard({
     busy: boolean;
     onChoose: () => void;
     onSwitchFree: () => void;
+    onCancel: () => void;
 }) {
+    const sub = billing.subscription;
     const minor = yearly ? plan.price_yearly_minor : plan.price_monthly_minor;
     const custom = plan.price_monthly_minor === null;
-    const paidCurrent = plan.current && billing.subscription?.provider === 'stripe' && billing.subscription.status !== 'trialing';
-    const sameInterval = billing.subscription?.interval === (yearly ? 'yearly' : 'monthly');
+    const selfServe = Boolean(sub?.self_serve);
+    const sameInterval = sub?.interval === (yearly ? 'yearly' : 'monthly');
+    // A plan set up by 10X Digital (not a trial, not Free): changed by them.
+    const managed = !selfServe && Boolean(sub) && sub?.status !== 'trialing' && !billing.plans.find((p) => p.current)?.free;
+    const scheduledHere = sub?.scheduled_change?.plan.key === plan.key && sub.scheduled_change.interval === (yearly ? 'yearly' : 'monthly');
+    const enabled = canManage && !busy && billing.stripe_configured;
+
+    let action: React.ReactNode;
+    if (custom) {
+        action = (
+            <Button asChild variant="outline" className="w-full">
+                <a href="mailto:sales@10xdigital.ae?subject=10X%20Engage%20Enterprise">Talk to sales</a>
+            </Button>
+        );
+    } else if (plan.free && !plan.current) {
+        action = sub?.cancel_at ? (
+            <Button variant="outline" className="w-full" disabled>
+                Moves here on {date(sub.cancel_at)}
+            </Button>
+        ) : selfServe ? (
+            <Button variant="outline" className="w-full" disabled={!enabled} onClick={onCancel}>
+                {busy ? 'Opening Stripe…' : 'Move to Free'}
+            </Button>
+        ) : billing.can_switch_to_free ? (
+            <Button variant="outline" className="w-full" disabled={!canManage || busy} onClick={onSwitchFree}>
+                {busy ? 'One moment…' : 'Switch to Free'}
+            </Button>
+        ) : (
+            <Button variant="outline" className="w-full" disabled title="Your plan is managed by 10X Digital">
+                Contact us to switch
+            </Button>
+        );
+    } else if (!plan.purchasable || (plan.current && (!selfServe || sameInterval))) {
+        action = (
+            <Button variant="outline" className="w-full" disabled>
+                {plan.current ? (
+                    <>
+                        <CheckIcon /> {sub?.status === 'trialing' ? 'On trial' : 'Your plan'}
+                    </>
+                ) : (
+                    'Included'
+                )}
+            </Button>
+        );
+    } else if (managed) {
+        action = (
+            <Button variant="outline" className="w-full" disabled title="Your plan is managed by 10X Digital">
+                Contact us to switch
+            </Button>
+        );
+    } else if (scheduledHere) {
+        action = (
+            <Button variant="outline" className="w-full" disabled>
+                Starts {date(sub?.scheduled_change?.at)}
+            </Button>
+        );
+    } else {
+        action = (
+            <Button className="w-full" disabled={!enabled} onClick={onChoose}>
+                {busy
+                    ? 'Opening Stripe…'
+                    : plan.current
+                      ? `Switch to ${yearly ? 'annual' : 'monthly'}`
+                      : selfServe
+                        ? `Switch to ${plan.name}`
+                        : `Upgrade to ${plan.name}`}
+            </Button>
+        );
+    }
 
     return (
         <div className={`flex flex-col rounded-lg border p-4 ${plan.current ? 'border-brand-500 ring-1 ring-brand-500' : ''}`}>
             <div className="flex items-center justify-between gap-2">
                 <p className="font-semibold">{plan.name}</p>
-                {plan.current && <Badge tone="brand">{billing.subscription?.status === 'trialing' ? 'Trial' : 'Current'}</Badge>}
+                {plan.current && <Badge tone="brand">{sub?.status === 'trialing' ? 'Trial' : 'Current'}</Badge>}
             </div>
             <p className="mt-2 text-2xl font-semibold tabular-nums">
                 {custom ? 'Custom' : minor ? money(yearly ? Math.round(minor / 12) : minor, plan.currency) : 'Free'}
@@ -191,200 +273,96 @@ function PlanCard({
                 {custom
                     ? 'For large teams and agencies.'
                     : minor
-                      ? `${yearly ? `${money(minor, plan.currency)} billed yearly` : 'Billed monthly'}${billing.vat.applies ? ` + ${billing.vat.percent}% VAT` : ''}`
-                      : 'Shared inbox, always free.'}
+                      ? `${yearly ? `${money(minor, plan.currency)} billed yearly` : 'Billed monthly'} + ${billing.vat.percent}% VAT in the UAE`
+                      : 'Send and receive messages, 1 team member. No card needed.'}
             </p>
-            <div className="mt-3">
-                {custom ? (
-                    <Button asChild variant="outline" className="w-full">
-                        <a href="mailto:sales@10xdigital.ae?subject=10X%20Engage%20Enterprise">Talk to sales</a>
-                    </Button>
-                ) : plan.free && !plan.current ? (
-                    billing.subscription?.cancel_at ? (
-                        <Button variant="outline" className="w-full" disabled>
-                            Switching on {date(billing.subscription.cancel_at)}
-                        </Button>
-                    ) : billing.can_switch_to_free === false ? (
-                        // In-House or a plan set up by 10X Digital: changed by the platform team.
-                        <Button variant="outline" className="w-full" disabled title="Your plan is managed by 10X Digital">
-                            Contact us to switch
-                        </Button>
-                    ) : (
-                        <Button variant="outline" className="w-full" disabled={!canManage || busy} onClick={onSwitchFree}>
-                            {busy ? 'One moment…' : 'Switch to Free'}
-                        </Button>
-                    )
-                ) : !plan.purchasable ? (
-                    <Button variant="outline" className="w-full" disabled>
-                        {plan.current ? (
-                            <>
-                                <CheckIcon /> Your plan
-                            </>
-                        ) : (
-                            'Included'
-                        )}
-                    </Button>
-                ) : paidCurrent && sameInterval ? (
-                    <Button variant="outline" className="w-full" disabled>
-                        <CheckIcon /> Your plan
-                    </Button>
-                ) : (
-                    <Button className="w-full" disabled={!canManage || busy || !billing.stripe_configured} onClick={onChoose}>
-                        {busy
-                            ? 'One moment…'
-                            : paidCurrent
-                              ? `Switch to ${yearly ? 'yearly' : 'monthly'}`
-                              : billing.subscription?.provider === 'stripe'
-                                ? `Switch to ${plan.name}`
-                                : `Choose ${plan.name}`}
-                    </Button>
-                )}
-            </div>
+            <div className="mt-3">{action}</div>
         </div>
     );
 }
 
-const PAYMENT: Record<string, { label: string; tone: Tone }> = {
-    succeeded: { label: 'Paid', tone: 'good' },
-    pending: { label: 'Processing', tone: 'warn' },
-    failed: { label: 'Failed', tone: 'bad' },
-    refunded: { label: 'Refunded', tone: 'info' },
-    partially_refunded: { label: 'Partly refunded', tone: 'info' },
-};
-
-const STATUS: Record<string, { label: string; tone: Tone }> = {
-    active: { label: 'Active', tone: 'good' },
-    trialing: { label: 'Trial', tone: 'brand' },
-    past_due: { label: 'Payment failed', tone: 'bad' },
-};
-
 /**
- * The Billing page: Overview · Plans · Payment methods · Invoices · Payments · Billing details.
- * Everything happens inside the platform; Stripe processes the money behind it.
+ * The Billing page (Batch 6): Overview · Plans · Invoices · Payments · Billing details.
+ * Every money action opens a Stripe-hosted page (Checkout or the Customer Portal) and comes back to
+ * /billing/return; the plan changes when Stripe's webhook confirms it. No card is entered here.
  */
 export function BillingPanel({ canManage }: { canManage: boolean }) {
     const qc = useQueryClient();
+    const router = useRouter();
+    const params = useSearchParams();
     const billing = useBilling();
     const invoices = useInvoices();
-    const cards = usePaymentMethods(billing.data?.stripe_configured ?? false);
-    const payments = usePayments(billing.data?.stripe_configured ?? false);
-    const [tab, setTab] = useState('overview');
+    const configured = billing.data?.stripe_configured ?? false;
+    const card = usePaymentMethod(configured && Boolean(billing.data?.subscription?.self_serve));
+    const payments = usePayments(configured);
+    const [tab, setTab] = useState(params.get('tab') ?? 'overview');
     const [yearly, setYearly] = useState(false);
     const [busy, setBusy] = useState<string | null>(null);
-    const [addingCard, setAddingCard] = useState(false);
-    const [choosing, setChoosing] = useState<BillingPlan | null>(null); // plan waiting in the confirmation dialog
     const b = billing.data;
+
+    // Back from Stripe Checkout without paying.
+    const canceled = params.get('canceled') === '1';
+    useEffect(() => {
+        if (!canceled) return;
+        toast('Nothing was changed', { description: 'You left Stripe before paying. Your plan is as it was.' });
+        router.replace('/billing');
+    }, [canceled, router]);
 
     if (billing.isLoading) return <Skeleton className="h-72" />;
     if (!b) return <p className="text-sm text-bad">{errorMessage(billing.error)}</p>;
 
     const sub = b.subscription;
-    const stripeSub = sub?.provider === 'stripe';
-    const methods = cards.data ?? [];
-    const defaultCard = methods.find((m) => m.is_default) ?? methods[0] ?? null;
-    const key = b.stripe_publishable_key;
+    const selfServe = Boolean(sub?.self_serve);
     const upcoming = payments.data?.upcoming ?? null;
     const wallet = payments.data?.wallet ?? null;
     const openInvoices = (invoices.data ?? []).filter((i) => i.status === 'open');
+    const interval = yearly ? 'yearly' : 'monthly';
 
-    const refreshAll = () => {
-        void qc.invalidateQueries({ queryKey: ['billing'] });
-        void qc.invalidateQueries({ queryKey: keys.entitlements });
-        // The plan shown everywhere else (trial banner, sidebar) comes from the session.
-        void qc.invalidateQueries({ queryKey: keys.me });
-    };
-
-    const run = async (id: string, action: () => Promise<unknown>) => {
+    /** Asks the server for a Stripe page and goes there. */
+    const toStripe = (id: string, url: () => Promise<string>) => {
         setBusy(id);
-        try {
-            await action();
-        } catch (e) {
-            const first = e instanceof ApiError ? Object.values(e.fields)[0]?.[0] : undefined;
-            toast.error(first ?? errorMessage(e));
-        } finally {
-            setBusy(null);
-        }
+        url().then(
+            (to) => window.location.assign(to),
+            (e) => {
+                const first = e instanceof ApiError ? Object.values(e.fields)[0]?.[0] : undefined;
+                toast.error(first ?? errorMessage(e));
+                setBusy(null);
+            },
+        );
     };
-
-    /** Confirms a payment with Stripe inside the page (the bank's 3-D Secure step appears here when needed). */
-    const confirmInPage = async (clientSecret: string, paymentMethod: string | null): Promise<string | null> => {
-        if (!key) return 'Online payments are not switched on.';
-        const stripe = await getStripe(key);
-        const result = await stripe.confirmCardPayment(clientSecret, paymentMethod ? { payment_method: paymentMethod } : undefined);
-
-        return result.error ? (result.error.message ?? 'The payment did not go through.') : null;
-    };
-
-    /** Runs after the customer pressed Confirm in the billing summary. Returns an error message or null. */
-    const confirmPlan = async (plan: BillingPlan): Promise<string | null> => {
-        try {
-            const step = await subscribeToPlan(plan.key, yearly ? 'yearly' : 'monthly', defaultCard?.id);
-            if (step.status === 'requires_confirmation' && step.client_secret) {
-                const problem = await confirmInPage(step.client_secret, step.payment_method);
-                if (problem) {
-                    await refreshBilling(true); // withdraw the unpaid attempt
-                    refreshAll();
-
-                    return `${problem} Your plan was not changed.`;
-                }
-                const status = await refreshBilling();
-                toast.success(status === 'active' ? `You are now on the ${plan.name} plan` : 'Payment received. Your plan will update in a moment.');
-            } else {
-                toast.success(`You are now on the ${plan.name} plan (${yearly ? 'yearly' : 'monthly'})`);
-            }
-            refreshAll();
-
-            return null;
-        } catch (e) {
-            const first = e instanceof ApiError ? Object.values(e.fields)[0]?.[0] : undefined;
-
-            return first ?? errorMessage(e);
-        }
-    };
-
-    const choose = (plan: BillingPlan) => {
-        if (!b.details.country) {
-            toast.error('Choose your billing country first (Billing details), so the correct tax is applied.');
-            setTab('details');
-
-            return;
-        }
-        setChoosing(plan);
-    };
-
-    const pay = (invoiceId: string) =>
-        run(`pay-${invoiceId}`, async () => {
-            const step = await payInvoice(invoiceId);
-            if (step.status === 'requires_confirmation' && step.client_secret) {
-                const problem = await confirmInPage(step.client_secret, step.payment_method);
-                if (problem) {
-                    toast.error(problem);
-
-                    return;
-                }
-                await refreshInvoice(invoiceId);
-            }
-            toast.success('Invoice paid');
-            refreshAll();
-        });
+    const portal = (flow: BillingPortalFlow, plan?: string) =>
+        toStripe(`portal-${flow}-${plan ?? ''}`, () => openBillingPortal(flow, plan, plan ? interval : undefined));
+    const choose = (plan: BillingPlan) => (selfServe ? portal('update', plan.key) : toStripe(`checkout-${plan.key}`, () => startCheckout(plan.key, interval)));
 
     const switchFree = () => {
-        const paid = sub?.provider === 'stripe' && sub.status !== 'trialing';
-        const question = paid
-            ? `Switch to Free? You keep ${b.plan.name} until ${date(sub?.current_period_end)} (already paid), then the workspace moves to Free and nothing more is charged.`
-            : `Switch to Free now? ${b.plan.name} features stop straight away.`;
-        if (!window.confirm(question)) return;
-        void run('free', async () => {
-            qc.setQueryData(['billing'], await switchToFree());
-            refreshAll();
-            toast.success(paid ? `You move to Free on ${date(sub?.current_period_end)}` : 'Your workspace is on the Free plan');
-        });
+        if (!window.confirm(`Switch to Free now? ${b.plan.name} trial features stop straight away.`)) return;
+        setBusy('free');
+        switchToFree().then(
+            (data) => {
+                qc.setQueryData(['billing'], data);
+                void qc.invalidateQueries({ queryKey: keys.entitlements });
+                void qc.invalidateQueries({ queryKey: keys.me });
+                toast.success('Your workspace is on the Free plan');
+                setBusy(null);
+            },
+            (e) => {
+                toast.error(errorMessage(e));
+                setBusy(null);
+            },
+        );
     };
 
-    const cancel = () =>
-        window.confirm(
-            `Cancel your plan? You keep ${b.plan.name} until ${date(sub?.current_period_end)}. After that the workspace moves to the Free plan and nothing more is charged.`,
-        ) && run('cancel', async () => qc.setQueryData(['billing'], await cancelSubscription()));
+    const downloadPdf = (id: string) => {
+        // Opened synchronously so the browser does not block it as a pop-up, then pointed at Stripe's fresh link.
+        const tab = window.open('about:blank', '_blank');
+        invoicePdfUrl(id).then(
+            (url) => (tab ? (tab.location.href = url) : window.location.assign(url)),
+            (e) => {
+                tab?.close();
+                toast.error(errorMessage(e));
+            },
+        );
+    };
 
     const invoiceTable = (
         <Card className="overflow-hidden p-0">
@@ -419,20 +397,19 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
                             </TableCell>
                             <TableCell>
                                 <div className="flex items-center justify-end gap-1">
-                                    {canManage && i.status === 'open' && (
-                                        <Button
-                                            size="sm"
-                                            disabled={busy === `pay-${i.id}`}
-                                            onClick={() => (methods.length === 0 ? setAddingCard(true) : pay(i.id))}
-                                        >
-                                            {busy === `pay-${i.id}` ? 'Paying…' : 'Pay now'}
+                                    {canManage && i.status === 'open' && selfServe && (
+                                        <Button size="sm" disabled={busy !== null} onClick={() => portal('card')}>
+                                            {busy === 'portal-card-' ? 'Opening Stripe…' : 'Pay now'}
                                         </Button>
                                     )}
-                                    {i.invoice_pdf && (
-                                        <Button asChild variant="ghost" size="icon-sm">
-                                            <a href={i.invoice_pdf} target="_blank" rel="noreferrer" aria-label={`Download invoice ${i.number ?? ''}`}>
-                                                <DownloadIcon />
-                                            </a>
+                                    {i.has_pdf && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon-sm"
+                                            aria-label={`Download invoice ${i.number ?? ''}`}
+                                            onClick={() => downloadPdf(i.id)}
+                                        >
+                                            <DownloadIcon />
                                         </Button>
                                     )}
                                 </div>
@@ -453,9 +430,17 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
 
     return (
         <div className="grid gap-4">
-            {sub?.status === 'past_due' && (
-                <div className="rounded-lg border border-bad/20 bg-bad-bg px-4 py-3 text-sm text-bad" role="alert">
-                    Your last payment failed. Update your card or pay the open invoice to keep your plan; otherwise the workspace moves to the Free plan.
+            {sub?.paused && (
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-bad/20 bg-bad-bg px-4 py-3 text-sm text-bad" role="alert">
+                    <span>
+                        <span className="font-semibold">Your last payment failed.</span> Chatbots, automations, reply alerts, campaigns and extra team seats are
+                        paused until it is paid. Sending and receiving messages keep working.
+                    </span>
+                    {canManage && selfServe && (
+                        <Button size="sm" className="ml-auto" disabled={busy !== null} onClick={() => portal('card')}>
+                            {busy === 'portal-card-' ? 'Opening Stripe…' : 'Update card and pay'}
+                        </Button>
+                    )}
                 </div>
             )}
             {!b.stripe_configured && (
@@ -468,7 +453,6 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
                 <TabsList>
                     <TabsTrigger value="overview">Overview</TabsTrigger>
                     <TabsTrigger value="plans">Plans</TabsTrigger>
-                    <TabsTrigger value="methods">Payment methods</TabsTrigger>
                     <TabsTrigger value="invoices">Invoices</TabsTrigger>
                     <TabsTrigger value="payments">Payments</TabsTrigger>
                     <TabsTrigger value="details">Billing details</TabsTrigger>
@@ -480,29 +464,33 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
                             <p className="text-[12.5px] text-muted-foreground">Current plan</p>
                             <p className="flex flex-wrap items-center gap-2 text-xl font-semibold">
                                 {b.plan.name}
+                                {selfServe && <span className="text-[13px] font-normal text-muted-foreground">· {period(sub?.interval)}</span>}
                                 {sub && STATUS[sub.status] && <Badge tone={STATUS[sub.status].tone}>{STATUS[sub.status].label}</Badge>}
                             </p>
                             <p className="text-[13px] text-muted-foreground">
                                 {sub?.status === 'trialing' && sub.trial_ends_at
-                                    ? `Free trial until ${date(sub.trial_ends_at)}. Choose a plan to keep these features; otherwise you move to Free.`
-                                    : stripeSub && sub.cancel_at
-                                      ? `Cancelled. You keep ${b.plan.name} until ${date(sub.cancel_at)}, then move to the Free plan.`
-                                      : stripeSub
-                                        ? `Billed ${sub.interval === 'yearly' ? 'yearly' : 'monthly'}. Renews automatically.`
-                                        : 'No paid subscription.'}
+                                    ? `Free trial until ${date(sub.trial_ends_at)}. Upgrade to keep these features; otherwise you move to Free.`
+                                    : selfServe && sub?.cancel_at
+                                      ? `Cancelled. You keep ${b.plan.name} until ${date(sub.cancel_at)}, then move to the Free plan. Your chats, contacts and settings stay.`
+                                      : selfServe
+                                        ? `Billed ${sub?.interval === 'yearly' ? 'yearly' : 'monthly'}. Renews automatically on ${date(sub?.current_period_end)}.`
+                                        : b.plans.find((p) => p.current)?.free
+                                          ? 'Send and receive messages for free. Upgrade for chatbots, automations, reply alerts, campaigns and more seats.'
+                                          : 'Set up by 10X Digital. Contact us to change it.'}
                             </p>
+                            {sub?.scheduled_change && (
+                                <p className="flex items-center gap-1.5 text-[13px] font-medium">
+                                    <CalendarClockIcon className="size-4 text-muted-foreground" />
+                                    Moves to {sub.scheduled_change.plan.name} · {period(sub.scheduled_change.interval)} on {date(sub.scheduled_change.at)}
+                                </p>
+                            )}
                             <div className="mt-1 flex flex-wrap gap-2">
                                 <Button size="sm" onClick={() => setTab('plans')}>
-                                    {stripeSub ? 'Change plan' : 'Choose a plan'}
+                                    {selfServe ? 'Change plan' : 'Upgrade'}
                                 </Button>
-                                {canManage && stripeSub && sub.cancel_at && (
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        disabled={busy === 'resume'}
-                                        onClick={() => run('resume', async () => qc.setQueryData(['billing'], await resumeSubscription()))}
-                                    >
-                                        Keep my plan
+                                {canManage && selfServe && (sub?.cancel_at || sub?.scheduled_change) && (
+                                    <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => portal('manage')}>
+                                        {busy === 'portal-manage-' ? 'Opening Stripe…' : sub?.cancel_at ? 'Keep my plan' : 'Undo change'}
                                     </Button>
                                 )}
                             </div>
@@ -514,27 +502,42 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
                                 {upcoming?.date
                                     ? `On ${date(upcoming.date)}${b.vat.applies ? `, including ${b.vat.percent}% VAT` : ''}.${
                                           upcoming.credit_applied_minor > 0
-                                              ? ` ${money(upcoming.total_minor, upcoming.currency)} less ${money(upcoming.credit_applied_minor, upcoming.currency)} wallet credit.`
+                                              ? ` ${money(upcoming.total_minor, upcoming.currency)} less ${money(upcoming.credit_applied_minor, upcoming.currency)} credit.`
                                               : ''
                                       }`
-                                    : stripeSub && sub.cancel_at
+                                    : selfServe && sub?.cancel_at
                                       ? 'Nothing more will be charged.'
                                       : 'Nothing scheduled.'}
                             </p>
                         </Card>
                         <Card className="gap-2 p-5">
                             <p className="text-[12.5px] text-muted-foreground">Payment method</p>
-                            <p className="text-xl font-semibold capitalize">{defaultCard ? `${defaultCard.brand} •••• ${defaultCard.last4}` : 'No card'}</p>
-                            <p className="text-[13px] text-muted-foreground">
-                                {defaultCard
-                                    ? `Expires ${String(defaultCard.exp_month).padStart(2, '0')}/${defaultCard.exp_year}.`
-                                    : 'Add a card to subscribe to a paid plan.'}
+                            <p className="flex items-center gap-2 text-xl font-semibold">
+                                {card.data ? (
+                                    <>
+                                        <CreditCardIcon className="size-5 text-muted-foreground" />
+                                        <span className="capitalize">{card.data.brand}</span> •••• {card.data.last4}
+                                    </>
+                                ) : selfServe && card.isLoading ? (
+                                    <Skeleton className="h-7 w-40" />
+                                ) : (
+                                    'No card'
+                                )}
                             </p>
-                            <div className="mt-1">
-                                <Button size="sm" variant="outline" onClick={() => setTab('methods')}>
-                                    Manage cards
-                                </Button>
-                            </div>
+                            <p className="text-[13px] text-muted-foreground">
+                                {card.data
+                                    ? `Expires ${String(card.data.exp_month).padStart(2, '0')}/${card.data.exp_year}. Kept by Stripe, not by 10X Engage.`
+                                    : selfServe
+                                      ? "Stripe has no card for renewals. Add one on Stripe's secure page."
+                                      : "No card needed on Free. You add one on Stripe's secure page when you upgrade."}
+                            </p>
+                            {canManage && selfServe && (
+                                <div className="mt-1">
+                                    <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => portal('card')}>
+                                        {busy === 'portal-card-' ? 'Opening Stripe…' : 'Update card'} <ExternalLinkIcon />
+                                    </Button>
+                                </div>
+                            )}
                         </Card>
                     </div>
                     {wallet && (wallet.balance_minor > 0 || wallet.entries.length > 0) && (
@@ -591,13 +594,9 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
                             <div>
                                 <CardTitle>Plans</CardTitle>
                                 <CardDescription>
-                                    Prices are in USD.{' '}
-                                    {b.vat.applies
-                                        ? `${b.vat.percent}% UAE VAT is added to each payment.`
-                                        : b.details.country
-                                          ? 'No VAT applies to your country.'
-                                          : 'Tax depends on your billing country.'}{' '}
-                                    When you change plan, the unused part of your current period is credited and you see the exact amount before confirming.
+                                    Prices are in USD and exclude {b.vat.percent}% UAE VAT. Annual is 10 × monthly (2 months free). You pay on Stripe&apos;s
+                                    secure page. Upgrades are charged now for the rest of the period; downgrades and Annual → Monthly start at the end of the
+                                    period you have paid for.
                                 </CardDescription>
                             </div>
                             <div className="flex rounded-md border p-0.5 text-[13px]" role="group" aria-label="Billing period">
@@ -608,7 +607,7 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
                                         aria-pressed={yearly === y}
                                         className={`rounded px-3 py-1 ${yearly === y ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
                                     >
-                                        {y ? 'Yearly' : 'Monthly'}
+                                        {y ? 'Annual' : 'Monthly'}
                                     </button>
                                 ))}
                             </div>
@@ -622,107 +621,41 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
                                         yearly={yearly}
                                         billing={b}
                                         canManage={canManage}
-                                        busy={plan.free ? busy === 'free' : false}
+                                        busy={
+                                            plan.free
+                                                ? busy === 'free' || busy === 'portal-cancel-'
+                                                : busy === `checkout-${plan.key}` || busy === `portal-update-${plan.key}`
+                                        }
                                         onChoose={() => choose(plan)}
                                         onSwitchFree={switchFree}
+                                        onCancel={() => portal('cancel')}
                                     />
                                 ))}
                             </div>
                         </CardContent>
                     </Card>
-                    {stripeSub && (
+                    {selfServe && (
                         <Card className="flex-row flex-wrap items-center gap-3 p-5">
                             <div className="min-w-0 flex-1">
-                                <p className="text-sm font-semibold">{sub.cancel_at ? 'Your plan is cancelled' : 'Cancel plan'}</p>
+                                <p className="text-sm font-semibold">{sub?.cancel_at ? 'Your plan is cancelled' : 'Cancel plan'}</p>
                                 <p className="text-[13px] text-muted-foreground">
-                                    {sub.cancel_at
+                                    {sub?.cancel_at
                                         ? `You keep ${b.plan.name} until ${date(sub.cancel_at)}. After that the workspace moves to the Free plan.`
-                                        : `Your subscription renews automatically on ${date(sub.current_period_end)}. If you cancel, you keep ${b.plan.name} until then and move to the Free plan afterwards.`}
+                                        : `Your plan renews on ${date(sub?.current_period_end)}. If you cancel, you keep ${b.plan.name} until then and move to Free afterwards. Your chats, contacts and settings stay.`}
                                 </p>
                             </div>
                             {canManage &&
-                                (sub.cancel_at ? (
-                                    <Button
-                                        variant="outline"
-                                        disabled={busy === 'resume'}
-                                        onClick={() => run('resume', async () => qc.setQueryData(['billing'], await resumeSubscription()))}
-                                    >
+                                (sub?.cancel_at ? (
+                                    <Button variant="outline" disabled={busy !== null} onClick={() => portal('manage')}>
                                         Keep my plan
                                     </Button>
                                 ) : (
-                                    <Button variant="outline" className="text-bad" disabled={busy === 'cancel'} onClick={cancel}>
-                                        Cancel plan
+                                    <Button variant="outline" className="text-bad" disabled={busy !== null} onClick={() => portal('cancel')}>
+                                        {busy === 'portal-cancel-' ? 'Opening Stripe…' : 'Cancel plan'}
                                     </Button>
                                 ))}
                         </Card>
                     )}
-                </TabsContent>
-
-                <TabsContent value="methods">
-                    <Card>
-                        <CardHeader>
-                            <div>
-                                <CardTitle>Payment methods</CardTitle>
-                                <CardDescription>
-                                    Cards are stored securely by Stripe. The default card is charged for renewals and plan changes.
-                                </CardDescription>
-                            </div>
-                            {canManage && b.stripe_configured && (
-                                <Button variant="outline" onClick={() => setAddingCard(true)}>
-                                    <PlusIcon /> Add payment method
-                                </Button>
-                            )}
-                        </CardHeader>
-                        <CardContent className="grid gap-3">
-                            {cards.isLoading ? (
-                                <Skeleton className="h-12" />
-                            ) : methods.length === 0 ? (
-                                <p className="text-[13px] text-muted-foreground">No card saved yet. Add one to subscribe to a paid plan.</p>
-                            ) : (
-                                methods.map((m) => (
-                                    <div key={m.id} className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2.5">
-                                        <CreditCardIcon className="size-5 text-muted-foreground" />
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-medium capitalize">
-                                                {m.brand} •••• {m.last4} {m.is_default && <Badge tone="brand">Default</Badge>}
-                                            </p>
-                                            <p className="text-[12.5px] text-muted-foreground">
-                                                Expires {String(m.exp_month).padStart(2, '0')}/{m.exp_year}
-                                            </p>
-                                        </div>
-                                        {canManage && !m.is_default && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                disabled={busy === m.id}
-                                                onClick={() =>
-                                                    run(m.id, async () => qc.setQueryData(['billing', 'payment-methods'], await setDefaultPaymentMethod(m.id)))
-                                                }
-                                            >
-                                                Make default
-                                            </Button>
-                                        )}
-                                        {canManage && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon-sm"
-                                                aria-label={`Remove card ending ${m.last4}`}
-                                                disabled={busy === `rm-${m.id}`}
-                                                onClick={() =>
-                                                    window.confirm(`Remove the card ending ${m.last4}?`) &&
-                                                    run(`rm-${m.id}`, async () =>
-                                                        qc.setQueryData(['billing', 'payment-methods'], await removePaymentMethod(m.id)),
-                                                    )
-                                                }
-                                            >
-                                                <Trash2Icon />
-                                            </Button>
-                                        )}
-                                    </div>
-                                ))
-                            )}
-                        </CardContent>
-                    </Card>
                 </TabsContent>
 
                 <TabsContent value="invoices">{invoiceTable}</TabsContent>
@@ -792,30 +725,6 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
                     <DetailsForm key={JSON.stringify(b.details)} billing={b} canManage={canManage} />
                 </TabsContent>
             </Tabs>
-
-            <PlanChangeDialog
-                plan={addingCard ? null : choosing}
-                yearly={yearly}
-                card={defaultCard}
-                onClose={() => setChoosing(null)}
-                onAddCard={() => setAddingCard(true)}
-                onConfirm={confirmPlan}
-            />
-
-            {key && (
-                <AddCardDialog
-                    open={addingCard}
-                    onOpenChange={setAddingCard}
-                    publishableKey={key}
-                    onAdded={(paymentMethodId) => {
-                        toast.success('Card saved');
-                        // A card added from the billing summary is the one the customer wants to pay with.
-                        const refresh = () => void qc.invalidateQueries({ queryKey: ['billing', 'payment-methods'] });
-                        if (choosing && paymentMethodId) void setDefaultPaymentMethod(paymentMethodId).then(refresh, refresh);
-                        else refresh();
-                    }}
-                />
-            )}
         </div>
     );
 }

@@ -1307,8 +1307,6 @@ export type BillingPlan = {
 
 export type Billing = {
     stripe_configured: boolean;
-    /** Stripe publishable key for the in-page card form (safe to expose). */
-    stripe_publishable_key: string | null;
     plan: { key: string; name: string };
     subscription: {
         status: 'trialing' | 'active' | 'past_due' | 'canceled' | 'expired';
@@ -1317,12 +1315,18 @@ export type Billing = {
         trial_ends_at: string | null;
         current_period_end: string | null;
         cancel_at: string | null;
+        /** Paid by card through Stripe: changed in the Stripe Customer Portal. Otherwise set up by 10X Digital. */
+        self_serve: boolean;
+        /** No grace period: a failed renewal pauses paid features until it is paid. */
+        paused: boolean;
+        /** A downgrade or Annual → Monthly switch scheduled for the end of the period. */
+        scheduled_change: { plan: { key: string; name: string }; interval: 'monthly' | 'yearly' | null; at: string | null } | null;
     } | null;
     details: { legal_name: string | null; country: string | null; tax_trn: string | null; billing_email: string | null };
     vat: { applies: boolean; percent: number; country: string };
     has_payment_history: boolean;
     plans: BillingPlan[];
-    /** Trial or paid Stripe plan: the workspace may switch itself to Free. */
+    /** A trial may switch itself to Free straight away. */
     can_switch_to_free?: boolean;
 };
 
@@ -1339,40 +1343,20 @@ export type BillingInvoice = {
     issued_at: string | null;
     paid_at: string | null;
     hosted_invoice_url: string | null;
-    invoice_pdf: string | null;
+    /** The PDF is fetched fresh from Stripe (billing/invoices/{id}/pdf). */
+    has_pdf: boolean;
 };
 
-export type PaymentMethod = { id: string; brand: string; last4: string; exp_month: number; exp_year: number; is_default: boolean };
+/** The card renewals are charged to, as Stripe reports it. */
+export type PaymentMethod = { brand: string; last4: string; exp_month: number; exp_year: number };
 
-/** Result of starting a payment: `requires_confirmation` means the browser must confirm it with Stripe (card check / 3-D Secure). */
-export type PaymentStep = {
-    status: 'active' | 'paid' | 'requires_confirmation';
-    updated?: boolean;
-    client_secret: string | null;
-    payment_method: string | null;
-};
+/** What a Stripe Customer Portal session is opened for. */
+export type BillingPortalFlow = 'update' | 'card' | 'cancel' | 'manage';
 
-/** What Stripe will invoice if the customer confirms this plan or interval change. */
-export type BillingPreview = {
-    plan: { key: string; name: string };
-    interval: 'monthly' | 'yearly';
-    price_minor: number;
-    currency: string;
-    change: boolean;
-    from: { plan: string | null; interval: string | null } | null;
-    lines: { description: string; amount_minor: number; proration: boolean }[];
-    unused_credit_minor: number;
-    subtotal_minor: number;
-    tax_minor: number;
-    tax_percent: number;
-    total_minor: number;
-    balance_applied_minor: number;
-    amount_due_minor: number;
-    credit_kept_minor: number;
-    /** What the wallet will hold after this change (earlier credit included). */
-    wallet_after_minor: number;
-    renews_at: string;
-    has_payment_method: boolean;
+/** Back from Stripe. Checkout: paid / processing / incomplete / rejected. Card screen: paid / nothing_due / failed. */
+export type BillingReturn = {
+    status: 'paid' | 'processing' | 'incomplete' | 'rejected' | 'nothing_due' | 'failed' | 'synced';
+    message: string | null;
 };
 
 export type BillingPayment = {

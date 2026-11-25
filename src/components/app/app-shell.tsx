@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 
-import { ChannelDisconnectedBanner, ImpersonationBanner, TrialBanner } from './banners';
+import { ChannelDisconnectedBanner, ImpersonationBanner, PaymentFailedBanner, TrialBanner } from './banners';
 import { NotificationBell } from './notification-bell';
 import { numberScope, UNRELEASED_ROUTES } from './nav';
 import { NumberSwitcher } from './number-switcher';
@@ -156,6 +156,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                     <UserMenu />
                                 </div>
                             </header>
+                            <PaymentFailedBanner />
                             <TrialBanner />
                             <ChannelDisconnectedBanner />
                             <main
