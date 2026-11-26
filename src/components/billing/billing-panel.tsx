@@ -191,8 +191,9 @@ function PlanCard({
     const custom = plan.price_monthly_minor === null;
     const selfServe = Boolean(sub?.self_serve);
     const sameInterval = sub?.interval === (yearly ? 'yearly' : 'monthly');
-    // A plan set up by 10X Digital (not a trial, not Free): changed by them.
-    const managed = !selfServe && Boolean(sub) && sub?.status !== 'trialing' && !billing.plans.find((p) => p.current)?.free;
+    // A plan set up by 10X Digital (manual billing, not a trial, not Free): changed by them. A Stripe
+    // subscription the current Stripe keys do not know (self_serve false) is not managed: Checkout replaces it.
+    const managed = sub?.provider === 'manual' && sub.status !== 'trialing' && !billing.plans.find((p) => p.current)?.free;
     const scheduledHere = sub?.scheduled_change?.plan.key === plan.key && sub.scheduled_change.interval === (yearly ? 'yearly' : 'monthly');
     const enabled = canManage && !busy && billing.stripe_configured;
 
@@ -476,7 +477,9 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
                                         ? `Billed ${sub?.interval === 'yearly' ? 'yearly' : 'monthly'}. Renews automatically on ${date(sub?.current_period_end)}.`
                                         : b.plans.find((p) => p.current)?.free
                                           ? 'Send and receive messages for free. Upgrade for chatbots, automations, reply alerts, campaigns and more seats.'
-                                          : 'Set up by 10X Digital. Contact us to change it.'}
+                                          : sub?.provider === 'stripe'
+                                            ? 'Stripe has no record of this subscription with the current payment settings. Upgrade to start a new one; it replaces this plan.'
+                                            : 'Set up by 10X Digital. Contact us to change it.'}
                             </p>
                             {sub?.scheduled_change && (
                                 <p className="flex items-center gap-1.5 text-[13px] font-medium">
