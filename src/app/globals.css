@@ -155,6 +155,55 @@
             animation-duration: 0.01ms !important;
         }
     }
+    /* The person's own "Reduce motion" switch (More): the same as the phone setting. */
+    .reduce-motion *,
+    .reduce-motion *::before,
+    .reduce-motion *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+    }
+    /* Phones and tablets: 16 px inputs so iPhone does not zoom in when one is tapped. */
+    @media (max-width: 1023px) and (pointer: coarse) {
+        input,
+        textarea,
+        select {
+            font-size: 16px !important;
+        }
+    }
+    /* The installed app does not bounce or reload when pulled past the top. */
+    @media (display-mode: standalone) {
+        body {
+            overscroll-behavior-y: none;
+        }
+    }
+}
+
+/* Mobile app (brief M1): a screen slides in from the right; root tabs fade. 320 ms, transform and opacity only. */
+@keyframes screen-in {
+    from {
+        transform: translateX(28%);
+        opacity: 0;
+    }
+    to {
+        transform: none;
+        opacity: 1;
+    }
+}
+@keyframes screen-fade {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+@media (max-width: 1023px) {
+    [data-screen='push'] {
+        animation: screen-in 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    [data-screen='root'] {
+        animation: screen-fade 200ms ease-out;
+    }
 }
 
 /* Inbox & CRM 3.5 motion: short and purposeful, nothing pulses. Reduced motion turns these off (above). */

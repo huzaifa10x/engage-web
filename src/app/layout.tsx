@@ -11,7 +11,9 @@ export const metadata: Metadata = {
     robots: { index: false, follow: false },
 };
 
-export const viewport: Viewport = { themeColor: '#0A0D08', width: 'device-width', initialScale: 1 };
+// viewport-fit=cover: the app draws under the notch and home bar (padded with safe-area insets);
+// resizes-content: the page shrinks above the on-screen keyboard, so the composer stays visible.
+export const viewport: Viewport = { themeColor: '#0A0D08', width: 'device-width', initialScale: 1, viewportFit: 'cover', interactiveWidget: 'resizes-content' };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
     return (

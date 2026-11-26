@@ -1,24 +1,29 @@
 'use client';
 
-import { MenuIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PinIcon, PinOffIcon, XIcon } from 'lucide-react';
+import { PanelLeftCloseIcon, PanelLeftOpenIcon, PinIcon, PinOffIcon } from 'lucide-react';
 import { notFound, usePathname } from 'next/navigation';
 import { createContext, useContext, useEffect, useState } from 'react';
 
 import { Logo } from '@/components/brand/logo';
 import { ContactSheetProvider } from '@/components/contacts/contact-sheet';
 import { useStored } from '@/hooks/use-stored';
+import { reduceMotion } from '@/lib/mobile';
 import { SHOW_UNRELEASED } from '@/lib/release';
 import { cn } from '@/lib/utils';
 
 import { Button } from '@/components/ui/button';
 
 import { ChannelDisconnectedBanner, ImpersonationBanner, PaymentFailedBanner, TrialBanner } from './banners';
+import { MobileTabBar, TABS } from './mobile-tab-bar';
+import { OfflineBar } from './offline-bar';
 import { NotificationBell } from './notification-bell';
 import { numberScope, UNRELEASED_ROUTES } from './nav';
 import { NumberSwitcher } from './number-switcher';
 import { Sidebar } from './sidebar';
 import { UserMenu } from './user-menu';
 import { WorkspaceSwitcher } from './workspace-switcher';
+
+const ROOT_PATHS = new Set<string>(TABS.map((t) => t.href));
 
 const ShellContext = createContext<{ setChatOpen: (open: boolean) => void }>({ setChatOpen: () => {} });
 
@@ -33,7 +38,10 @@ export function useChatOpen(open: boolean) {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-    const [mobileOpen, setMobileOpen] = useState(false);
+    // The person's "Reduce motion" switch (More) applies from the first screen.
+    useEffect(() => {
+        if (reduceMotion()) document.documentElement.classList.add('reduce-motion');
+    }, []);
     // Remembered per browser, so the extra room stays after a reload.
     const [collapsed, setCollapsed] = useStored<boolean>('engage.sidebar.collapsed', false);
     // The inbox is an app-within-the-app: full height, panes scroll independently.
@@ -51,6 +59,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const [chatOpen, setChatOpen] = useState(false);
     const [pinned, setPinned] = useStored<boolean>('engage.inbox.menu-pinned', false);
     const chatFold = fullBleed && chatOpen && !pinned;
+    // Phones: inside a chat the composer owns the bottom of the screen.
+    const tabBarHidden = fullBleed && chatOpen;
     const section = chatbotsPage ? 'chatbots' : chatFold ? 'inbox' : null;
     if (section === null && expandedIn !== null) setExpandedIn(null); // leaving the section: next visit folds again
     const rail = section !== null && expandedIn !== section;
@@ -88,29 +98,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                             )
                         )}
 
-                        {mobileOpen && (
-                            <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation">
-                                <div className="absolute inset-0 bg-slate-900/50" onClick={() => setMobileOpen(false)} />
-                                <div className="absolute inset-y-0 left-0 shadow-xl">
-                                    <Sidebar onNavigate={() => setMobileOpen(false)} />
-                                </div>
-                                <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="absolute top-3 left-[17rem] text-white hover:bg-white/10"
-                                    onClick={() => setMobileOpen(false)}
-                                    aria-label="Close menu"
-                                >
-                                    <XIcon />
-                                </Button>
-                            </div>
-                        )}
-
                         <div className="flex min-w-0 flex-1 flex-col">
-                            <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b bg-card/95 px-3 backdrop-blur sm:px-6">
-                                <Button size="icon-sm" variant="ghost" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
-                                    <MenuIcon />
-                                </Button>
+                            {/* On phones the top bar sits below the notch; the bottom tab bar (More) replaces the menu. */}
+                            <header className="sticky top-0 z-30 flex h-[calc(3.5rem+env(safe-area-inset-top))] items-center gap-2 border-b bg-card/95 px-3 pt-[env(safe-area-inset-top)] backdrop-blur sm:px-6">
                                 <Button
                                     size="icon-sm"
                                     variant="ghost"
@@ -159,13 +149,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                             <PaymentFailedBanner />
                             <TrialBanner />
                             <ChannelDisconnectedBanner />
+                            <OfflineBar />
+                            {/* Phones: tab roots fade in, inner screens slide in from the right (keyed by page). */}
                             <main
+                                key={pathname}
+                                data-screen={ROOT_PATHS.has(pathname) ? 'root' : 'push'}
                                 className={cn(
                                     fullBleed ? 'min-h-0 flex-1' : flush ? 'flex min-w-0 flex-1' : 'mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:py-8',
+                                    // Room for the phone's tab bar (and the home bar) under the content.
+                                    !tabBarHidden && 'max-lg:pb-[calc(4rem+env(safe-area-inset-bottom))]',
                                 )}
                             >
                                 {children}
                             </main>
+                            <MobileTabBar hidden={tabBarHidden} />
                         </div>
                     </div>
                 </div>
