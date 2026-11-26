@@ -23,8 +23,9 @@ function handleGlobalError(error: unknown) {
     // Outside React (query cache callback), and a hard navigation is intended: it discards every
     // cached query that belonged to the previous session / workspace.
     if (error.status === 401 && !isPublic) {
+        const why = error.code === 'app_signed_in_elsewhere' ? '&reason=app_moved' : '';
         // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-        window.location.assign(`/login?next=${encodeURIComponent(path + window.location.search)}`);
+        window.location.assign(`/login?next=${encodeURIComponent(path + window.location.search)}${why}`);
     } else if ((error.code === 'tenant_selection_required' || error.code === 'tenant_required') && path !== '/select-workspace') {
         // eslint-disable-next-line @next/next/no-location-assign-relative-destination
         window.location.assign('/select-workspace');

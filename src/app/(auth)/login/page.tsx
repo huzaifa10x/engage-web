@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { OtpForm } from '@/components/app/otp-form';
 import { TwoFactorChallenge } from '@/components/auth/two-factor';
+import { useMediaQuery } from '@/hooks/use-media-query';
 import { api, ApiError, errorMessage } from '@/lib/api';
 import { applyServerErrors } from '@/lib/form';
 import { safeNext } from '@/lib/navigation';
@@ -45,6 +46,30 @@ function LoginForm() {
 
     const [codeStep, setCodeStep] = useState<CodeStep | null>(null);
     const [twoFactor, setTwoFactor] = useState(false);
+    // "Email me a code instead": sign in with the emailed code alone, no password.
+    const [codeOnly, setCodeOnly] = useState(false);
+    const [sending, setSending] = useState(false);
+    // The installed app stays signed in for 90 days, so "remember this device" does not apply there.
+    const app = useMediaQuery('(display-mode: standalone)');
+    const moved = params.get('reason') === 'app_moved';
+
+    const emailCode = async () => {
+        const ok = await form.trigger('email');
+        if (!ok) return;
+        setFormError(null);
+        setSending(true);
+        try {
+            const res = await api<{ data: CodeStep }>('auth/login/code', {
+                method: 'POST',
+                body: { email: form.getValues('email'), remember_device: form.getValues('remember_device') },
+            });
+            setCodeStep(res.data);
+        } catch (e) {
+            setFormError(applyServerErrors(e, setError, ['email']));
+        } finally {
+            setSending(false);
+        }
+    };
 
     const enter = (me: Me) => {
         qc.setQueryData(keys.me, me);
@@ -83,7 +108,15 @@ function LoginForm() {
                         initialWait={codeStep.retry_in}
                         onSubmit={async (code) => {
                             try {
-                                enter((await api<{ data: Me }>('auth/login/verify', { method: 'POST', body: { code, remember_device: rememberDevice } })).data);
+                                const res = await api<{ data: Me | TwoFactorStep }>('auth/login/verify', {
+                                    method: 'POST',
+                                    body: { code, remember_device: rememberDevice },
+                                });
+                                // Signed in with a code alone and two-factor sign-in is on: the authenticator code comes next.
+                                if ('two_factor_required' in res.data) {
+                                    setCodeStep(null);
+                                    setTwoFactor(true);
+                                } else enter(res.data);
 
                                 return null;
                             } catch (e) {
@@ -104,21 +137,31 @@ function LoginForm() {
                         Use a different account
                     </button>
                 </p>
-                <div className="mt-6 flex items-center gap-2">
-                    <Controller
-                        control={control}
-                        name="remember_device"
-                        render={({ field }) => <Checkbox id="remember_device_code" checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />}
-                    />
-                    <Label htmlFor="remember_device_code" className="font-normal text-muted-foreground">
-                        Remember this device for 30 days
-                    </Label>
-                </div>
-                <p className="mt-2 text-[12.5px] text-muted-foreground">
-                    {rememberDevice
-                        ? 'After you verify, this browser signs in without a code for 30 days. Only tick this on your own device.'
-                        : 'After you verify, this browser stays signed in for 24 hours without asking for another code.'}
-                </p>
+                {app ? (
+                    <p className="mt-6 text-[12.5px] text-muted-foreground">
+                        This app stays signed in for 90 days on this phone. Signing in to the app on another phone signs it out here.
+                    </p>
+                ) : (
+                    <>
+                        <div className="mt-6 flex items-center gap-2">
+                            <Controller
+                                control={control}
+                                name="remember_device"
+                                render={({ field }) => (
+                                    <Checkbox id="remember_device_code" checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />
+                                )}
+                            />
+                            <Label htmlFor="remember_device_code" className="font-normal text-muted-foreground">
+                                Remember this device for 30 days
+                            </Label>
+                        </div>
+                        <p className="mt-2 text-[12.5px] text-muted-foreground">
+                            {rememberDevice
+                                ? 'After you verify, this browser signs in without a code for 30 days. Only tick this on your own device.'
+                                : 'After you verify, this browser stays signed in for 24 hours without asking for another code.'}
+                        </p>
+                    </>
+                )}
             </>
         );
     }
@@ -128,40 +171,69 @@ function LoginForm() {
             <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
             <p className="mt-1 text-sm text-muted-foreground">Welcome back. Sign in to your workspace.</p>
 
-            <form onSubmit={onSubmit} className="mt-8 grid gap-4" noValidate>
+            {moved && (
+                <p className="mt-6 rounded-lg border border-warn/30 bg-warn-bg px-3 py-2.5 text-[13px] text-warn">
+                    You signed in to the engageX app on another phone, so it was signed out here. Sign in again to use it on this phone.
+                </p>
+            )}
+            <form onSubmit={codeOnly ? (e) => (e.preventDefault(), void emailCode()) : onSubmit} className="mt-8 grid gap-4" noValidate>
                 <FormError message={formError} />
                 <Field label="Email" htmlFor="email" error={formState.errors.email?.message}>
                     <Input id="email" type="email" autoComplete="email" autoFocus aria-invalid={!!formState.errors.email} {...register('email')} />
                 </Field>
-                <Field label="Password" htmlFor="password" error={formState.errors.password?.message}>
-                    <Input id="password" type="password" autoComplete="current-password" aria-invalid={!!formState.errors.password} {...register('password')} />
-                </Field>
-                <div className="flex items-center gap-2">
-                    <Controller
-                        control={control}
-                        name="remember"
-                        render={({ field }) => <Checkbox id="remember" checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />}
-                    />
-                    <Label htmlFor="remember" className="font-normal text-muted-foreground">
-                        Keep me signed in
-                    </Label>
-                    <Link href="/forgot-password" className="ml-auto text-sm font-semibold text-brand-600 hover:underline">
-                        Forgot password?
-                    </Link>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Controller
-                        control={control}
-                        name="remember_device"
-                        render={({ field }) => <Checkbox id="remember_device" checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />}
-                    />
-                    <Label htmlFor="remember_device" className="font-normal text-muted-foreground">
-                        Remember this device for 30 days
-                    </Label>
-                </div>
-                <Button type="submit" disabled={formState.isSubmitting} className="mt-2">
-                    {formState.isSubmitting ? 'Signing in…' : 'Sign in'}
+                {!codeOnly && (
+                    <>
+                        <Field label="Password" htmlFor="password" error={formState.errors.password?.message}>
+                            <Input
+                                id="password"
+                                type="password"
+                                autoComplete="current-password"
+                                aria-invalid={!!formState.errors.password}
+                                {...register('password')}
+                            />
+                        </Field>
+                        <div className="flex items-center gap-2">
+                            <Controller
+                                control={control}
+                                name="remember"
+                                render={({ field }) => <Checkbox id="remember" checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />}
+                            />
+                            <Label htmlFor="remember" className="font-normal text-muted-foreground">
+                                Keep me signed in
+                            </Label>
+                            <Link href="/forgot-password" className="ml-auto text-sm font-semibold text-brand-600 hover:underline">
+                                Forgot password?
+                            </Link>
+                        </div>
+                        {!app && (
+                            <div className="flex items-center gap-2">
+                                <Controller
+                                    control={control}
+                                    name="remember_device"
+                                    render={({ field }) => (
+                                        <Checkbox id="remember_device" checked={field.value} onCheckedChange={(v) => field.onChange(v === true)} />
+                                    )}
+                                />
+                                <Label htmlFor="remember_device" className="font-normal text-muted-foreground">
+                                    Remember this device for 30 days
+                                </Label>
+                            </div>
+                        )}
+                    </>
+                )}
+                <Button type="submit" disabled={formState.isSubmitting || sending} className="mt-2">
+                    {codeOnly ? (sending ? 'Sending…' : 'Email me a code') : formState.isSubmitting ? 'Signing in…' : 'Sign in'}
                 </Button>
+                <button
+                    type="button"
+                    onClick={() => {
+                        setFormError(null);
+                        setCodeOnly(!codeOnly);
+                    }}
+                    className="justify-self-center text-sm font-semibold text-brand-600 hover:underline"
+                >
+                    {codeOnly ? 'Use my password instead' : 'Email me a code instead'}
+                </button>
             </form>
 
             <p className="mt-6 text-sm text-muted-foreground">

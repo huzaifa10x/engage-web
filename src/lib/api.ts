@@ -4,6 +4,8 @@
  * the XSRF-TOKEN cookie; a 419 refreshes the CSRF cookie once and retries.
  */
 
+import { appDeviceId } from './app-device';
+
 export type ApiErrorBody = {
     code: string;
     message: string;
@@ -83,6 +85,9 @@ export async function api<T>(path: string, options: Options = {}, retried = fals
     if (options.body !== undefined) headers['Content-Type'] = 'application/json';
     const xsrf = readCookie('XSRF-TOKEN');
     if (mutating && xsrf) headers['X-XSRF-TOKEN'] = xsrf;
+    // The installed app says which phone it is (90-day sign-in on one phone at a time).
+    const device = appDeviceId();
+    if (device) headers['X-Engage-Device'] = device;
 
     const response = await fetch(buildUrl(path, options.query), {
         method,
