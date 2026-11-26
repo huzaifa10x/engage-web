@@ -29,7 +29,7 @@ export function OfflineBar() {
     return (
         <div role="status" className="flex items-center gap-2 bg-sidebar px-4 py-2 text-[13px] text-white sm:px-6">
             <WifiOffIcon className="size-4" aria-hidden />
-            No connection · your typed replies are kept and you can send them when you’re back.
+            No connection · replies you send now go out as soon as you’re back online.
         </div>
     );
 }

@@ -384,8 +384,9 @@ export function Thread({
     const lastOut = [...messages].reverse().find((m) => m.direction === 'outbound');
     const pick = closureId ? (closures.data ?? []).find((r) => r.id === closureId) : null;
 
-    const send = async (payload: SendPayload) => {
-        await sendToConversation(conversationId, payload, newId());
+    // The composer passes one key per reply, so a retry (or a reply sent when the phone is back online) is stored once.
+    const send = async (payload: SendPayload, idempotencyKey: string = newId()) => {
+        await sendToConversation(conversationId, payload, idempotencyKey);
         pinnedToBottom.current = true;
         typingSince.current = null;
         setPending(null);

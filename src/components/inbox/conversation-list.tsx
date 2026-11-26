@@ -12,9 +12,12 @@ import {
     SearchIcon,
     TriangleAlertIcon,
 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { toast } from 'sonner';
 
+import { useSession } from '@/components/app/session';
 import { ResolvedList } from '@/components/inbox/resolved-list';
 import { WaitClock } from '@/components/inbox/wait-clock';
 import { OwnerAvatar, RingAvatar } from '@/components/inbox/window-ring';
@@ -22,8 +25,22 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { usePullToRefresh } from '@/hooks/use-pull-to-refresh';
+import { errorMessage } from '@/lib/api';
 import { dur, fmtDay, fmtListTime, fmtTime, windowLeft, windowTier } from '@/lib/inbox';
-import { type ConversationFilters, useConversationCounts, useConversations, useInboxTeams, useTags } from '@/lib/queries';
+import { HAPTIC, buzz, undoToast } from '@/lib/mobile';
+import { P } from '@/lib/permissions';
+import {
+    assignConversation,
+    type ConversationFilters,
+    keys,
+    resolveConversation,
+    undoResolve,
+    useConversationCounts,
+    useConversations,
+    useInboxTeams,
+    useTags,
+} from '@/lib/queries';
 import type { Conversation } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -230,7 +247,8 @@ export function ConversationList({
     const [panel, setPanel] = useState(false);
     const [search, setSearch] = useState('');
     const [q, setQ] = useState('');
-    const now = useNow();
+    // Wait badges move on every 15 seconds without reloading the list.
+    const now = useNow(15_000);
     const counts = useConversationCounts(phoneNumberId, polling ? 15_000 : false).data;
     const teams = useInboxTeams();
     const tags = useTags(panel);
@@ -274,7 +292,48 @@ export function ConversationList({
         polling ? 15_000 : false,
         !resolvedView,
     );
-    const rows = useMemo(() => list.data?.pages.flatMap((p) => p.data) ?? [], [list.data]);
+    // Pages are read by position while the order changes (a new message moves a chat up): a chat can
+    // come back on the next page, so each one is listed once.
+    const rows = useMemo(() => {
+        const seen = new Set<string>();
+
+        return (list.data?.pages.flatMap((p) => p.data) ?? []).filter((c) => !seen.has(c.id) && !!seen.add(c.id));
+    }, [list.data]);
+
+    // Phones: swipe right takes a chat, swipe left resolves it; both can be undone for 5 seconds.
+    const qc = useQueryClient();
+    const { can, membership } = useSession();
+    const reload = () => qc.invalidateQueries({ queryKey: keys.conversationsAll });
+    const swipeAction = async (done: string, act: () => Promise<unknown>, undo: () => Promise<unknown>) => {
+        try {
+            await act();
+            buzz(HAPTIC.threshold);
+            void reload();
+            undoToast(done, async () => {
+                await undo().catch((e) => toast.error(errorMessage(e)));
+                void reload();
+            });
+        } catch (e) {
+            buzz(HAPTIC.error);
+            toast.error(errorMessage(e));
+        }
+    };
+    const take = can(P.InboxAssign)
+        ? (c: Conversation) =>
+              swipeAction(
+                  `${c.contact?.display_name ?? 'Chat'} assigned to you`,
+                  () => assignConversation(c.id, membership.id),
+                  () => assignConversation(c.id, c.assigned_membership_id),
+              )
+        : undefined;
+    const resolve = can(P.InboxReply)
+        ? (c: Conversation) =>
+              swipeAction(
+                  `${c.contact?.display_name ?? 'Chat'} resolved`,
+                  () => resolveConversation(c.id, 'resolved'),
+                  () => undoResolve(c.id),
+              )
+        : undefined;
     useEffect(() => {
         if (!resolvedView) onOrder?.(rows.map((r) => r.id));
     }, [rows, resolvedView, onOrder]);
@@ -284,6 +343,9 @@ export function ConversationList({
     const ul = useRef<HTMLUListElement>(null);
     const tops = useRef(new Map<string, number>());
     const seenIn = useRef(new Map<string, string>());
+    const { pull, refreshing } = usePullToRefresh(ul, () =>
+        Promise.all([list.refetch(), qc.invalidateQueries({ queryKey: [...keys.conversationsAll, 'counts'] })]).then(() => toast.success('Updated')),
+    );
     const viewKey = `${view}|${q}|${sort}|${JSON.stringify(filters)}|${only}`;
     const lastKey = useRef(viewKey);
     useLayoutEffect(() => {
@@ -493,7 +555,12 @@ export function ConversationList({
             {resolvedView ? (
                 <ResolvedList phoneNumberId={phoneNumberId} selectedClosure={selectedClosure} onOpen={onSelect} polling={polling} now={now} />
             ) : (
-                <ul ref={ul} className="relative min-h-0 flex-1 overflow-y-auto" role="listbox" aria-label="Conversations">
+                <ul ref={ul} className="relative min-h-0 flex-1 overflow-y-auto overscroll-y-contain" role="listbox" aria-label="Conversations">
+                    {(pull > 0 || refreshing) && (
+                        <li aria-hidden className="flex items-end justify-center overflow-hidden text-[12px] text-muted-foreground" style={{ height: pull }}>
+                            <span className="pb-2">{refreshing ? 'Updating…' : pull >= 56 ? 'Release to update' : 'Pull to update'}</span>
+                        </li>
+                    )}
                     {q && (
                         <li className="border-b bg-muted/50 px-4 py-1.5 text-[11px] text-muted-foreground">
                             Searching all conversations, including resolved · {rows.length}
@@ -533,6 +600,8 @@ export function ConversationList({
                             selected={c.id === selectedId}
                             onSelect={() => onSelect(c.id)}
                             showNumber={!phoneNumberId}
+                            onTake={take && c.assigned_membership_id !== membership.id ? () => take(c) : undefined}
+                            onResolve={resolve && c.status !== 'closed' ? () => resolve(c) : undefined}
                         />
                     ))}
                     {list.hasNextPage && (
@@ -555,6 +624,8 @@ function QueueCard({
     selected,
     onSelect,
     showNumber,
+    onTake,
+    onResolve,
 }: {
     c: Conversation;
     now: number;
@@ -562,18 +633,74 @@ function QueueCard({
     selected: boolean;
     onSelect: () => void;
     showNumber: boolean;
+    onTake?: () => void;
+    onResolve?: () => void;
 }) {
     const name = c.contact?.display_name ?? 'WhatsApp user';
+    // Touch swipe: right reveals "Assign to me", left "Resolve"; past 80 px it vibrates and commits on release.
+    const [dx, setDx] = useState(0);
+    const swipe = useRef<{ x: number; y: number; axis: 'x' | 'y' | null; armed: boolean } | null>(null);
+    const moved = useRef(false);
+    const COMMIT = 80;
+    const onTouchStart = (e: React.TouchEvent) => {
+        const t = e.touches[0];
+        if (!t || (!onTake && !onResolve)) return;
+        swipe.current = { x: t.clientX, y: t.clientY, axis: null, armed: false };
+        moved.current = false;
+    };
+    const onTouchMove = (e: React.TouchEvent) => {
+        const s = swipe.current;
+        const t = e.touches[0];
+        if (!s || !t) return;
+        const mx = t.clientX - s.x;
+        const my = t.clientY - s.y;
+        s.axis ??= Math.abs(mx) > 8 || Math.abs(my) > 8 ? (Math.abs(mx) > Math.abs(my) ? 'x' : 'y') : null;
+        if (s.axis !== 'x') return;
+        moved.current = true;
+        const allowed = (mx > 0 && onTake) || (mx < 0 && onResolve) ? mx : 0;
+        const next = Math.max(-140, Math.min(140, allowed));
+        if (Math.abs(next) >= COMMIT && !s.armed) {
+            s.armed = true;
+            buzz(HAPTIC.threshold);
+        } else if (Math.abs(next) < COMMIT) s.armed = false;
+        setDx(next);
+    };
+    const onTouchEnd = () => {
+        const commit = dx;
+        swipe.current = null;
+        setDx(0);
+        if (commit >= COMMIT) onTake?.();
+        else if (commit <= -COMMIT) onResolve?.();
+    };
     const who = c.last_message_by && c.last_message_by.kind !== 'customer' ? (c.last_message_by.name ?? 'Auto') : null;
     const unread = c.unread_count > 0;
 
     return (
-        <li data-row={c.id} role="option" aria-selected={selected}>
+        <li data-row={c.id} role="option" aria-selected={selected} className="relative overflow-hidden">
+            {dx !== 0 && (
+                <span
+                    aria-hidden
+                    className={cn(
+                        'absolute inset-0 flex items-center px-5 text-[13px] font-semibold text-white',
+                        dx > 0 ? 'justify-start bg-info' : 'justify-end bg-good',
+                    )}
+                >
+                    {dx > 0 ? 'Assign to me' : 'Resolve'}
+                </span>
+            )}
             <button
                 type="button"
-                onClick={onSelect}
+                onClick={() => !moved.current && onSelect()}
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
+                onTouchCancel={() => {
+                    swipe.current = null;
+                    setDx(0);
+                }}
+                style={dx !== 0 ? { transform: `translateX(${dx}px)`, transition: 'none' } : undefined}
                 className={cn(
-                    'relative flex w-full gap-3 border-b border-line-2 bg-card px-4 py-3 text-left transition-colors duration-150 hover:bg-[#f5f5f4] motion-reduce:transition-none',
+                    'relative flex w-full gap-3 border-b border-line-2 bg-card px-4 py-3 text-left transition-[background-color,transform] duration-150 hover:bg-[#f5f5f4] motion-reduce:transition-none',
                     selected &&
                         'bg-brand-50 before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-r before:bg-brand-500 hover:bg-brand-50',
                 )}

@@ -21,12 +21,20 @@ export function liveClock(p: ReplyPromiseClock, fetchedAt: number, now: number):
 
 export type WaitTier = 'over' | 'soon' | 'ok' | 'paused';
 
-/** Red when over the limit, amber in its last quarter, grey otherwise; paused outside business hours. */
+/** Default reply-alert steps (Fast preset): amber after 5 minutes, red after 15. */
+export const AMBER_MINUTES = 5;
+export const RED_MINUTES = 15;
+
+/**
+ * Amber from the first reply-alert step (5 min on Fast), red from the second (15 min) or once over the
+ * promise; grey before that; paused outside business hours.
+ */
 export function waitTier(p: ReplyPromiseClock): WaitTier {
-    if (p.over) return 'over';
+    const [amber = AMBER_MINUTES, red = RED_MINUTES] = p.alert_minutes ?? [];
+    if (p.over || p.waited_seconds >= red * 60) return 'over';
     if (p.paused) return 'paused';
 
-    return p.left_seconds <= (p.limit_minutes * 60) / 4 ? 'soon' : 'ok';
+    return p.waited_seconds >= amber * 60 ? 'soon' : 'ok';
 }
 
 /** "Waiting 0:42 · Ahmed" */

@@ -6,6 +6,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 
 import { Logo } from '@/components/brand/logo';
 import { ContactSheetProvider } from '@/components/contacts/contact-sheet';
+import { useKeyboardInset } from '@/hooks/use-keyboard-inset';
 import { useStored } from '@/hooks/use-stored';
 import { reduceMotion } from '@/lib/mobile';
 import { SHOW_UNRELEASED } from '@/lib/release';
@@ -61,6 +62,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     const chatFold = fullBleed && chatOpen && !pinned;
     // Phones: inside a chat the composer owns the bottom of the screen.
     const tabBarHidden = fullBleed && chatOpen;
+    useKeyboardInset(tabBarHidden);
     const section = chatbotsPage ? 'chatbots' : chatFold ? 'inbox' : null;
     if (section === null && expandedIn !== null) setExpandedIn(null); // leaving the section: next visit folds again
     const rail = section !== null && expandedIn !== section;
@@ -158,6 +160,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                     fullBleed ? 'min-h-0 flex-1' : flush ? 'flex min-w-0 flex-1' : 'mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:py-8',
                                     // Room for the phone's tab bar (and the home bar) under the content.
                                     !tabBarHidden && 'max-lg:pb-[calc(4rem+env(safe-area-inset-bottom))]',
+                                    // In a chat: the composer sits on the keyboard (iPhone) or the home bar.
+                                    tabBarHidden && 'max-lg:pb-[max(var(--kb,0px),env(safe-area-inset-bottom))]',
                                 )}
                             >
                                 {children}

@@ -2,6 +2,7 @@
 
 import {
     AtSignIcon,
+    ClockIcon,
     FileTextIcon,
     Loader2Icon,
     LockIcon,
@@ -25,6 +26,9 @@ import { dur, templateBody, windowLeft } from '@/lib/inbox';
 import { type Assignee, type SendPayload, useCannedResponses, useTemplates } from '@/lib/queries';
 import type { Contact, Conversation, Message, MessageTemplate, UploadedMedia } from '@/lib/types';
 import { cn } from '@/lib/utils';
+
+import { useMediaQuery } from '@/hooks/use-media-query';
+import { newId } from '@/lib/id';
 
 import { EmojiPicker } from './emoji-picker';
 
@@ -117,7 +121,8 @@ export function Composer({
     disabledReason: string | null;
     replyTo: Message | null;
     onClearReply: () => void;
-    onSend: (payload: SendPayload) => Promise<void>;
+    /** The key identifies this reply: the same key is sent again on a retry, so it is stored only once. */
+    onSend: (payload: SendPayload, idempotencyKey: string) => Promise<void>;
     /** Notes; omitted when notes are not on the plan. */
     onNote?: (body: string, mentions: string[]) => Promise<void>;
     /** Checked right before a reply or template goes out: false holds it (the window closed, a teammate replied). */
@@ -152,6 +157,11 @@ export function Composer({
     const lastPointer = useRef<string>('mouse');
     // One send at a time: a second Enter or tap while the first is on its way does nothing.
     const inFlight = useRef(false);
+    // One key per reply: kept across retries (and a reply queued while offline), new once it went out or changed.
+    const replyKey = useRef<string | null>(null);
+    // No connection when Send was pressed: the reply goes out once the phone is back online.
+    const [queued, setQueued] = useState(false);
+    const touch = useMediaQuery('(pointer: coarse)');
     const typingAt = useRef(0);
     const canned = useCannedResponses(mode === 'reply');
 
@@ -318,8 +328,13 @@ export function Composer({
         }
         const body = reply.trim();
         if (!body && !attachment) return void toast.message('Write a message first');
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            setQueued(true);
+            return void toast.message('No connection', { description: 'Your reply is kept and sends as soon as you are back online.' });
+        }
         const go = async () => {
             setSending(true);
+            replyKey.current ??= newId();
             try {
                 await onSend(
                     attachment
@@ -331,7 +346,9 @@ export function Composer({
                               ...(voice ? { content: { voice: true } } : {}),
                           }
                         : { type: 'text', body, reply_to: replyTo?.wamid },
+                    replyKey.current,
                 );
+                replyKey.current = null;
                 setReply('');
                 setAttachment(null);
                 setVoice(false);
@@ -345,6 +362,21 @@ export function Composer({
         };
         if (await beforeSend('reply', go)) await go();
     };
+    // A changed reply is a new reply: it gets its own key (a failed one keeps its key for the retry).
+    useEffect(() => {
+        if (!inFlight.current) replyKey.current = null;
+    }, [reply, attachment]);
+    // Queued while offline: send once the connection is back (the key makes sure it is stored once).
+    useEffect(() => {
+        if (!queued) return;
+        const back = () => {
+            setQueued(false);
+            void send();
+        };
+        window.addEventListener('online', back);
+
+        return () => window.removeEventListener('online', back);
+    }, [queued]); // eslint-disable-line react-hooks/exhaustive-deps
     // A held voice note is sent as soon as it has been converted and uploaded.
     useEffect(() => {
         if (autoSend.current && attachment && voice) {
@@ -407,8 +439,9 @@ export function Composer({
                     onFullTemplate={onFullTemplate}
                     onSend={async (payload) => {
                         let ok = false;
+                        const key = newId(); // this template send, also if it is retried after a confirmation
                         const go = async () => {
-                            await onSend(payload);
+                            await onSend(payload, key);
                             ok = true;
                         };
                         if (await beforeSend('template', go)) await go();
@@ -460,6 +493,14 @@ export function Composer({
                                   ))}
                         </div>
                     )}
+                    {queued && mode === 'reply' && (
+                        <div className="flex items-center gap-2 border-b bg-warn-bg px-3 py-1.5 text-[12px] text-warn" role="status">
+                            <ClockIcon className="size-3.5" aria-hidden /> No connection · this reply sends as soon as you are back online
+                            <button type="button" className="ml-auto font-semibold underline-offset-2 hover:underline" onClick={() => setQueued(false)}>
+                                Cancel
+                            </button>
+                        </div>
+                    )}
                     {replyTo && mode === 'reply' && (
                         <div className="flex items-center gap-2 border-b px-3 py-1.5 text-[12px]">
                             <span className="min-w-0 flex-1 truncate border-l-2 border-brand-500 pl-2">
@@ -504,7 +545,9 @@ export function Composer({
                                   ? 'Free-form replies are locked until the customer messages again'
                                   : attachment
                                     ? 'Add a caption…'
-                                    : 'Type a WhatsApp reply… ( / for quick replies, Enter to send, Shift+Enter for new line )'
+                                    : touch
+                                      ? 'Write a reply…'
+                                      : 'Type a WhatsApp reply… ( / for quick replies, Enter to send, Shift+Enter for new line )'
                         }
                         onPaste={(e) => {
                             const file = [...e.clipboardData.files][0];

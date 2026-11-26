@@ -732,7 +732,16 @@ export type Conversation = {
     created_at: string | null;
 };
 
-export type ReplyPromiseClock = { limit_minutes: number; waited_seconds: number; left_seconds: number; due_at: string; over: boolean; paused: boolean };
+export type ReplyPromiseClock = {
+    limit_minutes: number;
+    waited_seconds: number;
+    left_seconds: number;
+    due_at: string;
+    over: boolean;
+    paused: boolean;
+    /** The reply-alert steps in business minutes (Fast: 5 / 15 / 30): amber from the first, red from the second. */
+    alert_minutes?: number[];
+};
 
 export type ReplyPromiseSettings = {
     enabled: boolean;
