@@ -43,7 +43,7 @@ const PREFS = ['me', 'email-preferences'] as const;
 const DEVICES = ['me', 'remembered-devices'] as const;
 
 /**
- * Settings › Email notifications: the person's own choice of emails. All on by default; sign-in and
+ * Settings › Email notifications: the person's own choice of emails. All on by default except reply-time alerts (opt-in); sign-in and
  * security emails (sign-in codes included) are always on. Each switch saves at once.
  */
 export function EmailNotificationsCard() {
@@ -74,7 +74,8 @@ export function EmailNotificationsCard() {
             <CardHeader>
                 <CardTitle>Email notifications</CardTitle>
                 <CardDescription>
-                    Choose which emails you receive. Everything is on until you switch it off. The bell in the app still shows inbox alerts either way.
+                    Choose which emails you receive. Everything is on except reply-time alerts, which you can switch on here. The bell in the app still shows
+                    inbox alerts either way.
                 </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-5" data-testid="email-preferences">
