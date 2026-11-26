@@ -743,8 +743,19 @@ export type ReplyPromiseClock = {
     alert_minutes?: number[];
 };
 
+export type ReplyPromisePreset = 'fast' | 'standard' | 'relaxed' | 'custom';
+
 export type ReplyPromiseSettings = {
     enabled: boolean;
+    /** Fast 5 / 15 / 30 (default), Standard 15 / 30 / 45, Relaxed 30 / 60 / 90, or Custom (the ladder below). */
+    preset: ReplyPromisePreset;
+    /** At the second step: a holding message to the customer naming the agent, once per wait. */
+    hold: boolean;
+    hold_message: string;
+    /** At the second step: move the chat to the next free agent (teams of 3 or more). */
+    reassign: boolean;
+    /** The agent's name in the first reply of each conversation. */
+    intro: boolean;
     /** True while business hours are off: the promise counts open time only, so it can't be on. */
     needs_business_hours?: boolean;
     limit_minutes: number;
