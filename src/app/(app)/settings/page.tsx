@@ -12,6 +12,7 @@ import { useSession } from '@/components/app/session';
 import { TwoFactorCard } from '@/components/auth/two-factor';
 import { EmailNotificationsCard, RememberedDevicesCard } from '@/components/settings/account-cards';
 import { BusinessHoursCard, CannedResponsesCard, InboxRulesCard } from '@/components/settings/inbox-cards';
+import { PhoneNotificationsCard } from '@/components/settings/phone-notifications-card';
 import { ReplyPromiseCard } from '@/components/settings/reply-promise-card';
 import {
     AlertDialog,
@@ -432,7 +433,10 @@ export default function SettingsPage() {
                     <RememberedDevicesCard />
                 </div>
             ) : tab === 'notifications' ? (
-                <EmailNotificationsCard />
+                <div className="grid gap-4">
+                    <PhoneNotificationsCard />
+                    <EmailNotificationsCard />
+                </div>
             ) : !tenant.data ? (
                 <Skeleton className="h-96" />
             ) : tab === 'workspace' || tab === 'company' ? (

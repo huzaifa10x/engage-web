@@ -2,7 +2,7 @@
 
 import { PanelLeftCloseIcon, PanelLeftOpenIcon, PinIcon, PinOffIcon } from 'lucide-react';
 import { notFound, usePathname } from 'next/navigation';
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, Suspense, useContext, useEffect, useState } from 'react';
 
 import { Logo } from '@/components/brand/logo';
 import { ContactSheetProvider } from '@/components/contacts/contact-sheet';
@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { ChannelDisconnectedBanner, ImpersonationBanner, PaymentFailedBanner, TrialBanner } from './banners';
 import { MobileTabBar, TABS } from './mobile-tab-bar';
 import { OfflineBar } from './offline-bar';
+import { PushBridge } from './push-bridge';
 import { NotificationBell } from './notification-bell';
 import { numberScope, UNRELEASED_ROUTES } from './nav';
 import { NumberSwitcher } from './number-switcher';
@@ -168,6 +169,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                 {children}
                             </main>
                             <MobileTabBar hidden={tabBarHidden} />
+                            <Suspense>
+                                <PushBridge />
+                            </Suspense>
                         </div>
                     </div>
                 </div>

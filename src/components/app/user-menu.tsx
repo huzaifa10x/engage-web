@@ -14,6 +14,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { api } from '@/lib/api';
+import { disablePush } from '@/lib/push';
 import { P } from '@/lib/permissions';
 
 import { useSession } from './session';
@@ -24,6 +25,8 @@ export function UserMenu() {
     const qc = useQueryClient();
 
     const logout = async () => {
+        // This phone stops getting notifications for this account.
+        if (!me.impersonation) await disablePush();
         await api(me.impersonation ? 'auth/impersonation' : 'auth/logout', { method: me.impersonation ? 'DELETE' : 'POST' }).catch(() => undefined);
         qc.clear();
         router.replace('/login');

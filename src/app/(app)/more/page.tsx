@@ -13,6 +13,7 @@ import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { useStored } from '@/hooks/use-stored';
 import { api } from '@/lib/api';
+import { disablePush } from '@/lib/push';
 import { setReduceMotion } from '@/lib/mobile';
 
 const ROOTS = new Set<string>(TABS.map((t) => t.href));
@@ -62,6 +63,8 @@ export default function MorePage() {
     })).filter((s) => s.items.length > 0);
 
     const signOut = async () => {
+        // This phone stops getting notifications for this account.
+        if (!me.impersonation) await disablePush();
         await api(me.impersonation ? 'auth/impersonation' : 'auth/logout', { method: me.impersonation ? 'DELETE' : 'POST' }).catch(() => undefined);
         qc.clear();
         router.replace('/login');

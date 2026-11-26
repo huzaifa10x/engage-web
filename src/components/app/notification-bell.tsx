@@ -7,6 +7,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { useMediaQuery } from '@/hooks/use-media-query';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
     type DesktopState,
@@ -49,6 +50,7 @@ function Bell() {
     const [sound, setSound] = useState(true);
     const feed = useNotifications();
     const { refetch } = feed;
+    const phone = useMediaQuery('(max-width: 1023px)');
 
     // What has already been announced. Seeded by the first load, so opening the app is silent.
     const seen = useRef<Set<string> | null>(null);
@@ -181,6 +183,11 @@ function Bell() {
         <DropdownMenu
             open={open}
             onOpenChange={(next) => {
+                // Phones: the full Notifications screen instead of a small panel.
+                if (next && phone) {
+                    router.push('/notifications');
+                    return;
+                }
                 if (next) {
                     // Read the browser's current answer each time the panel opens (it can change outside the page).
                     setDesktop(desktopState());
@@ -248,7 +255,7 @@ function Bell() {
                             <p className="border-t px-3 pt-2.5 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase first:border-t-0">
                                 Activity
                             </p>
-                            {data?.items.map((n) => (
+                            {data?.items.slice(0, 30).map((n) => (
                                 <button
                                     key={n.id}
                                     onClick={() => close(n.url, n.read ? undefined : n.id)}

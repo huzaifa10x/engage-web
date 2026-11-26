@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { P } from '@/lib/permissions';
 import { HAPTIC, buzz } from '@/lib/mobile';
 import { useConversationCounts } from '@/lib/queries';
+import { setBadge } from '@/lib/push';
 import { cn } from '@/lib/utils';
 
 import { useSession } from './session';
@@ -38,6 +39,10 @@ export function MobileTabBar({ hidden }: { hidden: boolean }) {
     const counts = useConversationCounts(null, 30_000);
     const waiting = counts.data?.needs_reply ?? 0;
     const active = tabFor(pathname);
+    // The number on the app icon follows the customers waiting (pushes update it while closed).
+    useEffect(() => {
+        if (counts.data) setBadge(waiting);
+    }, [counts.data, waiting]);
     // Tells the layout (CSS --tabbar) whether the bar takes room at the bottom of the screen.
     useEffect(() => {
         document.documentElement.classList.toggle('tabbar-hidden', hidden);

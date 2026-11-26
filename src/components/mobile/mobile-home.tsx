@@ -14,6 +14,7 @@ import { P } from '@/lib/permissions';
 import { useBilling, useConversations, useDashboardSummary } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 
+import { NotifyCard } from './notify-card';
 import { Kpi, Meter, mins, Row, RowCard, RowText, SectionLabel, Spark, WaitPill } from './kit';
 
 function greeting(): string {
@@ -88,6 +89,8 @@ export function MobileHome() {
                             </Link>
                         )}
                     </div>
+
+                    <NotifyCard />
 
                     {/* The week in four tiles. */}
                     <div className="mt-2.5 grid grid-cols-2 gap-2.5">
