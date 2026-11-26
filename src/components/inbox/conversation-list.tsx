@@ -300,7 +300,8 @@ export function ConversationList({
         return (list.data?.pages.flatMap((p) => p.data) ?? []).filter((c) => !seen.has(c.id) && !!seen.add(c.id));
     }, [list.data]);
 
-    // Phones: swipe right takes a chat, swipe left resolves it; both can be undone for 5 seconds.
+    // Phones: swipe right takes an unassigned chat, swipe left resolves it; both can be undone for 5
+    // seconds. A teammate's chat is never taken by a swipe: it is reassigned from inside the chat.
     const qc = useQueryClient();
     const { can, membership } = useSession();
     const reload = () => qc.invalidateQueries({ queryKey: keys.conversationsAll });
@@ -316,14 +317,16 @@ export function ConversationList({
         } catch (e) {
             buzz(HAPTIC.error);
             toast.error(errorMessage(e));
+            void reload(); // e.g. a teammate took it first: show who has it now
         }
     };
     const take = can(P.InboxAssign)
         ? (c: Conversation) =>
               swipeAction(
                   `${c.contact?.display_name ?? 'Chat'} assigned to you`,
-                  () => assignConversation(c.id, membership.id),
-                  () => assignConversation(c.id, c.assigned_membership_id),
+                  () => assignConversation(c.id, membership.id, c.assigned_membership_id),
+                  // Undo only while it is still yours.
+                  () => assignConversation(c.id, c.assigned_membership_id, membership.id),
               )
         : undefined;
     const resolve = can(P.InboxReply)
@@ -600,7 +603,7 @@ export function ConversationList({
                             selected={c.id === selectedId}
                             onSelect={() => onSelect(c.id)}
                             showNumber={!phoneNumberId}
-                            onTake={take && c.assigned_membership_id !== membership.id ? () => take(c) : undefined}
+                            onTake={take && c.assigned_membership_id === null ? () => take(c) : undefined}
                             onResolve={resolve && c.status !== 'closed' ? () => resolve(c) : undefined}
                         />
                     ))}

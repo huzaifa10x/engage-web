@@ -1121,8 +1121,15 @@ export const saveCrmStageMap = (stage_map: Record<string, { hubspot: string }>) 
 export const setCurrentEnquiry = (contactId: string, enquiryId: string) =>
     api(`contacts/${contactId}/current-enquiry`, { method: 'POST', body: { enquiry_id: enquiryId } });
 
-export const assignConversation = (id: string, membershipId: string | null) =>
-    api<Data<Conversation>>(`conversations/${id}`, { method: 'PATCH', body: { assigned_membership_id: membershipId } }).then((r) => r.data);
+/**
+ * Shared inbox: `expected` is who the person saw as the assignee. If a teammate changed it meanwhile
+ * the server refuses (409) rather than silently taking the chat from them.
+ */
+export const assignConversation = (id: string, membershipId: string | null, expected?: string | null) =>
+    api<Data<Conversation>>(`conversations/${id}`, {
+        method: 'PATCH',
+        body: { assigned_membership_id: membershipId, ...(expected !== undefined ? { expected_assigned_membership_id: expected } : {}) },
+    }).then((r) => r.data);
 
 export const reopenConversation = (id: string) =>
     api<Data<Conversation>>(`conversations/${id}`, { method: 'PATCH', body: { status: 'open' } }).then((r) => r.data);

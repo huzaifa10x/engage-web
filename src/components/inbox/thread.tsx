@@ -452,11 +452,12 @@ export function Thread({
     const assign = async (id: string | null, label: string) => {
         if (id === c.assigned_membership_id) return;
         try {
-            await assignConversation(c.id, id);
+            await assignConversation(c.id, id, c.assigned_membership_id);
             refresh();
             toast.success(id ? `Assigned to ${label}` : 'Moved to Unassigned');
         } catch (e) {
             toast.error(errorMessage(e));
+            refresh(); // a teammate changed it first: show who has it now
         }
     };
     const bot = async (action: 'take' | 'back') => {
