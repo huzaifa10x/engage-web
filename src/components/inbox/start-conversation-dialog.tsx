@@ -11,12 +11,14 @@ import { RingAvatar } from '@/components/inbox/window-ring';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { errorMessage } from '@/lib/api';
 import { newId } from '@/lib/id';
 import { dur, engageId, fmtDay, fmtPhone, PERMISSION_VIA, validName, windowLeft, withCountryCode } from '@/lib/inbox';
 import { keys, startConversation, type StartPayload, useContact, usePhoneNumbers, useStartSearch, useTemplates } from '@/lib/queries';
 import type { LifecycleKey, MessageTemplate, PermissionVia, StartCandidate } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { phoneDisplay } from '@/lib/whatsapp';
 
 const LIFE_TONE: Record<LifecycleKey, string> = {
     subscriber: 'border-border bg-muted text-ink-2',
@@ -70,7 +72,28 @@ export function StartConversationDialog({
     const router = useRouter();
     const now = useNow();
     const numbers = (usePhoneNumbers().data ?? []).filter((n) => n.status === 'connected');
-    const from = numbers.find((n) => n.id === defaultNumberId) ?? numbers[0] ?? null;
+    // The number it is sent from: the inbox's number unless another is chosen here (each number has its own templates).
+    const [chosenId, setChosenId] = useState<string | null>(null);
+    const from = numbers.find((n) => n.id === (chosenId ?? defaultNumberId)) ?? numbers[0] ?? null;
+    const fromPicker =
+        numbers.length > 1 && from ? (
+            <label className="flex items-center gap-2 text-[13px]">
+                <span className="shrink-0 font-semibold">Send from</span>
+                <Select value={from.id} onValueChange={(v) => setChosenId(v)}>
+                    <SelectTrigger className="h-9 min-w-0 flex-1" aria-label="Send from number">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {numbers.map((n) => (
+                            <SelectItem key={n.id} value={n.id}>
+                                {n.verified_name ?? phoneDisplay(n.display_phone_number)}
+                                <span className="ml-1.5 font-mono text-[11.5px] text-muted-foreground">{phoneDisplay(n.display_phone_number)}</span>
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </label>
+        ) : null;
     const [step, setStep] = useState<Step>({ kind: 'search' });
     const [typed, setTyped] = useState('');
     const [q, setQ] = useState('');
@@ -136,6 +159,7 @@ export function StartConversationDialog({
                                 Search first so you don’t create a duplicate. If the customer already has a chat, you’ll continue it.
                             </DialogDescription>
                         </DialogHeader>
+                        {fromPicker}
                         <label className="relative mt-1 block">
                             <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-[15px] -translate-y-1/2 text-faint" />
                             <input
@@ -262,16 +286,19 @@ export function StartConversationDialog({
                     </>
                 ) : (
                     from && (
-                        <StartForm
-                            key={step.pre?.id ?? 'new'}
-                            pre={step.pre}
-                            seed={step.seed}
-                            numberId={from.id}
-                            wabaAccountId={from.waba_account_id ?? null}
-                            onBack={() => setStep({ kind: 'search' })}
-                            onCancel={() => close(false)}
-                            onDone={(id) => (close(false), onStarted(id))}
-                        />
+                        <>
+                            {fromPicker}
+                            <StartForm
+                                key={`${step.pre?.id ?? 'new'}:${from.id}`}
+                                pre={step.pre}
+                                seed={step.seed}
+                                numberId={from.id}
+                                wabaAccountId={from.waba_account_id ?? null}
+                                onBack={() => setStep({ kind: 'search' })}
+                                onCancel={() => close(false)}
+                                onDone={(id) => (close(false), onStarted(id))}
+                            />
+                        </>
                     )
                 )}
                 {step.kind === 'form' && !from && <p className="text-[13px] text-bad">Connect a WhatsApp number first.</p>}

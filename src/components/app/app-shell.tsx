@@ -139,7 +139,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                 <WorkspaceSwitcher />
                                 {/* Switches the inbox, filters Dashboard, Campaigns, Leads, Orders and Insights; hidden elsewhere (CN-02). */}
                                 {numberScope(pathname) && (
-                                    <div className="hidden sm:block">
+                                    // Phones too: the number decides which chats show and which number new chats are sent from.
+                                    <div className="min-w-0">
                                         <NumberSwitcher scope={numberScope(pathname)!} />
                                     </div>
                                 )}
@@ -159,7 +160,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                 className={cn(
                                     fullBleed ? 'min-h-0 flex-1' : flush ? 'flex min-w-0 flex-1' : 'mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:py-8',
                                     // Room for the phone's tab bar (and the home bar) under the content.
-                                    !tabBarHidden && 'max-lg:pb-[calc(4rem+env(safe-area-inset-bottom))]',
+                                    !tabBarHidden && 'pb-[var(--tabbar)]',
                                     // In a chat: the composer sits on the keyboard (iPhone) or the home bar.
                                     tabBarHidden && 'max-lg:pb-[max(var(--kb,0px),env(safe-area-inset-bottom))]',
                                 )}

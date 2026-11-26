@@ -178,6 +178,19 @@
     }
 }
 
+/*
+ * Height of the phone's bottom tab bar (with the home bar). Everything pinned to the bottom of the screen
+ * (page padding, panels, toasts) sits above it; 0 on computers and while the bar is hidden (inside a chat).
+ */
+:root {
+    --tabbar: 0px;
+}
+@media (max-width: 1023px) {
+    :root:not(.tabbar-hidden) {
+        --tabbar: calc(4rem + env(safe-area-inset-bottom));
+    }
+}
+
 /* Mobile app (brief M1): a screen slides in from the right; root tabs fade. 320 ms, transform and opacity only. */
 @keyframes screen-in {
     from {

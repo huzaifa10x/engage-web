@@ -34,7 +34,7 @@ export function InboxHealthPanel({ phoneNumberId, onClose }: { phoneNumberId: st
     return (
         <section
             aria-label="Inbox health"
-            className="fixed right-4 bottom-4 z-40 max-h-[calc(100dvh-120px)] w-[340px] max-w-[calc(100vw-32px)] origin-bottom-right animate-in overflow-y-auto rounded-xl border bg-card px-4 py-3.5 shadow-raised zoom-in-95 fade-in motion-reduce:animate-none"
+            className="fixed right-4 bottom-[calc(1rem+var(--tabbar))] z-50 max-h-[calc(100dvh-120px-var(--tabbar))] w-[340px] max-w-[calc(100vw-32px)] origin-bottom-right animate-in overflow-y-auto rounded-xl border bg-card px-4 py-3.5 shadow-raised zoom-in-95 fade-in motion-reduce:animate-none"
         >
             <div className="flex items-center justify-between">
                 <b className="text-[15px] font-semibold">Inbox health</b>

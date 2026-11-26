@@ -24,6 +24,9 @@ import {
     SunIcon,
     TriangleAlertIcon,
     UploadCloudIcon,
+    PhoneIcon,
+    UserIcon,
+    CheckCircle2Icon,
 } from 'lucide-react';
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -75,6 +78,7 @@ import { ContextPanel, eventText, isDealEvent } from './context-panel';
 import { Chip, useNow, WindowChip } from './conversation-list';
 import { EditContactDialog, FlagDialog, NewDealDialog, SnoozeDialog, StepDialog } from './inbox-dialogs';
 import { MessageBubble } from './message-bubble';
+import { MobileWaitBar } from './mobile-wait-bar';
 import { reopenChat, resolveChat, ResolveMenu } from './resolve-menu';
 import { TemplateDialog } from './template-dialog';
 import { WaitClock } from './wait-clock';
@@ -695,16 +699,33 @@ export function Thread({
                         <Button variant="ghost" size="icon-sm" className="md:hidden" onClick={onBack} aria-label="Back to list">
                             <ArrowLeftIcon />
                         </Button>
-                        <RingAvatar name={name} expiresAt={c.window.expires_at} hasChat={tier !== 'none'} now={now} className="size-10 text-[13px]" />
-                        <div className="min-w-0 flex-1">
+                        <RingAvatar
+                            name={name}
+                            expiresAt={c.window.expires_at}
+                            hasChat={tier !== 'none'}
+                            now={now}
+                            className="size-10 text-[13px] max-md:size-9"
+                        />
+                        {/* Phones (prototype): tap the name for the customer's details. */}
+                        <button type="button" className="min-w-0 flex-1 text-left md:pointer-events-none" onClick={() => setCtxOpen(true)} tabIndex={-1}>
                             <b className="block truncate text-[15px] font-semibold" dir="auto">
                                 {name}
                             </b>
-                            <small className="block truncate text-[12px] text-muted-foreground">
+                            <small className="block truncate text-[12px] text-muted-foreground max-md:hidden">
                                 {contact?.phone ? fmtPhone(contact.phone) : contact?.username ? `@${contact.username}` : 'Number hidden'} · WhatsApp
                                 {contact?.company ? ` · ${contact.company}` : ''}
                             </small>
-                        </div>
+                            <small className="block truncate text-[12px] text-muted-foreground md:hidden">
+                                {owner ? `Assigned to ${owner.split(' ')[0]}` : 'Unassigned'} · tap for details
+                            </small>
+                        </button>
+                        {contact?.phone && (
+                            <Button asChild variant="ghost" size="icon-sm" className="md:hidden">
+                                <a href={`tel:${contact.phone}`} aria-label={`Call ${name}`}>
+                                    <PhoneIcon />
+                                </a>
+                            </Button>
+                        )}
                         <div className="flex shrink-0 items-center gap-1.5">
                             {can(P.InboxAssign) && (
                                 <DropdownMenu>
@@ -773,10 +794,15 @@ export function Thread({
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                 ))}
-                            {can(P.InboxReply) && !numberGone && <ResolveMenu conversation={c} onResolved={onResolved} />}
+                            {can(P.InboxReply) && !numberGone && (
+                                <span className="max-md:hidden">
+                                    <ResolveMenu conversation={c} onResolved={onResolved} />
+                                </span>
+                            )}
                             <Button
                                 variant={ctxOpen ? 'secondary' : 'ghost'}
                                 size="icon-sm"
+                                className="max-md:hidden"
                                 onClick={() => setCtxOpen(!ctxOpen)}
                                 title="Customer context"
                                 aria-label="Customer context"
@@ -791,6 +817,29 @@ export function Thread({
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-60">
+                                    {/* Phones: the header's buttons live here (prototype chat menu). */}
+                                    {can(P.InboxReply) && !numberGone && (
+                                        <DropdownMenuItem
+                                            className="md:hidden"
+                                            onSelect={() => void (c.status === 'closed' ? reopenChat(qc, c) : resolveChat(qc, c, 'resolved', onResolved))}
+                                        >
+                                            <CheckCircle2Icon /> {c.status === 'closed' ? 'Reopen chat' : 'Resolve chat'}
+                                        </DropdownMenuItem>
+                                    )}
+                                    {can(P.InboxAssign) && c.assigned_membership_id !== membership.id && (
+                                        <DropdownMenuItem className="md:hidden" onSelect={() => void assign(membership.id, me.user.name)}>
+                                            <UserIcon /> Assign to me
+                                        </DropdownMenuItem>
+                                    )}
+                                    {can(P.InboxReply) && feature('snooze').enabled && !numberGone && c.status !== 'closed' && !c.snoozed_until && (
+                                        <DropdownMenuItem className="md:hidden" onSelect={() => setDialog('snooze')}>
+                                            <MoonIcon /> Snooze…
+                                        </DropdownMenuItem>
+                                    )}
+                                    <DropdownMenuItem className="md:hidden" onSelect={() => setCtxOpen(true)}>
+                                        <PanelRightIcon /> Customer details
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator className="md:hidden" />
                                     {contact && can(P.ContactsUpdate) && (
                                         <DropdownMenuItem onSelect={() => setDialog('edit')}>
                                             <PencilIcon /> Edit contact
@@ -864,7 +913,8 @@ export function Thread({
                             </DropdownMenu>
                         </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-4 pb-2.5 text-[12px]">
+                    <MobileWaitBar conversation={c} fetchedAt={conversation.dataUpdatedAt} now={now} name={name} numberGone={numberGone} />
+                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 px-4 pb-2.5 text-[12px] max-md:hidden">
                         {numberGone ? <Chip tone="bad">Number disconnected</Chip> : <WindowChip conversation={c} now={now} big />}
                         <Chip tone={state === 'needs_reply' ? 'bad' : state === 'waiting' ? 'info' : 'grey'}>
                             {REPLY_LABEL[state]}

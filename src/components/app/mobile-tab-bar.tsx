@@ -3,6 +3,7 @@
 import { ContactIcon, EllipsisIcon, HomeIcon, InboxIcon, UsersIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect } from 'react';
 
 import { P } from '@/lib/permissions';
 import { HAPTIC, buzz } from '@/lib/mobile';
@@ -37,6 +38,12 @@ export function MobileTabBar({ hidden }: { hidden: boolean }) {
     const counts = useConversationCounts(null, 30_000);
     const waiting = counts.data?.needs_reply ?? 0;
     const active = tabFor(pathname);
+    // Tells the layout (CSS --tabbar) whether the bar takes room at the bottom of the screen.
+    useEffect(() => {
+        document.documentElement.classList.toggle('tabbar-hidden', hidden);
+
+        return () => document.documentElement.classList.remove('tabbar-hidden');
+    }, [hidden]);
 
     return (
         <nav

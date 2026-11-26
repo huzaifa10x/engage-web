@@ -82,7 +82,7 @@ export function NumberSwitcher({ scope = 'switch' }: { scope?: NumberScope }) {
         <DropdownMenu>
             <DropdownMenuTrigger className="flex items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 text-[13px] font-medium shadow-xs hover:bg-muted">
                 <PhoneIcon className="size-3.5 text-muted-foreground" />
-                <span className="max-w-[160px] truncate">
+                <span className="max-w-[110px] truncate sm:max-w-[160px]">
                     {current ? (current.verified_name ?? phoneDisplay(current.display_phone_number)) : 'All numbers'}
                 </span>
                 {scope === 'filter' && current && <span className="rounded bg-primary/15 px-1 text-[10.5px] font-semibold text-primary">Filter</span>}

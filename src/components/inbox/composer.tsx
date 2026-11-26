@@ -404,7 +404,7 @@ export function Composer({
 
     const MODES = [
         { id: 'reply' as const, label: 'Reply', Icon: SendIcon },
-        { id: 'note' as const, label: 'Internal note', Icon: PencilIcon },
+        { id: 'note' as const, label: 'Internal note', short: 'Note', Icon: PencilIcon },
         { id: 'template' as const, label: 'Template', Icon: FileTextIcon },
     ].filter((m) => m.id !== 'note' || onNote);
 
@@ -412,7 +412,7 @@ export function Composer({
         <div className="border-t bg-[#f0f2f5] px-4 pt-2 pb-3">
             {banners}
             <div role="radiogroup" aria-label="Message type" className="mb-2 flex flex-wrap items-center gap-1">
-                {MODES.map(({ id: m, label, Icon }) => (
+                {MODES.map(({ id: m, label, Icon, ...rest }) => (
                     <button
                         key={m}
                         type="button"
@@ -424,12 +424,38 @@ export function Composer({
                             mode === m ? 'bg-white text-foreground' : 'text-ink-2 hover:bg-white/60',
                         )}
                     >
-                        <Icon className="size-[15px]" /> {label}
+                        <Icon className="size-[15px]" />
+                        {'short' in rest && rest.short ? (
+                            <>
+                                <span className="max-md:hidden">{label}</span>
+                                <span className="md:hidden">{rest.short}</span>
+                            </>
+                        ) : (
+                            label
+                        )}
                         {m === 'reply' && !open && <LockIcon className="size-3 text-muted-foreground" aria-label="locked" />}
                     </button>
                 ))}
-                <span className="ml-auto text-[11px] text-muted-foreground">{hint}</span>
+                <span className="ml-auto text-[11px] text-muted-foreground max-md:hidden">{hint}</span>
             </div>
+            {/* Phones (prototype): quick replies as chips above the box; tap one to put it in the reply. */}
+            {mode === 'reply' && !locked && (canned.data ?? []).length > 0 && (
+                <div className="-mx-4 mb-2 flex [scrollbar-width:none] gap-1.5 overflow-x-auto px-4 md:hidden">
+                    {(canned.data ?? []).slice(0, 10).map((r) => (
+                        <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => {
+                                setReply(r.body);
+                                requestAnimationFrame(() => input.current?.focus());
+                            }}
+                            className="h-8 max-w-56 shrink-0 truncate rounded-full border bg-card px-3 text-[13px] font-medium active:scale-[.97]"
+                        >
+                            {r.body}
+                        </button>
+                    ))}
+                </div>
+            )}
 
             {mode === 'template' ? (
                 <TemplatePane
@@ -451,6 +477,14 @@ export function Composer({
                 />
             ) : (
                 <div className={cn('relative rounded-lg border bg-card', mode === 'note' && 'border-[#e0b43a]/60 bg-[#fff3c4]', locked && 'opacity-70')}>
+                    {/* Phones: recording in progress (hold the round button; slide left to cancel). */}
+                    {recording !== null && (
+                        <div className="flex items-center gap-2 border-b px-3 py-2 text-[13px] md:hidden" aria-live="polite">
+                            <span className="size-2 animate-pulse rounded-full bg-bad motion-reduce:animate-none" />
+                            <b className="font-semibold text-bad tabular-nums">{clock(recording)}</b>
+                            <span className="text-muted-foreground">Release to send · slide left to cancel</span>
+                        </div>
+                    )}
                     {pop && popCount > 0 && (
                         <div
                             className="absolute bottom-[calc(100%+6px)] left-2 z-10 w-[min(380px,90%)] rounded-lg border bg-popover p-1 shadow-raised"
@@ -530,77 +564,127 @@ export function Composer({
                             </button>
                         </div>
                     )}
-                    <textarea
-                        ref={input}
-                        value={text}
-                        disabled={locked}
-                        dir="auto"
-                        rows={2}
-                        maxLength={mode === 'note' ? 2000 : 4096}
-                        aria-label={mode === 'note' ? 'Internal note' : 'Message'}
-                        placeholder={
-                            mode === 'note'
-                                ? 'Write a private note… use @ to mention a teammate'
-                                : locked
-                                  ? 'Free-form replies are locked until the customer messages again'
-                                  : attachment
-                                    ? 'Add a caption…'
-                                    : touch
-                                      ? 'Write a reply…'
-                                      : 'Type a WhatsApp reply… ( / for quick replies, Enter to send, Shift+Enter for new line )'
-                        }
-                        onPaste={(e) => {
-                            const file = [...e.clipboardData.files][0];
-                            if (file && mode === 'reply') {
-                                e.preventDefault();
-                                void pick(file);
+                    <div className="max-md:flex max-md:items-end">
+                        {/* Phones: attach on the left of the box, one round send / mic button on the right (prototype). */}
+                        {mode === 'reply' && (
+                            <button
+                                type="button"
+                                aria-label="Attach a file"
+                                disabled={locked || uploading}
+                                onClick={() => fileRef.current?.click()}
+                                className="inline-flex size-11 shrink-0 items-center justify-center text-muted-foreground disabled:opacity-50 md:hidden"
+                            >
+                                {uploading ? <Loader2Icon className="size-5 animate-spin" /> : <PaperclipIcon className="size-5" />}
+                            </button>
+                        )}
+                        <textarea
+                            ref={input}
+                            value={text}
+                            disabled={locked}
+                            dir="auto"
+                            rows={2}
+                            maxLength={mode === 'note' ? 2000 : 4096}
+                            aria-label={mode === 'note' ? 'Internal note' : 'Message'}
+                            placeholder={
+                                mode === 'note'
+                                    ? 'Write a private note… use @ to mention a teammate'
+                                    : locked
+                                      ? 'Free-form replies are locked until the customer messages again'
+                                      : attachment
+                                        ? 'Add a caption…'
+                                        : touch
+                                          ? 'Write a reply…'
+                                          : 'Type a WhatsApp reply… ( / for quick replies, Enter to send, Shift+Enter for new line )'
                             }
-                        }}
-                        onChange={(e) => {
-                            const v = e.target.value;
-                            setText(v);
-                            if (mode === 'reply' && /^\/\w*$/.test(v)) setPop({ kind: 'qr', q: v.slice(1), hl: 0 });
-                            else if (mode === 'note' && /@(\w*)$/.test(v)) setPop({ kind: 'mention', q: v.match(/@(\w*)$/)?.[1] ?? '', hl: 0 });
-                            else setPop(null);
-                            if (mode === 'reply' && Date.now() - typingAt.current > 4000) {
-                                typingAt.current = Date.now();
-                                onTyping(true);
-                            }
-                        }}
-                        onBlur={() => {
-                            if (mode === 'reply') onTyping(false);
-                        }}
-                        onKeyDown={(e) => {
-                            if (pop && popCount > 0) {
-                                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                            onPaste={(e) => {
+                                const file = [...e.clipboardData.files][0];
+                                if (file && mode === 'reply') {
                                     e.preventDefault();
-                                    setPop({ ...pop, hl: (pop.hl + (e.key === 'ArrowDown' ? 1 : popCount - 1)) % popCount });
-
-                                    return;
+                                    void pick(file);
                                 }
-                                if (e.key === 'Enter' || e.key === 'Tab') {
+                            }}
+                            onChange={(e) => {
+                                const v = e.target.value;
+                                setText(v);
+                                if (mode === 'reply' && /^\/\w*$/.test(v)) setPop({ kind: 'qr', q: v.slice(1), hl: 0 });
+                                else if (mode === 'note' && /@(\w*)$/.test(v)) setPop({ kind: 'mention', q: v.match(/@(\w*)$/)?.[1] ?? '', hl: 0 });
+                                else setPop(null);
+                                if (mode === 'reply' && Date.now() - typingAt.current > 4000) {
+                                    typingAt.current = Date.now();
+                                    onTyping(true);
+                                }
+                            }}
+                            onBlur={() => {
+                                if (mode === 'reply') onTyping(false);
+                            }}
+                            onKeyDown={(e) => {
+                                if (pop && popCount > 0) {
+                                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                                        e.preventDefault();
+                                        setPop({ ...pop, hl: (pop.hl + (e.key === 'ArrowDown' ? 1 : popCount - 1)) % popCount });
+
+                                        return;
+                                    }
+                                    if (e.key === 'Enter' || e.key === 'Tab') {
+                                        e.preventDefault();
+                                        choosePop(pop.hl);
+
+                                        return;
+                                    }
+                                    if (e.key === 'Escape') {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setPop(null);
+
+                                        return;
+                                    }
+                                }
+                                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                                     e.preventDefault();
-                                    choosePop(pop.hl);
-
-                                    return;
+                                    void send();
                                 }
-                                if (e.key === 'Escape') {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    setPop(null);
+                            }}
+                            className="block field-sizing-content max-h-40 min-h-14 w-full resize-none bg-transparent px-3 pt-2.5 text-[14px] leading-5 text-[#111b21] outline-none placeholder:text-faint disabled:cursor-not-allowed max-md:max-h-32 max-md:min-h-11 max-md:min-w-0 max-md:flex-1 max-md:py-2.5 max-md:pl-0"
+                        />
+                        {(() => {
+                            const mic = mode === 'reply' && !locked && !text.trim() && !attachment;
 
-                                    return;
-                                }
-                            }
-                            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                                e.preventDefault();
-                                void send();
-                            }
-                        }}
-                        className="block field-sizing-content max-h-40 min-h-14 w-full resize-none bg-transparent px-3 pt-2.5 text-[14px] leading-5 text-[#111b21] outline-none placeholder:text-faint disabled:cursor-not-allowed"
-                    />
-                    <div className="flex items-center gap-1 px-2 pb-2">
-                        <input ref={fileRef} type="file" accept={ACCEPT} className="hidden" onChange={(e) => void pick(e.target.files?.[0])} />
+                            return (
+                                <button
+                                    type="button"
+                                    aria-label={mic ? 'Hold to record a voice message' : mode === 'note' ? 'Save note' : 'Send'}
+                                    disabled={(locked && !mic) || sending || uploading}
+                                    className={cn(
+                                        'm-1 inline-flex size-10 shrink-0 touch-none items-center justify-center rounded-full text-primary-foreground select-none active:scale-[.95] disabled:opacity-50 md:hidden',
+                                        mode === 'note' ? 'bg-[#e0b43a]' : recording !== null ? 'bg-bad text-white' : 'bg-primary',
+                                    )}
+                                    {...(mic
+                                        ? {
+                                              onPointerDown: holdStart,
+                                              onPointerMove: holdMove,
+                                              onPointerUp: holdEnd,
+                                              onPointerCancel: () => hold.current && stopRecording(true),
+                                              onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+                                              onClick: () => lastPointer.current === 'mouse' && void startRecording(),
+                                          }
+                                        : { onClick: () => void send() })}
+                                >
+                                    {sending ? (
+                                        <Loader2Icon className="size-5 animate-spin" />
+                                    ) : mic ? (
+                                        <MicIcon className="size-5" />
+                                    ) : mode === 'note' ? (
+                                        <PencilIcon className="size-5" />
+                                    ) : (
+                                        <SendIcon className="size-5" />
+                                    )}
+                                </button>
+                            );
+                        })()}
+                    </div>
+                    <input ref={fileRef} type="file" accept={ACCEPT} className="hidden" onChange={(e) => void pick(e.target.files?.[0])} />
+                    {/* Computers: the toolbar under the box (phones use the round button above). */}
+                    <div className="flex items-center gap-1 px-2 pb-2 max-md:hidden">
                         {mode === 'reply' ? (
                             <>
                                 <Button
