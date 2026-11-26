@@ -1,28 +1,70 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0A0D08">
-<title>engageX · Offline</title>
-<style>
-  :root { color-scheme: light; }
-  body { margin: 0; min-height: 100dvh; display: grid; place-items: center; background: #f6f7f3; color: #0d1109;
-    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom); }
-  main { max-width: 320px; text-align: center; }
-  img { width: 64px; height: 64px; border-radius: 16px; }
-  h1 { font-size: 22px; margin: 18px 0 6px; letter-spacing: -.3px; }
-  p { color: #5c6459; margin: 0 0 22px; }
-  button { height: 48px; padding: 0 24px; border: 0; border-radius: 12px; background: #a9e324; color: #101a02; font: inherit; font-weight: 700; }
-</style>
-</head>
-<body>
-<main>
-  <img src="/brand/icon-192.png" alt="">
-  <h1>You’re offline</h1>
-  <p>engageX needs a connection to load your chats. This page reloads by itself when you’re back online.</p>
-  <button type="button" onclick="location.reload()">Try again</button>
-</main>
-<script>addEventListener('online', function () { location.reload(); });</script>
-</body>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <meta name="theme-color" content="#0A0D08" />
+        <title>engageX · Offline</title>
+        <style>
+            :root {
+                color-scheme: light;
+            }
+            body {
+                margin: 0;
+                min-height: 100dvh;
+                display: grid;
+                place-items: center;
+                background: #f6f7f3;
+                color: #0d1109;
+                font:
+                    15px/1.5 -apple-system,
+                    BlinkMacSystemFont,
+                    'Segoe UI',
+                    Roboto,
+                    sans-serif;
+                padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom);
+            }
+            main {
+                max-width: 320px;
+                text-align: center;
+            }
+            img {
+                width: 64px;
+                height: 64px;
+                border-radius: 16px;
+            }
+            h1 {
+                font-size: 22px;
+                margin: 18px 0 6px;
+                letter-spacing: -0.3px;
+            }
+            p {
+                color: #5c6459;
+                margin: 0 0 22px;
+            }
+            button {
+                height: 48px;
+                padding: 0 24px;
+                border: 0;
+                border-radius: 12px;
+                background: #a9e324;
+                color: #101a02;
+                font: inherit;
+                font-weight: 700;
+            }
+        </style>
+    </head>
+    <body>
+        <main>
+            <img src="/brand/icon-192.png" alt="" />
+            <h1>You’re offline</h1>
+            <p>engageX needs a connection to load your chats. This page reloads by itself when you’re back online.</p>
+            <button type="button" onclick="location.reload()">Try again</button>
+        </main>
+        <script>
+            addEventListener('online', function () {
+                location.reload();
+            });
+        </script>
+    </body>
 </html>
