@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { CalendarClockIcon, CheckIcon, CreditCardIcon, DownloadIcon, ExternalLinkIcon, WalletIcon } from 'lucide-react';
+import { CalendarClockIcon, CheckIcon, CreditCardIcon, DownloadIcon, ExternalLinkIcon } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
@@ -315,7 +315,6 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
     const sub = b.subscription;
     const selfServe = Boolean(sub?.self_serve);
     const upcoming = payments.data?.upcoming ?? null;
-    const wallet = payments.data?.wallet ?? null;
     const openInvoices = (invoices.data ?? []).filter((i) => i.status === 'open');
     const interval = yearly ? 'yearly' : 'monthly';
 
@@ -501,11 +500,6 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
                                 <Button size="sm" onClick={() => setTab('plans')}>
                                     {selfServe ? 'Change plan' : 'Upgrade'}
                                 </Button>
-                                {canManage && selfServe && (sub?.cancel_at || sub?.scheduled_change) && (
-                                    <Button size="sm" variant="outline" disabled={busy !== null} onClick={() => portal('manage')}>
-                                        {busy === 'portal-manage-' ? 'Opening Stripe…' : sub?.cancel_at ? 'Keep my plan' : 'Undo change'}
-                                    </Button>
-                                )}
                             </div>
                         </Card>
                         <Card className="gap-2 p-5">
@@ -513,11 +507,7 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
                             <p className="text-xl font-semibold tabular-nums">{upcoming ? money(upcoming.amount_due_minor, upcoming.currency) : '—'}</p>
                             <p className="text-[13px] text-muted-foreground">
                                 {upcoming?.date
-                                    ? `On ${date(upcoming.date)}${b.vat.applies ? `, including ${b.vat.percent}% VAT` : ''}.${
-                                          upcoming.credit_applied_minor > 0
-                                              ? ` ${money(upcoming.total_minor, upcoming.currency)} less ${money(upcoming.credit_applied_minor, upcoming.currency)} credit.`
-                                              : ''
-                                      }`
+                                    ? `On ${date(upcoming.date)}${b.vat.applies ? `, including ${b.vat.percent}% VAT` : ''}.`
                                     : selfServe && sub?.cancel_at
                                       ? 'Nothing more will be charged.'
                                       : 'Nothing scheduled.'}
@@ -553,43 +543,6 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
                             )}
                         </Card>
                     </div>
-                    {wallet && (wallet.balance_minor > 0 || wallet.entries.length > 0) && (
-                        <Card className="gap-3 p-5">
-                            <div className="flex flex-wrap items-start gap-3">
-                                <div className="inline-flex size-10 items-center justify-center rounded-lg bg-good-bg text-good">
-                                    <WalletIcon className="size-5" />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <p className="text-[12.5px] text-muted-foreground">Wallet credit</p>
-                                    <p className="text-xl font-semibold tabular-nums">{money(wallet.balance_minor, wallet.currency)}</p>
-                                    <p className="mt-1 max-w-2xl text-[13px] text-muted-foreground">
-                                        {wallet.balance_minor > 0
-                                            ? 'This is the remaining balance from a plan you changed. It is applied automatically to your next renewal payments, or if you upgrade.'
-                                            : 'Your wallet credit has been used up on your payments.'}
-                                        {wallet.balance_minor > 0 && upcoming && upcoming.credit_applied_minor > 0 && upcoming.date
-                                            ? ` ${money(upcoming.credit_applied_minor, upcoming.currency)} of it will be used on ${date(upcoming.date)}.`
-                                            : ''}
-                                    </p>
-                                </div>
-                            </div>
-                            {wallet.entries.length > 0 && (
-                                <div className="grid gap-1.5 border-t pt-3 text-[13px]">
-                                    {wallet.entries.slice(0, 5).map((e) => (
-                                        <div key={e.id} className="flex items-baseline justify-between gap-3">
-                                            <span className="text-muted-foreground">
-                                                {e.created_at ? date(e.created_at) : ''} ·{' '}
-                                                {e.kind === 'added' ? 'Added from a plan change' : 'Used on a payment'}
-                                            </span>
-                                            <span className={`tabular-nums ${e.kind === 'added' ? 'text-good' : ''}`}>
-                                                {e.kind === 'added' ? '+ ' : '− '}
-                                                {money(Math.abs(e.amount_minor), e.currency)}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </Card>
-                    )}
                     {openInvoices.length > 0 && (
                         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-warn/30 bg-warn-bg px-4 py-3 text-sm">
                             {openInvoices.length === 1 ? 'One invoice is' : `${openInvoices.length} invoices are`} waiting for payment.
