@@ -1,7 +1,7 @@
 'use client';
 
-import { useQueryClient } from '@tanstack/react-query';
-import { MessageCircleIcon } from 'lucide-react';
+import { type QueryClient, useQueryClient } from '@tanstack/react-query';
+import { CheckIcon, MessageCircleIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -10,10 +10,12 @@ import { useSession } from '@/components/app/session';
 import { burst } from '@/components/inbox/context-panel';
 import { useNow } from '@/components/inbox/conversation-list';
 import { OwnerAvatar } from '@/components/inbox/window-ring';
+import { BottomSheet } from '@/components/mobile/kit';
 import { Avatar } from '@/components/ui/avatar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { api, ApiError, errorMessage } from '@/lib/api';
+import { api, errorMessage } from '@/lib/api';
 import { aedK, fmtDay, fmtMoney } from '@/lib/inbox';
+import { buzz } from '@/lib/mobile';
 import { P } from '@/lib/permissions';
 import { useEnquiryBoard } from '@/lib/queries';
 import type { CrmStage, Enquiry, EnquiryBoard } from '@/lib/types';
@@ -60,6 +62,21 @@ export function BStat({ value, label, warn = false }: { value: string; label: st
  * Contacts & CRM › Deals pipeline (3.5): one card per deal across all contacts. Drag a card to change
  * stage; Won or Lost asks about open tasks. Same deal records as the inbox Sales card.
  */
+/** Moves a deal to an open stage (Won and Lost go through the closing dialog first). */
+async function moveEnquiry(qc: QueryClient, e: Enquiry, stage: CrmStage): Promise<void> {
+    try {
+        await api(`contacts/${e.contact_id}/stage`, {
+            method: 'POST',
+            body: { stage_id: stage.id, version: e.stage_version, enquiry_id: e.id, via: 'leads' },
+        });
+        toast.success(`Moved to ${stage.name} · saved to the inbox Sales card`);
+    } catch (err) {
+        toast.error(errorMessage(err));
+    } finally {
+        invalidateEnquiry(qc, e.contact_id);
+    }
+}
+
 export function EnquiryBoardView() {
     const { can } = useSession();
     const qc = useQueryClient();
@@ -90,18 +107,7 @@ export function EnquiryBoardView() {
         setOver(null);
         if (!e || e.stage?.id === stage.id) return;
         if ((stage.group ?? 'open') !== 'open') return setClosing({ enquiry: e, stage });
-        try {
-            await api(`contacts/${e.contact_id}/stage`, {
-                method: 'POST',
-                body: { stage_id: stage.id, version: e.stage_version, enquiry_id: e.id, via: 'leads' },
-            });
-            toast.success(`Moved to ${stage.name} · saved to the inbox Sales card`);
-        } catch (err) {
-            toast.error(errorMessage(err));
-            if (!(err instanceof ApiError) || err.status !== 409) return;
-        } finally {
-            invalidateEnquiry(qc, e.contact_id);
-        }
+        await moveEnquiry(qc, e, stage);
     };
 
     return (
@@ -261,6 +267,152 @@ export function EnquiryBoardView() {
                     }}
                 />
             )}
+        </>
+    );
+}
+
+/**
+ * The pipeline on a phone (mobile prototype): one stage per screen, swiped sideways with dots below.
+ * Tap a deal for the contact; long-press (or the stage chip) for "Move to". Moving needs the same
+ * permission as dragging on a computer.
+ */
+export function MobileBoard() {
+    const { can } = useSession();
+    const qc = useQueryClient();
+    const now = useNow();
+    const openContact = useOpenContact();
+    const board = useEnquiryBoard({});
+    const [index, setIndex] = useState(0);
+    const [moving, setMoving] = useState<Enquiry | null>(null);
+    const [lifted, setLifted] = useState<string | null>(null);
+    const [closing, setClosing] = useState<{ enquiry: Enquiry; stage: CrmStage } | null>(null);
+    const scroller = useRef<HTMLDivElement>(null);
+    const press = useRef<{ timer: ReturnType<typeof setTimeout> | null; fired: boolean }>({ timer: null, fired: false });
+    const canMove = can(P.StagesChange) || can(P.ContactsUpdate);
+    const stages = board.data?.stages ?? [];
+
+    const startPress = (d: Enquiry) => {
+        press.current.fired = false;
+        if (!canMove) return;
+        press.current.timer = setTimeout(() => {
+            press.current.fired = true;
+            buzz(20);
+            setLifted(d.id);
+            setTimeout(() => {
+                setLifted(null);
+                setMoving(d);
+            }, 250);
+        }, 450);
+    };
+    const cancelPress = () => {
+        if (press.current.timer) clearTimeout(press.current.timer);
+        press.current.timer = null;
+    };
+    const choose = async (stage: CrmStage) => {
+        const e = moving;
+        setMoving(null);
+        if (!e || e.stage?.id === stage.id) return;
+        if ((stage.group ?? 'open') !== 'open') return setClosing({ enquiry: e, stage });
+        await moveEnquiry(qc, e, stage);
+    };
+
+    if (!board.data) return <Skeleton className="mt-3 h-80 rounded-2xl" />;
+    if (stages.length === 0) return <p className="mt-3 rounded-2xl border border-dashed p-6 text-center text-[13px] text-muted-foreground">No stages yet.</p>;
+
+    return (
+        <>
+            <div
+                ref={scroller}
+                onScroll={(e) => {
+                    const el = e.currentTarget;
+                    const w = (el.firstElementChild as HTMLElement | null)?.offsetWidth ?? 1;
+                    setIndex(Math.round(el.scrollLeft / (w + 10)));
+                }}
+                className="-mx-4 mt-3 flex snap-x snap-mandatory [scrollbar-width:none] gap-2.5 overflow-x-auto px-4 pb-3 [&::-webkit-scrollbar]:hidden"
+                role="region"
+                aria-label="Deals pipeline"
+            >
+                {stages.map((stage) => (
+                    <section key={stage.id} aria-label={stage.name} className="flex-[0_0_86%] snap-center rounded-2xl bg-muted p-2.5">
+                        <h3 className="mx-1 mt-0.5 mb-2.5 flex items-center gap-1.5 text-[14px] font-bold">
+                            <span className="min-w-0 flex-1 truncate">{stage.name}</span>
+                            <span className="inline-flex h-[22px] items-center rounded-full bg-card px-2 text-[11.5px] font-bold text-ink-2 tabular-nums">
+                                {stage.count}
+                            </span>
+                        </h3>
+                        {stage.enquiries.map((d) => {
+                            const step = d.next_step;
+                            const late = !!step && new Date(step.due_at).getTime() < now;
+
+                            return (
+                                <button
+                                    key={d.id}
+                                    type="button"
+                                    onTouchStart={() => startPress(d)}
+                                    onTouchMove={cancelPress}
+                                    onTouchEnd={cancelPress}
+                                    onContextMenu={(e) => e.preventDefault()}
+                                    onClick={() => {
+                                        if (press.current.fired) return;
+                                        openContact(d.contact_id);
+                                    }}
+                                    className={cn(
+                                        'mb-2 block w-full rounded-xl bg-card p-3 text-left shadow-[0_1px_2px_rgba(13,17,9,.08)] transition-[transform,box-shadow] duration-200 select-none [-webkit-touch-callout:none] active:scale-[.98] motion-reduce:transition-none',
+                                        lifted === d.id && 'scale-[1.02] -rotate-[1.5deg] shadow-[0_14px_30px_rgba(13,17,9,.2)]',
+                                    )}
+                                >
+                                    <b className="block truncate text-[14.5px] font-semibold" dir="auto">
+                                        {d.contact?.name ?? d.title ?? `Enquiry ${d.number}`}
+                                    </b>
+                                    <small className="block truncate text-[12.5px] text-muted-foreground" dir="auto">
+                                        {[d.title, d.value ? fmtMoney(d.value, d.value_period) : null].filter(Boolean).join(' · ') || '—'}
+                                    </small>
+                                    <span className="mt-2 flex items-center justify-between gap-2 text-[12px] text-muted-foreground">
+                                        <span className="truncate">{d.owner?.name.split(' ')[0] ?? 'Unassigned'}</span>
+                                        {step ? (
+                                            <span className={cn('shrink-0', late && 'font-semibold text-bad')}>
+                                                {late ? '⚠' : '→'} {step.type_label} {fmtDay(step.due_at, now)}
+                                            </span>
+                                        ) : d.group === 'open' ? (
+                                            <span className="shrink-0 font-semibold text-warn">No next step</span>
+                                        ) : null}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                        {stage.enquiries.length === 0 && <p className="px-1 py-2.5 text-[13px] text-muted-foreground">No deals</p>}
+                    </section>
+                ))}
+            </div>
+            <div className="flex justify-center gap-1.5 pb-2" aria-hidden>
+                {stages.map((s, i) => (
+                    <i
+                        key={s.id}
+                        className={cn('h-1.5 rounded-full transition-all duration-200', i === index ? 'w-[18px] bg-foreground' : 'w-1.5 bg-faint/50')}
+                    />
+                ))}
+            </div>
+            <p className="text-center text-[13px] text-muted-foreground">Swipe between stages{canMove ? ' · long-press a deal to move it' : ''}</p>
+            {board.data.truncated && <p className="mt-1 text-center text-[12px] text-muted-foreground">Showing the 200 most recently active deals.</p>}
+
+            <BottomSheet
+                open={moving !== null}
+                onOpenChange={(o) => !o && setMoving(null)}
+                title={`Move ${(moving?.contact?.name ?? 'deal').split(' ')[0]} to`}
+            >
+                {stages.map((s) => (
+                    <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => void choose(s)}
+                        className="flex min-h-13 w-full items-center gap-3 px-4 text-left text-[15px] font-semibold active:bg-muted"
+                    >
+                        <span className="min-w-0 flex-1 truncate">{s.name}</span>
+                        {moving && (moving.stage?.id ?? stages[0]?.id) === s.id && <CheckIcon className="size-5 text-good" aria-hidden />}
+                    </button>
+                ))}
+            </BottomSheet>
+            {closing && <CloseEnquiryDialog enquiry={closing.enquiry} stage={closing.stage} open onOpenChange={(o) => !o && setClosing(null)} />}
         </>
     );
 }

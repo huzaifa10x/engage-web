@@ -244,6 +244,8 @@ export type ConversationFilters = {
     assigned?: 'me' | 'unassigned' | 'others' | 'any';
     /** Only conversations given to this inbox team. */
     team?: string;
+    /** One teammate's chats (Agents › a person). */
+    assignee?: string;
     /** Chatbot views: handled by the bot now, waiting for the customer, or how the bot ended. */
     view?: 'bot' | 'waiting' | 'abandoned' | 'completed' | 'handed_off';
     unread?: boolean;
@@ -338,7 +340,7 @@ export type ContactFilters = {
     owner?: string;
     duplicates?: 1;
     /** 3.5: newest activity first (page numbers as the cursor). */
-    sort?: 'activity';
+    sort?: 'activity' | 'name';
 };
 
 export type ContactCounts = { matching: number; total: number; sources: { value: string; count: number }[] };

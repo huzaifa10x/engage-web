@@ -17,6 +17,8 @@ import Link from 'next/link';
 import { PageHeader } from '@/components/app/page-header';
 import { useSelectedNumber } from '@/components/app/number-switcher';
 import { useSession } from '@/components/app/session';
+import { usePhone } from '@/components/mobile/kit';
+import { MobileHome } from '@/components/mobile/mobile-home';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -93,7 +95,12 @@ function WorkCard({
     );
 }
 
+/** Phones get the prototype's Home; computers the full dashboard. */
 export default function DashboardPage() {
+    return usePhone() ? <MobileHome /> : <DesktopDashboard />;
+}
+
+function DesktopDashboard() {
     const { me, membership, can } = useSession();
     const numbers = usePhoneNumbers();
     // The number chosen in the top bar filters the figures and the number list (CN-02).

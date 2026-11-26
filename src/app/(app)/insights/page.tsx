@@ -1,10 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSelectedNumber } from '@/components/app/number-switcher';
 import { useSession } from '@/components/app/session';
+import { usePhone } from '@/components/mobile/kit';
+import { MobileAgents } from '@/components/mobile/mobile-agents';
 import { FollowUpResultsCard } from '@/components/analytics/follow-up-results';
 import { FeedbackResultsCard } from '@/components/analytics/feedback-results';
 import { ResolutionReviewCard } from '@/components/analytics/resolution-review';
@@ -79,7 +82,25 @@ function DailyChart({ daily }: { daily: AnalyticsOverview['daily'] }) {
     );
 }
 
+/** Phones get the prototype's Agents screen (Full reports opens the computer view); computers the full page. */
 export default function InsightsPage() {
+    return (
+        <Suspense>
+            <InsightsSwitch />
+        </Suspense>
+    );
+}
+
+function InsightsSwitch() {
+    const phone = usePhone();
+    const params = useSearchParams();
+    const { can } = useSession();
+    if (phone && params.get('full') !== '1') return can(P.AnalyticsView) ? <MobileAgents agentId={params.get('agent')} /> : <Forbidden />;
+
+    return <DesktopInsights />;
+}
+
+function DesktopInsights() {
     const { can } = useSession();
     const allowed = can(P.AnalyticsView);
     const [days, setDays] = useState(30);

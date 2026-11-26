@@ -6,6 +6,8 @@ import { Suspense, useEffect, useState } from 'react';
 
 import { Forbidden } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
+import { usePhone } from '@/components/mobile/kit';
+import { MobileContacts } from '@/components/mobile/mobile-contacts';
 import { BulkEditDialog } from '@/components/contacts/bulk-edit-dialog';
 import { usePeekedContact, useOpenContact } from '@/components/contacts/contact-sheet';
 import { CrmSettingsDialog } from '@/components/contacts/crm-settings-dialog';
@@ -381,7 +383,10 @@ function ContactsArea() {
     const params = useSearchParams();
     const t = params.get('tab') ?? (params.get('view') === 'pipeline' ? 'deals' : 'contacts');
     const tab: CrmTab = t === 'deals' || t === 'sync' ? t : 'contacts';
+    const phone = usePhone();
     if (!can(P.ContactsView)) return <Forbidden />;
+    // Phones: People or Pipeline as in the mobile prototype; Fields & sync stays the computer view.
+    if (phone && tab !== 'sync') return <MobileContacts view={tab === 'deals' ? 'pipeline' : 'people'} />;
 
     return <CrmShell tab={tab}>{tab === 'deals' ? <EnquiryBoardView /> : tab === 'sync' ? <CrmSyncTab /> : <ContactsTab />}</CrmShell>;
 }

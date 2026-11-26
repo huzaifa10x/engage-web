@@ -1514,6 +1514,17 @@ export type DashboardSummary = {
     messages_received_today: number;
     campaign_messages_today: number;
     campaign_messages_this_month: number;
+    /** The phone's Home: the last 7 days, oldest first, today last. */
+    week?: {
+        days: string[];
+        new_enquiries: number[];
+        first_reply_median_seconds: (number | null)[];
+        replies: number;
+        median_seconds: number | null;
+        on_time_pct: number | null;
+        target_seconds: number;
+        won: number;
+    };
 };
 
 /** A conversation with unread customer messages that is this member's to answer (bell + desktop alerts). */
@@ -1798,6 +1809,16 @@ export type ResponseTimes = {
     resolution: ResponseStat;
     agents: (ResponseStat & { membership_id: string; name: string; resolution_average_seconds: number | null })[];
     numbers: (ResponseStat & { id: string; display: string | null })[];
+    /** The latest first replies: on time (within the target), slow (up to twice it) or late. */
+    log?: {
+        conversation_id: string;
+        contact: string;
+        by: string | null;
+        seconds: number;
+        after_hours: boolean;
+        result: 'on_time' | 'slow' | 'late';
+        at: string;
+    }[];
 };
 
 export type ConversationCounts = { needs_reply: number; needs_reply_mine: number; needs_reply_unassigned?: number; after_hours: number; unassigned: number };
