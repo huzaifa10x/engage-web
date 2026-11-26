@@ -1525,6 +1525,8 @@ export type DashboardSummary = {
         target_seconds: number;
         won: number;
     };
+    /** The phone's Action Centre: each count opens its filtered list. */
+    action?: { closing_soon: number; followups_today: number; followups_overdue: number; mentions_unread: number; open_deals: number };
 };
 
 /** A conversation with unread customer messages that is this member's to answer (bell + desktop alerts). */

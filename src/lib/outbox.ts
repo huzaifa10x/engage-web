@@ -105,6 +105,16 @@ export function clearForSignOut(userId: string): void {
     }
 }
 
+/** Mobile-ready, step 5: a reply from this phone was accepted by the server. */
+export const REPLIED_KEY = 'engage.mobile-ready.replied';
+function markReplied(): void {
+    try {
+        localStorage.setItem(REPLIED_KEY, '1');
+    } catch {
+        // fine
+    }
+}
+
 let running: Promise<void> | null = null;
 
 /**
@@ -126,6 +136,7 @@ export function flush(scope: OutboxScope, onSent: (conversationId: string) => vo
                 try {
                     await sendToConversation(next.conversationId, { type: 'text', body: next.body, reply_to: next.replyTo ?? undefined }, next.id);
                     remove(next.id);
+                    markReplied();
                     onSent(next.conversationId);
                 } catch (e) {
                     const refused = e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 408 && e.status !== 429;

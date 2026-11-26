@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { useSession } from '@/components/app/session';
@@ -44,6 +44,15 @@ import {
 import type { Conversation } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
+/** Mobile brief v5: Needs reply with the window open (closing soonest first), then closed, then the rest. */
+type QueueGroup = 'open' | 'closed' | 'rest';
+const GROUP_LABEL: Record<QueueGroup, string> = { open: 'Needs reply · window open', closed: 'Needs reply · template only', rest: 'Everything else' };
+function groupOf(c: Conversation, now: number): QueueGroup {
+    if (c.status === 'closed' || c.state !== 'needs_reply') return 'rest';
+
+    return c.window?.expires_at && new Date(c.window.expires_at).getTime() > now ? 'open' : 'closed';
+}
+
 export type InboxView = 'needs' | 'mine' | 'unassigned' | 'all' | 'resolved';
 type Sort = NonNullable<ConversationFilters['sort']>;
 
@@ -61,7 +70,7 @@ const SORTS: { id: Sort; label: string; hint?: string }[] = [
     { id: 'waiting', label: 'Longest waiting', hint: 'Backlog view' },
 ];
 type Filters = {
-    window: 'any' | 'open' | 'closed';
+    window: 'any' | 'open' | 'closed' | 'closing';
     unread: boolean;
     followup: boolean;
     tag: string;
@@ -243,7 +252,12 @@ export function ConversationList({
         return params.get('tab') === 'needs_reply' && (a === 'me' || a === 'unassigned') ? a : null;
     });
     const [sort, setSort] = useState<Sort>('priority');
-    const [filters, setFilters] = useState<Filters>(() => ({ ...NO_FILTERS, afterHours: params.get('after_hours') === '1' }));
+    const [filters, setFilters] = useState<Filters>(() => ({
+        ...NO_FILTERS,
+        afterHours: params.get('after_hours') === '1',
+        // The Action Centre's "closing within 2 h" tile opens this view.
+        window: params.get('window') === 'closing' ? 'closing' : NO_FILTERS.window,
+    }));
     const [panel, setPanel] = useState(false);
     const [search, setSearch] = useState('');
     const [q, setQ] = useState('');
@@ -479,6 +493,7 @@ export function ConversationList({
                             options={[
                                 ['any', 'Any'],
                                 ['open', 'Open'],
+                                ['closing', 'Closing'],
                                 ['closed', 'Closed'],
                             ]}
                             onChange={(v) => setFilters((f) => ({ ...f, window: v as Filters['window'] }))}
@@ -594,18 +609,26 @@ export function ConversationList({
                             )}
                         </li>
                     )}
-                    {rows.map((c) => (
-                        <QueueCard
-                            key={c.id}
-                            c={c}
-                            now={now}
-                            fetchedAt={list.dataUpdatedAt}
-                            selected={c.id === selectedId}
-                            onSelect={() => onSelect(c.id)}
-                            showNumber={!phoneNumberId}
-                            onTake={take && c.assigned_membership_id === null ? () => take(c) : undefined}
-                            onResolve={resolve && c.status !== 'closed' ? () => resolve(c) : undefined}
-                        />
+                    {rows.map((c, i) => (
+                        <Fragment key={c.id}>
+                            {sort === 'priority' &&
+                                groupOf(c, now) !== (i > 0 ? groupOf(rows[i - 1]!, now) : null) &&
+                                rows.some((r) => groupOf(r, now) !== 'rest') && (
+                                    <li className="sticky top-0 z-[1] border-b bg-muted/95 px-4 py-1.5 text-[11.5px] font-bold tracking-[0.06em] text-muted-foreground uppercase backdrop-blur">
+                                        {GROUP_LABEL[groupOf(c, now)]}
+                                    </li>
+                                )}
+                            <QueueCard
+                                c={c}
+                                now={now}
+                                fetchedAt={list.dataUpdatedAt}
+                                selected={c.id === selectedId}
+                                onSelect={() => onSelect(c.id)}
+                                showNumber={!phoneNumberId}
+                                onTake={take && c.assigned_membership_id === null ? () => take(c) : undefined}
+                                onResolve={resolve && c.status !== 'closed' ? () => resolve(c) : undefined}
+                            />
+                        </Fragment>
                     ))}
                     {list.hasNextPage && (
                         <li className="p-3">

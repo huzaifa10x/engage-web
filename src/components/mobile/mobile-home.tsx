@@ -14,7 +14,8 @@ import { P } from '@/lib/permissions';
 import { useBilling, useConversations, useDashboardSummary } from '@/lib/queries';
 import { cn } from '@/lib/utils';
 
-import { NotifyCard } from './notify-card';
+import { ActionCentre } from './action-centre';
+import { MobileReadyCard } from './mobile-ready-card';
 import { Kpi, Meter, mins, Row, RowCard, RowText, SectionLabel, Spark, WaitPill } from './kit';
 
 function greeting(): string {
@@ -31,7 +32,8 @@ const first = (name: string | null | undefined) => (name ?? '').trim().split(' '
  * with the same permission as on a computer.
  */
 export function MobileHome() {
-    const { me, can } = useSession();
+    const { me, can, membership } = useSession();
+    const owner = membership.role?.key === 'owner';
     const [numberId] = useSelectedNumber();
     const now = useNow(15_000);
     const inbox = can(P.InboxView);
@@ -90,38 +92,43 @@ export function MobileHome() {
                         )}
                     </div>
 
-                    <NotifyCard />
+                    <MobileReadyCard />
 
-                    {/* The week in four tiles. */}
-                    <div className="mt-2.5 grid grid-cols-2 gap-2.5">
-                        {!w ? (
-                            [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28 rounded-2xl" />)
-                        ) : (
-                            <>
-                                <Kpi label="New enquiries today" value={today}>
-                                    <div className={cn('mt-1 text-[11.5px] font-bold', today >= yesterday ? 'text-good' : 'text-muted-foreground')}>
-                                        {today === yesterday
-                                            ? 'Same as yesterday'
-                                            : `${today > yesterday ? '▲' : '▼'} ${Math.abs(today - yesterday)} vs yesterday`}
-                                    </div>
-                                    <Spark points={w.new_enquiries} />
-                                </Kpi>
-                                <Kpi label="Median first reply" value={mins(w.median_seconds)}>
-                                    <div className="mt-1 text-[11.5px] font-bold text-good">Target: {mins(w.target_seconds)}</div>
-                                    <Spark points={w.first_reply_median_seconds} />
-                                </Kpi>
-                                <Kpi label="Answered on time" value={w.on_time_pct === null ? '—' : `${w.on_time_pct}%`}>
-                                    <div className="mt-2.5">
-                                        <Meter pct={w.on_time_pct ?? 0} />
-                                    </div>
-                                    <div className="mt-1.5 text-[11.5px] text-muted-foreground">Last 7 days · {w.replies} replies</div>
-                                </Kpi>
-                                <Kpi label="Deals won this week" value={w.won}>
-                                    <div className="mt-1 text-[11.5px] font-bold text-good">From WhatsApp</div>
-                                </Kpi>
-                            </>
-                        )}
-                    </div>
+                    <ActionCentre s={s} />
+
+                    {/* The week in four tiles (the Owner's view of how the business is doing). */}
+                    {owner && <SectionLabel>This week</SectionLabel>}
+                    {owner && (
+                        <div className="grid grid-cols-2 gap-2.5">
+                            {!w ? (
+                                [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-28 rounded-2xl" />)
+                            ) : (
+                                <>
+                                    <Kpi label="New enquiries today" value={today}>
+                                        <div className={cn('mt-1 text-[11.5px] font-bold', today >= yesterday ? 'text-good' : 'text-muted-foreground')}>
+                                            {today === yesterday
+                                                ? 'Same as yesterday'
+                                                : `${today > yesterday ? '▲' : '▼'} ${Math.abs(today - yesterday)} vs yesterday`}
+                                        </div>
+                                        <Spark points={w.new_enquiries} />
+                                    </Kpi>
+                                    <Kpi label="Median first reply" value={mins(w.median_seconds)}>
+                                        <div className="mt-1 text-[11.5px] font-bold text-good">Target: {mins(w.target_seconds)}</div>
+                                        <Spark points={w.first_reply_median_seconds} />
+                                    </Kpi>
+                                    <Kpi label="Answered on time" value={w.on_time_pct === null ? '—' : `${w.on_time_pct}%`}>
+                                        <div className="mt-2.5">
+                                            <Meter pct={w.on_time_pct ?? 0} />
+                                        </div>
+                                        <div className="mt-1.5 text-[11.5px] text-muted-foreground">Last 7 days · {w.replies} replies</div>
+                                    </Kpi>
+                                    <Kpi label="Deals won this week" value={w.won}>
+                                        <div className="mt-1 text-[11.5px] font-bold text-good">From WhatsApp</div>
+                                    </Kpi>
+                                </>
+                            )}
+                        </div>
+                    )}
 
                     <SectionLabel>Needs you</SectionLabel>
                     <RowCard>

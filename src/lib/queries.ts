@@ -257,7 +257,7 @@ export type ConversationFilters = {
     after_hours?: boolean;
     /** 3.5: All lists snoozed chats too. */
     include_snoozed?: boolean;
-    window?: 'open' | 'closed';
+    window?: 'open' | 'closed' | 'closing';
     followup?: boolean;
     tag?: string;
     sort?: 'priority' | 'newest' | 'waiting';
