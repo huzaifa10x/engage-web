@@ -1,7 +1,7 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronRightIcon, LogOutIcon, MailIcon, ShieldCheckIcon } from 'lucide-react';
+import { BellIcon, ChevronRightIcon, ListChecksIcon, LogOutIcon, MailIcon, ShieldCheckIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
@@ -103,12 +103,9 @@ export default function MorePage() {
             <section>
                 <h2 className="px-1 pb-1.5 text-[12px] font-semibold tracking-wide text-muted-foreground uppercase">You</h2>
                 <Card className="divide-y overflow-hidden p-0">
-                    <Row
-                        href="/settings?tab=notifications"
-                        icon={MailIcon}
-                        label="Email notifications"
-                        hint="Reply-time alerts are off unless you turn them on"
-                    />
+                    <Row href="/next-steps" icon={ListChecksIcon} label="Follow-ups" hint="Overdue, today and later" />
+                    <Row href="/notifications" icon={BellIcon} label="Notifications" />
+                    <Row href="/settings?tab=notifications" icon={MailIcon} label="Notification settings" hint="This phone, and which emails you get" />
                     <Row href="/settings?tab=security" icon={ShieldCheckIcon} label="Sign-in & security" />
                     <label className="flex min-h-13 items-center gap-3 px-4 py-2.5">
                         <span className="min-w-0 flex-1">

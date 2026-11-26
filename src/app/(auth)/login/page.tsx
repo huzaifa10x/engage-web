@@ -47,7 +47,11 @@ function LoginForm() {
     const [codeStep, setCodeStep] = useState<CodeStep | null>(null);
     const [twoFactor, setTwoFactor] = useState(false);
     // "Email me a code instead": sign in with the emailed code alone, no password.
-    const [codeOnly, setCodeOnly] = useState(false);
+    // Phones sign in with an emailed code by default (no password to type); the password stays one tap away.
+    const phone = useMediaQuery('(max-width: 1023px), (pointer: coarse)');
+    const [choice, setChoice] = useState<'code' | 'password' | null>(null);
+    const codeOnly = choice ? choice === 'code' : phone;
+    const setCodeOnly = (on: boolean) => setChoice(on ? 'code' : 'password');
     const [sending, setSending] = useState(false);
     // The installed app stays signed in for 90 days, so "remember this device" does not apply there.
     const app = useMediaQuery('(display-mode: standalone)');

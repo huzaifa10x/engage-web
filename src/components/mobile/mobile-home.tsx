@@ -179,6 +179,9 @@ export function MobileHome() {
                             </Row>
                         )}
                         {followups.isLoading && <Skeleton className="h-14 rounded-none" />}
+                        <Row href="/next-steps?bucket=today" chevron>
+                            <span className="min-w-0 flex-1 text-[14px] font-semibold text-brand-600">All follow-ups</span>
+                        </Row>
                     </RowCard>
                 </>
             )}

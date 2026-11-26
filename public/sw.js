@@ -6,18 +6,24 @@
  *  - Only the build's content-hashed files (/_next/static) and the icons are cached.
  * Bump VERSION to drop every cache at the next visit.
  */
-const VERSION = 'egx-v2';
+const VERSION = 'egx-v3';
 const STATIC = `${VERSION}-static`;
 const OFFLINE = '/offline.html';
 const NEVER = [/^\/api\//, /^\/sanctum\//, /^\/billing(\/|$)/, /^\/impersonate/, /^\/login/, /^\/register/, /^\/_next\/data\//];
 
 self.addEventListener('install', (event) => {
+    // A new version installs and then waits: the page tells it to take over only when nobody is
+    // typing, recording or sending (SKIP_WAITING). The very first install takes over at once.
     event.waitUntil(
         caches
             .open(STATIC)
             .then((c) => c.addAll([OFFLINE, '/brand/icon-192.png']))
-            .then(() => self.skipWaiting()),
+            .then(() => (self.registration.active ? undefined : self.skipWaiting())),
     );
+});
+
+self.addEventListener('message', (event) => {
+    if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {

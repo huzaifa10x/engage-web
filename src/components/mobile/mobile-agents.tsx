@@ -90,8 +90,19 @@ export function MobileAgents({ agentId }: { agentId: string | null }) {
             </LargeTitle>
 
             <div className="mt-3 grid grid-cols-2 gap-2.5">
-                <Kpi label="Team median reply" value={d ? mins(d.first_response.median_seconds) : '–'} />
-                <Kpi label="Waiting now" value={<span className={d && d.now.needs_reply > 0 ? 'text-warn' : ''}>{d ? d.now.needs_reply : '–'}</span>} />
+                <Kpi label="Team median first reply" value={d ? mins(d.first_response.median_seconds) : '–'} />
+                <Kpi
+                    label="Answered on time"
+                    value={d?.first_response.within_target_pct === null || !d ? '—' : `${Math.round(d.first_response.within_target_pct)}%`}
+                />
+                <Kpi
+                    label="Slow (up to 2× target)"
+                    value={<span className={(d?.first_response.slow ?? 0) > 0 ? 'text-warn' : ''}>{d ? (d.first_response.slow ?? 0) : '–'}</span>}
+                />
+                <Kpi
+                    label="Late (over 2× target)"
+                    value={<span className={(d?.first_response.late ?? 0) > 0 ? 'text-bad' : ''}>{d ? (d.first_response.late ?? 0) : '–'}</span>}
+                />
             </div>
 
             {can(P.InboxView) && (
@@ -196,6 +207,8 @@ function AgentScreen({
     const { can } = useSession();
     const now = useNow(15_000);
     const chats = useConversations({ assignee: id, status: 'open' }, 30_000, can(P.InboxView));
+    const [numberId] = useSelectedNumber();
+    const slowest = useResponseTimes(Number(period), numberId ?? undefined, true, id).data?.log ?? [];
     const list = chats.data?.pages.flatMap((p) => p.data) ?? [];
     const name = a?.name ?? 'Teammate';
     const faster = a?.median_seconds !== null && a?.median_seconds !== undefined && teamMedian !== null && a.median_seconds < teamMedian;
@@ -220,6 +233,19 @@ function AgentScreen({
                     {faster && <div className="mt-1 text-[11.5px] font-bold text-good">Faster than the team</div>}
                 </Kpi>
             </div>
+            {slowest.length > 0 && (
+                <>
+                    <SectionLabel>Their slowest replies · {when}</SectionLabel>
+                    <RowCard>
+                        {slowest.map((r) => (
+                            <Row key={`${r.conversation_id}-${r.at}`} href={`/inbox?c=${r.conversation_id}`}>
+                                <RowText title={r.contact} sub={`Replied after ${mins(r.seconds)}${r.after_hours ? ' · after hours' : ''}`} />
+                                <Pill tone={RESULT[r.result][0]}>{RESULT[r.result][1]}</Pill>
+                            </Row>
+                        ))}
+                    </RowCard>
+                </>
+            )}
             {can(P.InboxView) && (
                 <>
                     <SectionLabel>Their open chats</SectionLabel>

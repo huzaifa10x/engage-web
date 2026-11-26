@@ -1800,6 +1800,10 @@ export type ResponseStat = {
     within_target: number;
     within_target_pct: number | null;
     after_hours: number;
+    /** Over the target, up to twice it. */
+    slow?: number;
+    /** More than twice the target. */
+    late?: number;
 };
 
 export type ResponseTimes = {

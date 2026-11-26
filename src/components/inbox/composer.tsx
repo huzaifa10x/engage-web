@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils';
 
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { newId } from '@/lib/id';
+import { setBusy } from '@/lib/busy';
 import { buzz, HAPTIC } from '@/lib/mobile';
 import * as outbox from '@/lib/outbox';
 import { useOutbox } from '@/hooks/use-outbox';
@@ -149,6 +150,13 @@ export function Composer({
     const [uploading, setUploading] = useState(false);
     const [sending, setSending] = useState(false);
     const [recording, setRecording] = useState<number | null>(null);
+    // A new app version waits while a reply is typed, a voice note recorded or a message sent.
+    const busyNow = reply.trim() !== '' || note.trim() !== '' || recording !== null || sending;
+    useEffect(() => {
+        setBusy(`composer:${c.id}`, busyNow);
+
+        return () => setBusy(`composer:${c.id}`, false);
+    }, [busyNow, c.id]);
     const [pop, setPop] = useState<{ kind: 'qr' | 'mention'; q: string; hl: number } | null>(null);
     const input = useRef<HTMLTextAreaElement>(null);
     const fileRef = useRef<HTMLInputElement>(null);

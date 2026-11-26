@@ -669,10 +669,13 @@ export const addConversationNote = (id: string, body: string, mentions: string[]
 export const snoozeConversation = (id: string, until: string | null) =>
     api<Data<Conversation>>(`conversations/${id}/snooze`, until ? { method: 'POST', body: { until } } : { method: 'DELETE' }).then((r) => r.data);
 
-export const useResponseTimes = (days: number, phoneNumberId?: string, enabled = true) =>
+export const useResponseTimes = (days: number, phoneNumberId?: string, enabled = true, membershipId?: string) =>
     useQuery({
-        queryKey: ['analytics', 'response-times', days, phoneNumberId ?? null] as const,
-        queryFn: () => api<Data<ResponseTimes>>('analytics/response-times', { query: { days, phone_number_id: phoneNumberId } }).then((r) => r.data),
+        queryKey: ['analytics', 'response-times', days, phoneNumberId ?? null, membershipId ?? null] as const,
+        queryFn: () =>
+            api<Data<ResponseTimes>>('analytics/response-times', { query: { days, phone_number_id: phoneNumberId, membership_id: membershipId } }).then(
+                (r) => r.data,
+            ),
         enabled,
     });
 

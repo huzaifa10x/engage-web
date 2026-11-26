@@ -862,7 +862,7 @@ export function Thread({
                                     )}
                                     {contact && can(P.ContactsUpdate) && (
                                         <DropdownMenuItem onSelect={() => setDialog('step')}>
-                                            <HistoryIcon /> Set next step
+                                            <HistoryIcon /> Add a follow-up
                                         </DropdownMenuItem>
                                     )}
                                     {contact && can(P.ContactsUpdate) && (

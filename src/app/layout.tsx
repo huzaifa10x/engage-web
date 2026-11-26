@@ -3,6 +3,7 @@ import { GeistSans } from 'geist/font/sans';
 import type { Metadata, Viewport } from 'next';
 
 import './globals.css';
+import { InstallBanner } from '@/components/app/install-banner';
 import { ServiceWorker } from '@/components/app/service-worker';
 
 import { Providers } from './providers';
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <body className="min-h-dvh font-sans">
                 <Providers>{children}</Providers>
                 <ServiceWorker />
+                <InstallBanner />
             </body>
         </html>
     );

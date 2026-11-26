@@ -39,7 +39,12 @@ export function ActionCentre({ s }: { s: DashboardSummary | undefined }) {
                       href: '/inbox?tab=needs_reply&assigned=me&window=closing',
                       tone: (a?.closing_soon ?? 0) > 0 ? 'bad' : undefined,
                   },
-                  { label: 'Follow-ups today and overdue', value: followups, href: '/follow-ups', tone: (a?.followups_overdue ?? 0) > 0 ? 'bad' : undefined },
+                  {
+                      label: 'Follow-ups today and overdue',
+                      value: followups,
+                      href: (a?.followups_overdue ?? 0) > 0 ? '/next-steps?bucket=overdue' : '/next-steps?bucket=today',
+                      tone: (a?.followups_overdue ?? 0) > 0 ? 'bad' : undefined,
+                  },
                   { label: 'Unread mentions', value: a?.mentions_unread ?? 0, href: '/notifications' },
               ]
             : role === 'manager'
@@ -60,7 +65,7 @@ export function ActionCentre({ s }: { s: DashboardSummary | undefined }) {
                     {
                         label: 'Overdue follow-ups',
                         value: a?.followups_overdue ?? 0,
-                        href: '/follow-ups',
+                        href: '/next-steps?bucket=overdue',
                         tone: (a?.followups_overdue ?? 0) > 0 ? 'bad' : undefined,
                     },
                 ]
@@ -76,7 +81,7 @@ export function ActionCentre({ s }: { s: DashboardSummary | undefined }) {
                     {
                         label: 'Overdue follow-ups',
                         value: a?.followups_overdue ?? 0,
-                        href: '/follow-ups',
+                        href: '/next-steps?bucket=overdue',
                         tone: (a?.followups_overdue ?? 0) > 0 ? 'bad' : undefined,
                     },
                 ];
