@@ -6,11 +6,18 @@ import * as React from 'react';
 import { cn } from '@/lib/utils';
 
 function Tabs({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Root>) {
-    return <TabsPrimitive.Root data-slot="tabs" className={cn('flex flex-col gap-4', className)} {...props} />;
+    return <TabsPrimitive.Root data-slot="tabs" className={cn('flex min-w-0 flex-col gap-4', className)} {...props} />;
 }
 
 function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.List>) {
-    return <TabsPrimitive.List data-slot="tabs-list" className={cn('inline-flex w-fit items-center gap-1 border-b', className)} {...props} />;
+    // Never wider than the screen: on a phone the tabs scroll sideways inside the row, not the page.
+    return (
+        <TabsPrimitive.List
+            data-slot="tabs-list"
+            className={cn('inline-flex w-fit max-w-full [scrollbar-width:none] items-center gap-1 overflow-x-auto overflow-y-hidden border-b', className)}
+            {...props}
+        />
+    );
 }
 
 function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
@@ -18,7 +25,7 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPr
         <TabsPrimitive.Trigger
             data-slot="tabs-trigger"
             className={cn(
-                '-mb-px inline-flex items-center gap-1.5 rounded-t-md border-b-2 border-transparent px-3 py-2 text-sm font-semibold whitespace-nowrap text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground',
+                '-mb-px inline-flex shrink-0 items-center gap-1.5 rounded-t-md border-b-2 border-transparent px-3 py-2 text-sm font-semibold whitespace-nowrap text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground',
                 'focus-visible:ring-[3px] focus-visible:ring-ring/30 focus-visible:outline-none data-[state=active]:border-brand-500 data-[state=active]:text-foreground',
                 className,
             )}

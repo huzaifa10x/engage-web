@@ -18,6 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { errorMessage } from '@/lib/api';
 import { P } from '@/lib/permissions';
 import { useAnalytics } from '@/lib/queries';
+import { cn } from '@/lib/utils';
 import type { AnalyticsOverview } from '@/lib/types';
 
 const rate = (part: number, whole: number) => (whole > 0 ? `${Math.round((part / whole) * 100)}%` : '—');
@@ -44,7 +45,7 @@ function DailyChart({ daily }: { daily: AnalyticsOverview['daily'] }) {
                 {daily.map((d) => (
                     <div
                         key={d.date}
-                        className="group relative flex h-full flex-1 items-end justify-center gap-px"
+                        className="group relative flex h-full min-w-0 flex-1 items-end justify-center gap-px"
                         title={`${label(d.date)}: ${d.outbound} sent, ${d.inbound} received`}
                     >
                         <div
@@ -57,7 +58,11 @@ function DailyChart({ daily }: { daily: AnalyticsOverview['daily'] }) {
             </div>
             <div className="mt-1.5 flex gap-[3px] border-t pt-1.5 text-[11px] text-muted-foreground">
                 {daily.map((d, i) => (
-                    <span key={d.date} className="flex-1 text-center whitespace-nowrap">
+                    // Phones show every other label so they never overlap; the column may be narrower than its label.
+                    <span
+                        key={d.date}
+                        className={cn('min-w-0 flex-1 overflow-visible text-center whitespace-nowrap', i % (step * 2) !== 0 && 'max-sm:invisible')}
+                    >
                         {i % step === 0 ? label(d.date) : ''}
                     </span>
                 ))}

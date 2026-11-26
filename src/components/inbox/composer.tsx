@@ -32,12 +32,19 @@ import { EmojiPicker } from './emoji-picker';
 const ACCEPT =
     'image/jpeg,image/png,image/webp,video/mp4,video/3gpp,audio/aac,audio/mp4,audio/mpeg,audio/amr,audio/ogg,.m4a,.aac,.amr,.mp3,.ogg,.opus,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt';
 
-/** Recording formats WhatsApp accepts, best first: OGG/Opus is a real voice note; MP4/AAC an audio file. */
+/**
+ * Recording formats, best first. The server converts every recording to OGG / Opus mono, the only
+ * format WhatsApp shows as a voice note: Firefox records OGG, Chrome WebM (Opus inside), Safari MP4.
+ */
 const VOICE_FORMATS = [
     { mime: 'audio/ogg;codecs=opus', extension: 'ogg', type: 'audio/ogg' },
+    { mime: 'audio/webm;codecs=opus', extension: 'webm', type: 'audio/webm' },
     { mime: 'audio/mp4;codecs=mp4a.40.2', extension: 'm4a', type: 'audio/mp4' },
     { mime: 'audio/mp4', extension: 'm4a', type: 'audio/mp4' },
 ];
+/** WhatsApp shows a play button up to 512 KB: about 2 minutes. Warn before, stop at the limit. */
+const VOICE_WARN_SECONDS = 105;
+const VOICE_MAX_SECONDS = 120;
 const voiceFormat = () => (typeof MediaRecorder === 'undefined' ? null : (VOICE_FORMATS.find((f) => MediaRecorder.isTypeSupported(f.mime)) ?? null));
 
 /** Unsent text is kept in this browser per conversation and per mode for a week. */
@@ -139,6 +146,12 @@ export function Composer({
     const fileRef = useRef<HTMLInputElement>(null);
     const recorder = useRef<MediaRecorder | null>(null);
     const discard = useRef(false);
+    // Hold to record (touch): released → sent at once; slid left past 80 px → cancelled.
+    const hold = useRef<{ x: number; pointer: number } | null>(null);
+    const autoSend = useRef(false);
+    const lastPointer = useRef<string>('mouse');
+    // One send at a time: a second Enter or tap while the first is on its way does nothing.
+    const inFlight = useRef(false);
     const typingAt = useRef(0);
     const canned = useCannedResponses(mode === 'reply');
 
@@ -156,6 +169,14 @@ export function Composer({
         return () => clearInterval(t);
     }, [recording === null]); // eslint-disable-line react-hooks/exhaustive-deps
     useEffect(() => () => recorder.current?.stream.getTracks().forEach((t) => t.stop()), []);
+    useEffect(() => {
+        if (recording === VOICE_WARN_SECONDS)
+            toast.message('15 seconds left', { description: 'Voice notes stop at 2 minutes so WhatsApp shows a play button.' });
+        if (recording !== null && recording >= VOICE_MAX_SECONDS && recorder.current?.state === 'recording') {
+            discard.current = false;
+            recorder.current.stop();
+        }
+    }, [recording]);
 
     const pick = async (file: File | undefined, isVoice = false) => {
         if (!file) return;
@@ -163,10 +184,13 @@ export function Composer({
         try {
             const form = new FormData();
             form.append('file', file);
+            // A recording: the server turns it into a WhatsApp voice note (OGG / Opus).
+            if (isVoice) form.append('voice', '1');
             const res = await upload<{ data: UploadedMedia }>('media', form);
             setAttachment(res.data);
-            setVoice(isVoice && res.data.type === 'audio');
+            setVoice(isVoice && res.data.type === 'audio' && res.data.voice !== false);
         } catch (e) {
+            autoSend.current = false;
             toast.error(errorMessage(e));
         } finally {
             setUploading(false);
@@ -201,7 +225,31 @@ export function Composer({
     };
     const stopRecording = (cancel: boolean) => {
         discard.current = cancel;
-        recorder.current?.stop();
+        if (recorder.current?.state === 'recording') recorder.current.stop();
+    };
+
+    /** Touch: hold the mic to record, release to send, slide left to cancel (like WhatsApp). */
+    const holdStart = (e: React.PointerEvent) => {
+        lastPointer.current = e.pointerType;
+        if (e.pointerType === 'mouse') return;
+        e.preventDefault();
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+        hold.current = { x: e.clientX, pointer: e.pointerId };
+        void startRecording();
+    };
+    const holdMove = (e: React.PointerEvent) => {
+        if (hold.current && e.clientX - hold.current.x < -80) {
+            hold.current = null;
+            stopRecording(true);
+            navigator.vibrate?.(12);
+            toast.message('Voice note cancelled');
+        }
+    };
+    const holdEnd = () => {
+        if (!hold.current) return;
+        hold.current = null;
+        autoSend.current = true;
+        stopRecording(false);
     };
 
     const qrItems = useMemo(() => {
@@ -239,6 +287,15 @@ export function Composer({
     };
 
     const send = async () => {
+        if (inFlight.current) return;
+        inFlight.current = true;
+        try {
+            await sendNow();
+        } finally {
+            inFlight.current = false;
+        }
+    };
+    const sendNow = async () => {
         if (mode === 'note') {
             const body = note.trim();
             if (!body) return void toast.message('Write a note first');
@@ -288,6 +345,13 @@ export function Composer({
         };
         if (await beforeSend('reply', go)) await go();
     };
+    // A held voice note is sent as soon as it has been converted and uploaded.
+    useEffect(() => {
+        if (autoSend.current && attachment && voice) {
+            autoSend.current = false;
+            void send();
+        }
+    }, [attachment, voice]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const hint =
         mode === 'reply'
@@ -551,9 +615,15 @@ export function Composer({
                                         <Button
                                             variant="ghost"
                                             size="icon-sm"
-                                            title="Record a voice message"
+                                            title="Record a voice message (on a phone: hold to record, release to send, slide left to cancel)"
                                             aria-label="Record a voice message"
-                                            onClick={startRecording}
+                                            className="touch-none select-none"
+                                            onPointerDown={holdStart}
+                                            onPointerMove={holdMove}
+                                            onPointerUp={holdEnd}
+                                            onPointerCancel={() => hold.current && stopRecording(true)}
+                                            onContextMenu={(e) => e.preventDefault()}
+                                            onClick={() => lastPointer.current === 'mouse' && void startRecording()}
                                             disabled={uploading}
                                         >
                                             <MicIcon />

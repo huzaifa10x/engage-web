@@ -918,13 +918,25 @@ export type Message = {
     sent_at: string | null;
     delivered_at: string | null;
     read_at: string | null;
+    /** Voice notes: when the customer first played it. */
+    played_at?: string | null;
     edited_at: string | null;
     revoked_at: string | null;
     /** Content removed by the workspace's retention policy; the delivery record remains. */
     redacted?: boolean;
 };
 
-export type UploadedMedia = { id: string; type: 'image' | 'video' | 'audio' | 'document' | 'sticker'; mime_type: string; filename: string; file_size: number };
+export type UploadedMedia = {
+    id: string;
+    type: 'image' | 'video' | 'audio' | 'document' | 'sticker';
+    mime_type: string;
+    filename: string;
+    file_size: number;
+    /** A recording converted to a WhatsApp voice note (OGG / Opus). */
+    voice?: boolean;
+    /** Voice notes up to 512 KB show a play button on the customer's phone; bigger ones a download arrow. */
+    playable?: boolean;
+};
 
 export type CursorPage<T> = { data: T[]; meta: { next_cursor?: string | null; prev_cursor?: string | null; per_page: number } };
 

@@ -4,6 +4,7 @@ import {
     AlertCircleIcon,
     BotIcon,
     CheckCheckIcon,
+    MicIcon,
     CheckIcon,
     ClockIcon,
     FileIcon,
@@ -33,7 +34,15 @@ function StatusTicks({ message }: { message: Message }) {
         case 'delivered':
             return <CheckCheckIcon className="size-3.5" aria-label="Delivered" />;
         case 'read':
-            return <CheckCheckIcon className="size-3.5 text-[#53bdeb]" aria-label="Read" />;
+            return message.played_at ? (
+                // A voice note the customer listened to (Meta's "played" status).
+                <span className="inline-flex items-center gap-0.5 text-[#53bdeb]" title="Played">
+                    <MicIcon className="size-3" aria-hidden />
+                    <CheckCheckIcon className="size-3.5" aria-label="Played" />
+                </span>
+            ) : (
+                <CheckCheckIcon className="size-3.5 text-[#53bdeb]" aria-label="Read" />
+            );
         case 'failed':
             return (
                 <span className="inline-flex items-center gap-0.5 font-medium text-bad">

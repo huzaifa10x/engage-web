@@ -76,15 +76,24 @@ export function PaymentFailedBanner() {
     if (me.entitlements?.subscription?.status !== 'past_due' || pathname.startsWith('/billing')) return null;
 
     return (
-        <div role="alert" className="flex flex-wrap items-center gap-2 border-b border-bad/20 bg-bad px-4 py-2 text-[13px] text-white sm:px-6">
+        <div role="alert" className="flex items-center gap-2 border-b border-bad/20 bg-bad px-4 py-2 text-[13px] text-white sm:flex-wrap sm:px-6">
             <TriangleAlertIcon className="size-4" />
-            <span>
-                <span className="font-semibold">Payment failed.</span> Chatbots, automations, reply alerts, campaigns and extra seats are paused. Messaging
-                still works.
+            <span className="min-w-0 flex-1">
+                <span className="font-semibold">Payment failed.</span>
+                {/* Phones: one line; the Billing page explains the rest. */}
+                <span className="max-sm:hidden"> Chatbots, automations, reply alerts, campaigns and extra seats are paused. Messaging still works.</span>
+                <span className="sm:hidden"> Paid features paused.</span>
             </span>
             {can(P.BillingView) ? (
-                <Link href="/billing" className="ml-auto font-semibold underline-offset-2 hover:underline">
-                    {can(P.BillingManage) ? 'Update card and pay' : 'View billing'}
+                <Link href="/billing" className="ml-auto shrink-0 font-semibold underline-offset-2 hover:underline">
+                    {can(P.BillingManage) ? (
+                        <>
+                            <span className="max-sm:hidden">Update card and pay</span>
+                            <span className="sm:hidden">Pay now</span>
+                        </>
+                    ) : (
+                        'View billing'
+                    )}
                 </Link>
             ) : (
                 <span className="ml-auto opacity-90">Ask the workspace owner to update the card.</span>
