@@ -333,7 +333,17 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
     };
     const portal = (flow: BillingPortalFlow, plan?: string) =>
         toStripe(`portal-${flow}-${plan ?? ''}`, () => openBillingPortal(flow, plan, plan ? interval : undefined));
-    const choose = (plan: BillingPlan) => (selfServe ? portal('update', plan.key) : toStripe(`checkout-${plan.key}`, () => startCheckout(plan.key, interval)));
+    const choose = (plan: BillingPlan) => {
+        if (selfServe) return portal('update', plan.key);
+        if (!b.vat.automatic && !b.details.country) {
+            // VAT is chosen from the billing country, so it is needed before Checkout opens.
+            toast.error('Choose your billing country first, so the correct VAT is charged.');
+            setTab('details');
+
+            return;
+        }
+        toStripe(`checkout-${plan.key}`, () => startCheckout(plan.key, interval));
+    };
 
     const switchFree = () => {
         if (!window.confirm(`Switch to Free now? ${b.plan.name} trial features stop straight away.`)) return;

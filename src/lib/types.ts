@@ -1323,7 +1323,8 @@ export type Billing = {
         scheduled_change: { plan: { key: string; name: string }; interval: 'monthly' | 'yearly' | null; at: string | null } | null;
     } | null;
     details: { legal_name: string | null; country: string | null; tax_trn: string | null; billing_email: string | null };
-    vat: { applies: boolean; percent: number; country: string };
+    /** automatic: Stripe Tax works VAT out at Checkout; otherwise the billing country must be set before upgrading. */
+    vat: { applies: boolean; percent: number; country: string; automatic: boolean };
     has_payment_history: boolean;
     plans: BillingPlan[];
     /** A trial may switch itself to Free straight away. */
