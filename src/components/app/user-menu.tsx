@@ -14,6 +14,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { api } from '@/lib/api';
+import * as outbox from '@/lib/outbox';
 import { disablePush } from '@/lib/push';
 import { P } from '@/lib/permissions';
 
@@ -25,8 +26,14 @@ export function UserMenu() {
     const qc = useQueryClient();
 
     const logout = async () => {
-        // This phone stops getting notifications for this account.
-        if (!me.impersonation) await disablePush();
+        if (!me.impersonation) {
+            // Unsent replies live only on this phone: say how many would be lost before going on.
+            const unsent = outbox.countFor(me.user.id);
+            if (unsent > 0 && !window.confirm(`${unsent} unsent ${unsent === 1 ? 'reply' : 'replies'} on this phone will be deleted. Sign out anyway?`)) return;
+            // This phone stops getting notifications for this account; drafts and unsent replies are removed.
+            await disablePush();
+            outbox.clearForSignOut(me.user.id);
+        }
         await api(me.impersonation ? 'auth/impersonation' : 'auth/logout', { method: me.impersonation ? 'DELETE' : 'POST' }).catch(() => undefined);
         qc.clear();
         router.replace('/login');

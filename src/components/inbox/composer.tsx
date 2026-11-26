@@ -29,6 +29,9 @@ import { cn } from '@/lib/utils';
 
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { newId } from '@/lib/id';
+import { buzz, HAPTIC } from '@/lib/mobile';
+import * as outbox from '@/lib/outbox';
+import { useOutbox } from '@/hooks/use-outbox';
 
 import { EmojiPicker } from './emoji-picker';
 
@@ -77,7 +80,7 @@ function writeDraft(id: string, mode: 'reply' | 'note', text: string): void {
 const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 
 export type ComposerMode = 'reply' | 'note' | 'template';
-export type ComposerHandle = { attach: (file: File) => void; focus: () => void };
+export type ComposerHandle = { attach: (file: File) => void; focus: () => void; restore: (text: string) => void };
 
 /** Why a template can't be sent to this contact, or null. */
 export function templateBlock(t: MessageTemplate, contact: Contact | undefined): string | null {
@@ -159,8 +162,8 @@ export function Composer({
     const inFlight = useRef(false);
     // One key per reply: kept across retries (and a reply queued while offline), new once it went out or changed.
     const replyKey = useRef<string | null>(null);
-    // No connection when Send was pressed: the reply goes out once the phone is back online.
-    const [queued, setQueued] = useState(false);
+    // Typed replies wait in the phone's outbox (see lib/outbox): saved first, sent when there is a connection.
+    const { scope, flush: flushOutbox } = useOutbox(id);
     const touch = useMediaQuery('(pointer: coarse)');
     const typingAt = useRef(0);
     const canned = useCannedResponses(mode === 'reply');
@@ -207,7 +210,15 @@ export function Composer({
             if (fileRef.current) fileRef.current.value = '';
         }
     };
-    useImperativeHandle(ref, () => ({ attach: (file: File) => void pick(file), focus: () => input.current?.focus() }));
+    useImperativeHandle(ref, () => ({
+        attach: (file: File) => void pick(file),
+        focus: () => input.current?.focus(),
+        // Edit on an unsent reply: its text comes back into the reply box, after anything already typed.
+        restore: (text: string) => {
+            setReply((cur) => (cur.trim() ? `${cur.trimEnd()}\n${text}` : text));
+            requestAnimationFrame(() => input.current?.focus());
+        },
+    }));
 
     const startRecording = async () => {
         const format = voiceFormat();
@@ -328,10 +339,34 @@ export function Composer({
         }
         const body = reply.trim();
         if (!body && !attachment) return void toast.message('Write a message first');
-        if (typeof navigator !== 'undefined' && !navigator.onLine) {
-            setQueued(true);
-            return void toast.message('No connection', { description: 'Your reply is kept and sends as soon as you are back online.' });
+        const offline = typeof navigator !== 'undefined' && !navigator.onLine;
+        // A typed reply is saved on this phone first (it survives closing the app), then sent.
+        if (!attachment) {
+            const queue = async () => {
+                outbox.add({
+                    id: replyKey.current ?? newId(),
+                    userId: scope.userId,
+                    tenantId: scope.tenantId,
+                    conversationId: id,
+                    body,
+                    replyTo: replyTo?.wamid ?? null,
+                });
+                replyKey.current = null;
+                setReply('');
+                onClearReply();
+                onTyping(false);
+                buzz(HAPTIC.send);
+                void flushOutbox();
+            };
+            if (offline) {
+                await queue();
+                return void toast.message('No connection', { description: 'Your reply is saved on this phone and sends when you’re back online.' });
+            }
+            if (await beforeSend('reply', queue)) await queue();
+
+            return;
         }
+        if (offline) return void toast.error('No connection. Photos, files and voice notes need a connection to send.');
         const go = async () => {
             setSending(true);
             replyKey.current ??= newId();
@@ -366,17 +401,6 @@ export function Composer({
     useEffect(() => {
         if (!inFlight.current) replyKey.current = null;
     }, [reply, attachment]);
-    // Queued while offline: send once the connection is back (the key makes sure it is stored once).
-    useEffect(() => {
-        if (!queued) return;
-        const back = () => {
-            setQueued(false);
-            void send();
-        };
-        window.addEventListener('online', back);
-
-        return () => window.removeEventListener('online', back);
-    }, [queued]); // eslint-disable-line react-hooks/exhaustive-deps
     // A held voice note is sent as soon as it has been converted and uploaded.
     useEffect(() => {
         if (autoSend.current && attachment && voice) {
@@ -525,14 +549,6 @@ export function Composer({
                                           {t.name}
                                       </button>
                                   ))}
-                        </div>
-                    )}
-                    {queued && mode === 'reply' && (
-                        <div className="flex items-center gap-2 border-b bg-warn-bg px-3 py-1.5 text-[12px] text-warn" role="status">
-                            <ClockIcon className="size-3.5" aria-hidden /> No connection · this reply sends as soon as you are back online
-                            <button type="button" className="ml-auto font-semibold underline-offset-2 hover:underline" onClick={() => setQueued(false)}>
-                                Cancel
-                            </button>
                         </div>
                     )}
                     {replyTo && mode === 'reply' && (

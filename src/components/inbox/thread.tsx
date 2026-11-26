@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMediaQuery } from '@/hooks/use-media-query';
+import { useOutbox } from '@/hooks/use-outbox';
 import { useStored } from '@/hooks/use-stored';
 import { api, errorMessage } from '@/lib/api';
 import { handBackConversation, takeOverConversation } from '@/lib/chatbots';
@@ -71,6 +72,7 @@ import {
     useThread,
 } from '@/lib/queries';
 import type { ConversationEvent, ConversationNote, Enquiry, Message, Resolution } from '@/lib/types';
+import * as outbox from '@/lib/outbox';
 import { cn } from '@/lib/utils';
 
 import { Composer, type ComposerHandle, type ComposerMode } from './composer';
@@ -78,6 +80,7 @@ import { ContextPanel, eventText, isDealEvent } from './context-panel';
 import { Chip, useNow, WindowChip } from './conversation-list';
 import { EditContactDialog, FlagDialog, NewDealDialog, SnoozeDialog, StepDialog } from './inbox-dialogs';
 import { MessageBubble } from './message-bubble';
+import { OutboxBubble } from './outbox-bubble';
 import { MobileWaitBar } from './mobile-wait-bar';
 import { reopenChat, resolveChat, ResolveMenu } from './resolve-menu';
 import { TemplateDialog } from './template-dialog';
@@ -264,6 +267,7 @@ export function Thread({
     const [dialog, setDialog] = useState<'edit' | 'step' | 'deal' | 'snooze' | 'flag' | null>(null);
     const [flagging, setFlagging] = useState<Resolution | null>(null);
     const composer = useRef<ComposerHandle>(null);
+    const { items: unsent, flush: flushOutbox } = useOutbox(conversationId);
     const dragDepth = useRef(0);
     const [dropping, setDropping] = useState(false);
     const scroller = useRef<HTMLDivElement>(null);
@@ -304,7 +308,17 @@ export function Thread({
     useEffect(() => {
         const el = scroller.current;
         if (el && pinnedToBottom.current) el.scrollTop = el.scrollHeight;
-    }, [timeline.length, conversationId]);
+    }, [timeline.length, conversationId, unsent.length]);
+    // A reply just saved on the phone: show it, wherever the agent had scrolled.
+    const unsentBefore = useRef(unsent.length);
+    useEffect(() => {
+        if (unsent.length > unsentBefore.current) {
+            pinnedToBottom.current = true;
+            const el = scroller.current;
+            if (el) el.scrollTop = el.scrollHeight;
+        }
+        unsentBefore.current = unsent.length;
+    }, [unsent.length]);
 
     // A link to one message (/inbox?c=…&m=…): load earlier pages until it is there, then show it.
     const focusDone = useRef<string | null>(null);
@@ -1035,6 +1049,33 @@ export function Thread({
                             </Fragment>
                         );
                     })}
+                    {/* Replies still on this phone: waiting for a connection, sending, or refused. */}
+                    {unsent.map((item) => (
+                        <OutboxBubble
+                            key={item.id}
+                            item={item}
+                            onEdit={() => {
+                                // The text goes back into the reply box first, then the unsent reply is removed.
+                                composer.current?.restore(item.body);
+                                setMode('reply');
+                                outbox.remove(item.id);
+                            }}
+                            onRetry={() => {
+                                // The 24-hour window closed since: keep the text, offer a template.
+                                if (!replyOpen) {
+                                    composer.current?.restore(item.body);
+                                    outbox.remove(item.id);
+                                    setMode('template');
+                                    toast.message('The 24-hour window has closed', {
+                                        description: 'Your text is kept in the reply box. Send a template to reach them.',
+                                    });
+                                    return;
+                                }
+                                outbox.update(item.id, { state: 'waiting', error: null });
+                                void flushOutbox();
+                            }}
+                        />
+                    ))}
                 </div>
 
                 <Composer

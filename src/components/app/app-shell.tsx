@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { ChannelDisconnectedBanner, ImpersonationBanner, PaymentFailedBanner, TrialBanner } from './banners';
 import { MobileTabBar, TABS } from './mobile-tab-bar';
 import { OfflineBar } from './offline-bar';
+import { OutboxRunner } from './outbox-runner';
 import { PushBridge } from './push-bridge';
 import { NotificationBell } from './notification-bell';
 import { numberScope, UNRELEASED_ROUTES } from './nav';
@@ -172,6 +173,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                             <Suspense>
                                 <PushBridge />
                             </Suspense>
+                            <OutboxRunner />
                         </div>
                     </div>
                 </div>

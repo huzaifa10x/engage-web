@@ -13,6 +13,7 @@ import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { useStored } from '@/hooks/use-stored';
 import { api } from '@/lib/api';
+import * as outbox from '@/lib/outbox';
 import { disablePush } from '@/lib/push';
 import { setReduceMotion } from '@/lib/mobile';
 
@@ -63,8 +64,14 @@ export default function MorePage() {
     })).filter((s) => s.items.length > 0);
 
     const signOut = async () => {
-        // This phone stops getting notifications for this account.
-        if (!me.impersonation) await disablePush();
+        if (!me.impersonation) {
+            // Unsent replies live only on this phone: say how many would be lost before going on.
+            const unsent = outbox.countFor(me.user.id);
+            if (unsent > 0 && !window.confirm(`${unsent} unsent ${unsent === 1 ? 'reply' : 'replies'} on this phone will be deleted. Sign out anyway?`)) return;
+            // This phone stops getting notifications for this account; drafts and unsent replies are removed.
+            await disablePush();
+            outbox.clearForSignOut(me.user.id);
+        }
         await api(me.impersonation ? 'auth/impersonation' : 'auth/logout', { method: me.impersonation ? 'DELETE' : 'POST' }).catch(() => undefined);
         qc.clear();
         router.replace('/login');
