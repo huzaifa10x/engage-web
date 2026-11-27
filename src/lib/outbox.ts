@@ -20,6 +20,8 @@ export type OutboxItem = {
     state: OutboxState;
     error: string | null;
     at: number;
+    /** Failed attempts while the phone was online (server busy or failing). */
+    tries?: number;
 };
 export type OutboxScope = { userId: string; tenantId: string };
 
@@ -124,37 +126,49 @@ let running: Promise<void> | null = null;
  */
 export function flush(scope: OutboxScope, onSent: (conversationId: string) => void): Promise<void> {
     if (running) return running;
-    running = (async () => {
-        try {
-            for (;;) {
-                if (typeof navigator !== 'undefined' && !navigator.onLine) return;
-                const next = read()
-                    .filter((i) => inScope(i, scope) && i.state === 'waiting')
-                    .sort((a, b) => a.at - b.at)[0];
-                if (!next) return;
-                update(next.id, { state: 'sending', error: null });
-                try {
-                    await sendToConversation(next.conversationId, { type: 'text', body: next.body, reply_to: next.replyTo ?? undefined }, next.id);
-                    remove(next.id);
-                    markReplied();
+    const run = async (): Promise<void> => {
+        for (;;) {
+            if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+            const next = read()
+                .filter((i) => inScope(i, scope) && i.state === 'waiting')
+                .sort((a, b) => a.at - b.at)[0];
+            if (!next) return;
+            update(next.id, { state: 'sending', error: null });
+            try {
+                await sendToConversation(next.conversationId, { type: 'text', body: next.body, reply_to: next.replyTo ?? undefined }, next.id);
+                remove(next.id);
+                markReplied();
+                onSent(next.conversationId);
+            } catch (e) {
+                const refused = e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 408 && e.status !== 429;
+                if (refused) {
+                    const reason = e.firstFieldError('body') ?? e.firstFieldError('message') ?? e.message;
+                    update(next.id, { state: 'refused', error: reason });
                     onSent(next.conversationId);
-                } catch (e) {
-                    const refused = e instanceof ApiError && e.status >= 400 && e.status < 500 && e.status !== 408 && e.status !== 429;
-                    if (refused) {
-                        const reason = e.firstFieldError('body') ?? e.firstFieldError('message') ?? e.message;
-                        update(next.id, { state: 'refused', error: reason });
-                        onSent(next.conversationId);
-                        continue;
-                    }
-                    update(next.id, { state: 'waiting', error: null });
-
-                    return; // no connection, or the server is busy: try again later
+                    continue;
                 }
+                update(next.id, { state: 'waiting', error: null });
+
+                // Online but the server keeps failing: after 3 tries say so, with Retry, instead of
+                // waiting for a connection the phone already has.
+                const tries = (next.tries ?? 0) + 1;
+                const online = typeof navigator === 'undefined' || navigator.onLine;
+                if (online && tries >= 3) {
+                    update(next.id, { state: 'refused', error: 'Couldn’t reach engageX', tries: 0 });
+                    onSent(next.conversationId);
+                    continue;
+                }
+                update(next.id, { state: 'waiting', error: null, tries: online ? tries : next.tries });
+
+                return; // no connection, or the server is busy: try again later
             }
-        } finally {
-            running = null;
         }
-    })();
+    };
+    // Cleared only after it was set: when there is nothing to send the loop ends at once, and clearing
+    // it inside the loop would run before the assignment and leave every later send blocked.
+    running = run().finally(() => {
+        running = null;
+    });
 
     return running;
 }

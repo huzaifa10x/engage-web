@@ -28,7 +28,8 @@ export function OutboxBubble({ item, onRetry, onEdit }: { item: OutboxItem; onRe
                 >
                     {item.state === 'waiting' && (
                         <>
-                            <ClockIcon className="size-3.5" aria-hidden /> Waiting for connection
+                            <ClockIcon className="size-3.5" aria-hidden />{' '}
+                            {typeof navigator !== 'undefined' && !navigator.onLine ? 'Waiting for connection' : 'Sending shortly…'}
                         </>
                     )}
                     {item.state === 'sending' && (
