@@ -168,7 +168,7 @@ export default function SalesRevenuePage() {
                 <EmptyState
                     icon={<ShoppingCartIcon />}
                     title="Sales & Revenue is part of the Pro plan"
-                    description="Connect your WooCommerce store with the 10X Engage plugin to see revenue from WhatsApp chats by source and product."
+                    description="Connect your WooCommerce store with the engageX plugin to see revenue from WhatsApp chats by source and product."
                     action={
                         <Button asChild>
                             <Link href="/billing">See plans</Link>

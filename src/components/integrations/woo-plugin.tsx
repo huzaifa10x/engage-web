@@ -37,7 +37,7 @@ async function copy(text: string) {
 
 /**
  * Integrations › WooCommerce › Connect with the plugin (Engagement Plan step D): download the
- * "10X Engage for WooCommerce" plugin, get a one-time workspace key, paste it in WordPress. The
+ * "engageX for WooCommerce" plugin, get a one-time workspace key, paste it in WordPress. The
  * dialog watches for the store to connect and opens it. Render it only while open (a fresh dialog per use).
  */
 export function PluginConnectDialog({
@@ -111,7 +111,7 @@ export function PluginConnectDialog({
                         <p className="text-muted-foreground">In WordPress: Plugins → Add New → Upload Plugin, choose the file, then Activate.</p>
                         <Button asChild variant="outline" className="w-fit">
                             <a href={PLUGIN_ZIP_URL} download>
-                                <DownloadIcon /> Download 10X Engage for WooCommerce
+                                <DownloadIcon /> Download engageX for WooCommerce
                             </a>
                         </Button>
                     </li>
@@ -140,7 +140,7 @@ export function PluginConnectDialog({
                     <li className="grid gap-1.5">
                         <p className="font-medium">3. Paste it in WordPress</p>
                         <p className="text-muted-foreground">
-                            WooCommerce → 10X Engage, paste the key and choose Connect. The store then shows as Connected here.
+                            WooCommerce → engageX, paste the key and choose Connect. The store then shows as Connected here.
                         </p>
                         {key && (
                             <p className="flex items-center gap-2 text-[12.5px] text-muted-foreground">
@@ -194,7 +194,7 @@ export function StoreSalesSettings({
                         <CardTitle>Sales from chats</CardTitle>
                         <CardDescription>
                             {integration.via === 'waiting'
-                                ? 'Waiting for the plugin: paste the workspace key in WooCommerce → 10X Engage.'
+                                ? 'Waiting for the plugin: paste the workspace key in WooCommerce → engageX.'
                                 : 'This store is connected with REST keys, so order messages work, but chat links cannot be followed to the order. Install the plugin to see which chats became orders.'}
                         </CardDescription>
                     </div>

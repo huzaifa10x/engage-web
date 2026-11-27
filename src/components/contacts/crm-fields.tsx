@@ -469,7 +469,7 @@ export function FieldRow({
     const c = ctx.contact;
     const ok = canEditField(c, f) && can(P.ContactsUpdate);
     const lastChange = changes.find((x) => f.history?.includes(x.field));
-    const tip = `HubSpot: ${f.hubspot}${lastChange ? ` · Last changed by ${lastChange.by?.name ?? 'Engage'}, ${fmtWhen(lastChange.at, ctx.now)}` : ''}`;
+    const tip = `HubSpot: ${f.hubspot}${lastChange ? ` · Last changed by ${lastChange.by?.name ?? 'engageX'}, ${fmtWhen(lastChange.at, ctx.now)}` : ''}`;
     const [flash, setFlash] = useState(false);
     const pen = useRef<HTMLButtonElement>(null);
     const value = f.get(ctx);

@@ -76,7 +76,7 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
     const reconnectWebhooks = useMutation({
         mutationFn: () => api(`whatsapp/accounts/${waba.id}/webhooks`, { method: 'POST' }),
         onSuccess: () => {
-            toast.success('Webhooks reconnected. Messages and updates from Meta reach 10X Engage again.');
+            toast.success('Webhooks reconnected. Messages and updates from Meta reach engageX again.');
             invalidate();
         },
         onError: (e) => toast.error(errorMessage(e)),
@@ -134,8 +134,8 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                             className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-warn/30 bg-warn-bg px-3 py-2 text-[13px] leading-relaxed text-ink-2"
                         >
                             <span>
-                                <span className="font-semibold text-warn">Meta isn’t sending this account’s messages to 10X Engage.</span> New messages,
-                                delivery updates and quality alerts won’t arrive until the webhooks are reconnected.
+                                <span className="font-semibold text-warn">Meta isn’t sending this account’s messages to engageX.</span> New messages, delivery
+                                updates and quality alerts won’t arrive until the webhooks are reconnected.
                             </span>
                             {canManage && (
                                 <Button size="sm" variant="outline" onClick={() => reconnectWebhooks.mutate()} disabled={reconnectWebhooks.isPending}>
@@ -146,9 +146,9 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                     )}
                     {!disconnected && waba.needs_reconnect && (
                         <p role="alert" className="mt-2.5 rounded-lg border border-warn/30 bg-warn-bg px-3 py-2 text-[13px] leading-relaxed text-ink-2">
-                            <span className="font-semibold text-warn">Meta hasn’t given 10X Engage permission to manage this account.</span> Reconnect it: sign
-                            in with the Facebook account that manages this business, choose the same business and WhatsApp account, and allow every permission
-                            it asks for. Your conversations, contacts and templates are kept.{' '}
+                            <span className="font-semibold text-warn">Meta hasn’t given engageX permission to manage this account.</span> Reconnect it: sign in
+                            with the Facebook account that manages this business, choose the same business and WhatsApp account, and allow every permission it
+                            asks for. Your conversations, contacts and templates are kept.{' '}
                             {canManage && (
                                 <Link href="/channels?connect=1" className="font-semibold text-warn underline underline-offset-2">
                                     Reconnect
@@ -437,7 +437,7 @@ function ConversionReportingRow({
                 <Badge tone={enabled ? 'good' : 'grey'} dot>
                     {enabled ? 'Enabled' : 'Not enabled'}
                 </Badge>
-                {!enabled && <span className="text-muted-foreground">Meta hasn’t allowed 10X Engage to report conversions for this account.</span>}
+                {!enabled && <span className="text-muted-foreground">Meta hasn’t allowed engageX to report conversions for this account.</span>}
             </span>
             {!enabled && canReconnect && (
                 <Button size="sm" variant="outline" onClick={onReconnect}>

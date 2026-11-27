@@ -23,8 +23,8 @@ export default function FollowUpsPage() {
     return (
         <>
             <PageHeader
-                title="Follow-ups & Alerts"
-                description="What answers when you are closed, who is alerted when a chat waits, the nudges sent when a customer goes quiet, and the ratings and feedback requests."
+                title="Alerts & automation"
+                description="Settings for what answers when you are closed, who is alerted when a chat waits, the nudges sent when a customer goes quiet, and ratings and feedback. Your task list is in Follow-ups."
                 actions={
                     <Button asChild variant="outline">
                         <Link href="/settings?tab=hours">

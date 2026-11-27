@@ -35,7 +35,7 @@ export default function ChatbotTemplatesPage() {
         <>
             <div className="cb-pagehead">
                 <div>
-                    <h1>Templates</h1>
+                    <h1>Flow templates</h1>
                     <p>Ready-made customer journeys. Preview the whole conversation, answer a few questions, and a working draft is built from your answers.</p>
                 </div>
             </div>

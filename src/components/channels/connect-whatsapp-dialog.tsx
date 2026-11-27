@@ -138,7 +138,7 @@ function ChooseFlow({ flow, setFlow, cancelled }: { flow: Flow; setFlow: (f: Flo
             title: 'My WhatsApp Business app number',
             body: !coexistence.enabled
                 ? 'Not available on this workspace. Contact support to connect a number that stays on the WhatsApp Business app.'
-                : 'Keep chatting from the app on your phone while your team uses 10X Engage. Your contacts and recent chat history are imported. Sending on this number is limited to 15 messages per second on every plan.',
+                : 'Keep chatting from the app on your phone while your team uses engageX. Your contacts and recent chat history are imported. Sending on this number is limited to 15 messages per second on every plan.',
             disabled: !coexistence.enabled,
         },
     ];
@@ -291,12 +291,12 @@ function RegisteredElsewhere({ conflict }: { conflict: SignupConflict }) {
                 <div>
                     <p className="font-semibold text-bad">
                         {conflict.sameApp
-                            ? 'This number is already connected to another 10X Engage environment'
+                            ? 'This number is already connected to another engageX environment'
                             : 'This number is already registered with another application'}
                     </p>
                     <p className="mt-0.5 text-ink-2">
                         {conflict.sameApp ? (
-                            'It is live on a different 10X Engage site (for example production), which uses the same Meta app.'
+                            'It is live on a different engageX site (for example production), which uses the same Meta app.'
                         ) : names.length ? (
                             <>
                                 It is currently connected to <span className="font-semibold">{where}</span>.
@@ -312,7 +312,7 @@ function RegisteredElsewhere({ conflict }: { conflict: SignupConflict }) {
                 <p className="font-semibold">How to fix it</p>
                 {conflict.sameApp ? (
                     <ol className="mt-2 grid list-decimal gap-1.5 pl-5 text-[13px] text-muted-foreground">
-                        <li>Sign in to the 10X Engage site where this number is currently working.</li>
+                        <li>Sign in to the engageX site where this number is currently working.</li>
                         <li>Open Channels and disconnect the number there.</li>
                         <li>Wait a minute, then come back here and check again.</li>
                     </ol>

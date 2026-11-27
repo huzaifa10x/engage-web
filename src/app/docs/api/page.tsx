@@ -375,7 +375,7 @@ export default function ApiDocsPage() {
         <div className="min-h-dvh bg-background">
             <header className="sticky top-0 z-40 border-b bg-card/90 backdrop-blur">
                 <div className="mx-auto flex h-16 max-w-[90rem] items-center gap-3 px-4 sm:px-6">
-                    <Link href="/" aria-label="10X Engage">
+                    <Link href="/" aria-label="engageX">
                         <Logo />
                     </Link>
                     <span className="hidden rounded-full bg-brand-100 px-2.5 py-0.5 text-[12px] font-semibold text-brand-600 sm:inline">
@@ -487,7 +487,7 @@ export default function ApiDocsPage() {
                             <Section id="rate-limits" title="Rate limits">
                                 <p className="max-w-3xl">
                                     Limits apply per workspace, across all its API keys, and come from the workspace&apos;s plan. They are separate from your
-                                    team&apos;s use of the 10X Engage portal, so an integration never slows your agents down. Over the limit you get{' '}
+                                    team&apos;s use of the engageX portal, so an integration never slows your agents down. Over the limit you get{' '}
                                     <code>429</code> with a <code>Retry-After</code> header: wait that many seconds and send again. The Developer page shows the
                                     requests of this minute and today.
                                 </p>

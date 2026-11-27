@@ -47,7 +47,7 @@ export function coexistenceLabel(s: PhoneNumber['coexistence_status']): string |
 export function disconnectExplanation(reason: string | null | undefined): string | null {
     switch (reason) {
         case 'partner_removed':
-            return '10X Engage was removed as a partner on this WhatsApp Business account in Meta Business Settings.';
+            return 'engageX was removed as a partner on this WhatsApp Business account in Meta Business Settings.';
         case 'offboarded':
             return 'This number was disconnected from inside the WhatsApp Business app.';
         case 'access_revoked':

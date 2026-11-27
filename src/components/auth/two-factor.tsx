@@ -48,7 +48,7 @@ function RecoveryCodes({ codes, onDone }: { codes: string[]; onDone: () => void 
                 </Button>
                 <Button asChild variant="outline" size="sm">
                     <a
-                        href={`data:text/plain;charset=utf-8,${encodeURIComponent(`10X Engage recovery codes\n\n${text}\n`)}`}
+                        href={`data:text/plain;charset=utf-8,${encodeURIComponent(`engageX recovery codes\n\n${text}\n`)}`}
                         download="10x-engage-recovery-codes.txt"
                     >
                         <DownloadIcon /> Download
@@ -328,8 +328,8 @@ export function TwoFactorChallenge({ onSignedIn, onCancel }: { onSignedIn: (me: 
                 </div>
                 {method !== 'app' && (
                     <p className="text-[12.5px]">
-                        After signing in you can replace your authenticator straight away. No access to your email or recovery codes? Contact 10X Engage
-                        support: after confirming who you are, they can reset two-factor sign-in for you.
+                        After signing in you can replace your authenticator straight away. No access to your email or recovery codes? Contact engageX support:
+                        after confirming who you are, they can reset two-factor sign-in for you.
                     </p>
                 )}
             </div>
@@ -412,8 +412,8 @@ export function TwoFactorCard({ status }: { status: TwoFactorStatus }) {
             <CardContent className="grid gap-4">
                 {status.review_account ? (
                     <p className="text-[13px] text-muted-foreground">
-                        This is a review account: it signs in with email and password only, without an authenticator or emailed code. 10X Engage support set
-                        this up; ask them to turn it off when the review is finished.
+                        This is a review account: it signs in with email and password only, without an authenticator or emailed code. engageX support set this
+                        up; ask them to turn it off when the review is finished.
                     </p>
                 ) : codes ? (
                     <RecoveryCodes codes={codes} onDone={() => (reset(), refresh())} />

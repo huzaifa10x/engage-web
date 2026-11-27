@@ -19,6 +19,8 @@ import { keys, startConversation, type StartPayload, useContact, usePhoneNumbers
 import type { LifecycleKey, MessageTemplate, PermissionVia, StartCandidate } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { phoneDisplay } from '@/lib/whatsapp';
+import Link from 'next/link';
+import { ConnectPrompt, useNoNumber } from '@/components/app/connect-prompt';
 
 const LIFE_TONE: Record<LifecycleKey, string> = {
     subscriber: 'border-border bg-muted text-ink-2',
@@ -72,6 +74,7 @@ export function StartConversationDialog({
     const router = useRouter();
     const now = useNow();
     const numbers = (usePhoneNumbers().data ?? []).filter((n) => n.status === 'connected');
+    const noNumber = useNoNumber();
     // The number it is sent from: the inbox's number unless another is chosen here (each number has its own templates).
     const [chosenId, setChosenId] = useState<string | null>(null);
     const from = numbers.find((n) => n.id === (chosenId ?? defaultNumberId)) ?? numbers[0] ?? null;
@@ -159,6 +162,7 @@ export function StartConversationDialog({
                                 Search first so you don’t create a duplicate. If the customer already has a chat, you’ll continue it.
                             </DialogDescription>
                         </DialogHeader>
+                        {noNumber && <ConnectPrompt purpose="start conversations" />}
                         {fromPicker}
                         <label className="relative mt-1 block">
                             <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-[15px] -translate-y-1/2 text-faint" />
@@ -295,6 +299,7 @@ export function StartConversationDialog({
                                 pre={step.pre}
                                 seed={step.seed}
                                 numberId={from.id}
+                                senderName={from.verified_name ?? phoneDisplay(from.display_phone_number)}
                                 wabaAccountId={from.waba_account_id ?? null}
                                 onBack={() => setStep({ kind: 'search' })}
                                 onCancel={() => close(false)}
@@ -333,6 +338,7 @@ function StartForm({
     pre,
     seed,
     numberId,
+    senderName,
     wabaAccountId,
     onBack,
     onCancel,
@@ -341,6 +347,7 @@ function StartForm({
     pre: StartCandidate | null;
     seed: string;
     numberId: string;
+    senderName: string;
     wabaAccountId: string | null;
     onBack: () => void;
     onCancel: () => void;
@@ -593,6 +600,14 @@ function StartForm({
                             ))}
                         </select>
                     </label>
+                    {templates.length === 0 && (
+                        <p className="col-span-2 text-[12.5px] text-warn" role="status">
+                            {senderName} has no approved utility template yet, so a first message can’t be sent from it.{' '}
+                            <Link href="/templates" className="font-semibold text-brand-600 underline-offset-2 hover:underline">
+                                New template
+                            </Link>
+                        </p>
+                    )}
                     <label className={label}>
                         {'{{2}}'} Enquiry topic
                         <Input id="nc-topic" value={topic} onChange={(e) => setTopic(e.target.value)} placeholder="e.g. your website project" maxLength={120} />

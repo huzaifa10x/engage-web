@@ -48,7 +48,7 @@ const NO_TEAM = '__no_team__';
 /** One line in plain words for a chat event (the timeline, Ownership and Activity). */
 export function eventText(e: ConversationEvent): string {
     const d = e.data as Record<string, string | null | undefined>;
-    const who = e.actor_name ?? (e.actor === 'customer' ? 'the customer' : 'Engage');
+    const who = e.actor_name ?? (e.actor === 'customer' ? 'the customer' : 'engageX');
     switch (e.type) {
         case 'conversation.assigned':
             return d.to_name
@@ -506,7 +506,7 @@ function SalesCard({ c, now, owners }: { c: Conversation; now: number; owners: A
             });
             refreshAll();
             void qc.invalidateQueries({ queryKey: ['inbox', 'events'] });
-            toast.success(`${STEP_TYPES.find((t) => t.id === type)?.label} · ${fmtWhen(at.toISOString())} · saved to Follow-ups & Alerts`);
+            toast.success(`${STEP_TYPES.find((t) => t.id === type)?.label} · ${fmtWhen(at.toISOString())} · saved to Follow-ups`);
         } catch (e) {
             toast.error(errorMessage(e));
         }

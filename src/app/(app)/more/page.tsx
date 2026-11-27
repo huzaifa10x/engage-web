@@ -1,13 +1,15 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { BellIcon, ChevronRightIcon, ListChecksIcon, LogOutIcon, MailIcon, ShieldCheckIcon } from 'lucide-react';
+import { BellIcon, ChevronRightIcon, DownloadIcon, LogOutIcon, MailIcon, ShieldCheckIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 import { TABS } from '@/components/app/mobile-tab-bar';
 import { isVisible, NAV, type NavItem, roleAllows } from '@/components/app/nav';
 import { useSession } from '@/components/app/session';
+import { InstallGuide } from '@/components/mobile/install-guide';
 import { Avatar } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -45,6 +47,7 @@ export default function MorePage() {
     const router = useRouter();
     const qc = useQueryClient();
     const [calm, setCalm] = useStored<boolean>('engage.reduce-motion', false);
+    const [install, setInstall] = useState(false);
 
     const roleKey = membership.role?.key;
     const growth = me.growth?.tier === 'full';
@@ -112,8 +115,21 @@ export default function MorePage() {
             <section>
                 <h2 className="px-1 pb-1.5 text-[12px] font-semibold tracking-wide text-muted-foreground uppercase">You</h2>
                 <Card className="divide-y overflow-hidden p-0">
-                    <Row href="/next-steps" icon={ListChecksIcon} label="Follow-ups" hint="Overdue, today and later" />
                     <Row href="/notifications" icon={BellIcon} label="Notifications" />
+                    <button
+                        type="button"
+                        onClick={() => setInstall(true)}
+                        className="flex min-h-13 w-full items-center gap-3 px-4 py-2.5 text-left active:bg-muted/60"
+                    >
+                        <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">
+                            <DownloadIcon className="size-4" aria-hidden />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[15px] font-semibold">Install the app</span>
+                            <span className="block truncate text-[12.5px] text-muted-foreground">iPhone, Android, or another phone</span>
+                        </span>
+                        <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                    </button>
                     <Row href="/settings?tab=notifications" icon={MailIcon} label="Notification settings" hint="This phone, and which emails you get" />
                     <Row href="/settings?tab=security" icon={ShieldCheckIcon} label="Sign-in & security" />
                     <label className="flex min-h-13 items-center gap-3 px-4 py-2.5">
@@ -141,6 +157,7 @@ export default function MorePage() {
                 <LogOutIcon className="size-4" aria-hidden /> {me.impersonation ? 'End support session' : 'Sign out of this device'}
             </button>
             <p className="pb-2 text-center text-[12px] text-muted-foreground">engageX · by 10X Digital</p>
+            <InstallGuide open={install} onOpenChange={setInstall} />
         </div>
     );
 }

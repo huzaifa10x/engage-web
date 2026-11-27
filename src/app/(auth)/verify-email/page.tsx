@@ -55,7 +55,7 @@ export default function VerifyEmailPage() {
         setError(null);
         try {
             await api('auth/email/verify', { method: 'POST', body: { code } });
-            toast.success('Email verified. Welcome to 10X Engage!');
+            toast.success('Email verified. Welcome to engageX!');
             await qc.invalidateQueries({ queryKey: keys.me }); // the redirect above takes over once /me says "verified"
         } catch (e) {
             setError(firstError(e));

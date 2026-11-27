@@ -241,7 +241,7 @@ function LoginForm() {
             </form>
 
             <p className="mt-6 text-sm text-muted-foreground">
-                New to 10X Engage?{' '}
+                New to engageX?{' '}
                 <Link
                     href={`/register${params.get('next') ? `?next=${encodeURIComponent(next)}` : ''}`}
                     className="font-semibold text-brand-600 hover:underline"

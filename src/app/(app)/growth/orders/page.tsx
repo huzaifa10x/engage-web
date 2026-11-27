@@ -58,7 +58,7 @@ export default function OrdersPage() {
                 <EmptyState
                     icon={<ShoppingCartIcon />}
                     title="Sales from chats is part of the Pro plan"
-                    description="Connect your WooCommerce store with the 10X Engage plugin to see which chats became orders, and the revenue behind each source."
+                    description="Connect your WooCommerce store with the engageX plugin to see which chats became orders, and the revenue behind each source."
                     action={
                         <Button asChild>
                             <Link href="/billing">See plans</Link>

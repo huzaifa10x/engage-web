@@ -98,7 +98,7 @@ export type Me = {
     permissions: string[];
     impersonation: { admin_name: string | null; reason: string | null; expires_at: string } | null;
     entitlements: EntitlementSnapshot | null;
-    /** Growth Hub pilot switch for the active workspace (set by 10X Engage, not part of a plan). */
+    /** Growth Hub pilot switch for the active workspace (set by engageX, not part of a plan). */
     /** tier: off | chip (Starter: Meta ad source chip only) | full (Growth Hub and Analytics → Marketing). */
     growth?: { enabled: boolean; tier?: 'off' | 'chip' | 'full' };
     /** The active workspace's date format and time zone (screens follow them). */
@@ -244,7 +244,7 @@ export type SignupStatus = 'started' | 'signup_captured' | 'exchanging' | 'provi
 /** Another provider's Meta app that a WhatsApp Business Account is still subscribed to. */
 export type SubscribedApp = { id: string; name: string | null; link: string | null };
 
-/** Why a signup was refused: `sameApp` = connected by another 10X Engage environment (same Meta app). */
+/** Why a signup was refused: `sameApp` = connected by another engageX environment (same Meta app). */
 export type SignupConflict = { apps: SubscribedApp[]; sameApp: boolean };
 
 export type SignupAttempt = {
@@ -1654,7 +1654,7 @@ export type Integration = {
     created_at: string | null;
     rules?: IntegrationRule[];
     // WooCommerce only (Engagement Plan step D):
-    /** plugin = "10X Engage for WooCommerce" connected · waiting = key issued, plugin not connected yet · rest = REST keys only */
+    /** plugin = "engageX for WooCommerce" connected · waiting = key issued, plugin not connected yet · rest = REST keys only */
     via?: 'plugin' | 'waiting' | 'rest';
     pending?: boolean;
     link_days?: number;

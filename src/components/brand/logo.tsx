@@ -14,7 +14,7 @@ export function Logo({ className, dark = false }: Props) {
         <svg
             viewBox={WORDMARK.viewBox}
             role="img"
-            aria-label="10X Engage"
+            aria-label="engageX"
             className={cn('h-7 w-auto shrink-0', dark ? 'text-white' : 'text-[#0A0D08]', className)}
         >
             <path fill="currentColor" d={WORDMARK.ink} />
@@ -26,7 +26,7 @@ export function Logo({ className, dark = false }: Props) {
 /** The mark alone (icon). Use it where the full logo does not fit: avatars, compact headers. */
 export function LogoMark({ className, dark = false }: Props) {
     return (
-        <svg viewBox={MARK.viewBox} role="img" aria-label="10X Engage" className={cn('size-7 shrink-0', dark ? 'text-white' : 'text-[#0A0D08]', className)}>
+        <svg viewBox={MARK.viewBox} role="img" aria-label="engageX" className={cn('size-7 shrink-0', dark ? 'text-white' : 'text-[#0A0D08]', className)}>
             <path fill="currentColor" d={MARK.ink} />
             <circle fill={BRAND_LIME} {...MARK.dot} />
         </svg>

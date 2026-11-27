@@ -138,7 +138,7 @@ function ChangeList({ contactId, limit, now }: { contactId: string; limit: numbe
                         <b className="font-semibold">{a.label}</b> <span className="text-muted-foreground">{a.from ?? '—'}</span> → {a.to ?? '—'}
                     </div>
                     <small className="mt-0.5 block text-[11px] text-faint">
-                        {a.by?.name ?? (a.source === 'system' ? 'Automation' : 'Engage')} · {fmtWhen(a.at, now)}
+                        {a.by?.name ?? (a.source === 'system' ? 'Automation' : 'engageX')} · {fmtWhen(a.at, now)}
                     </small>
                 </div>
             ))}

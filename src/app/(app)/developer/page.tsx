@@ -520,12 +520,13 @@ const DELIVERY: Record<WebhookDelivery['status'], [string, Tone]> = {
     failed: ['Failed', 'bad'],
 };
 
-function LogsTab({ canManage }: { canManage: boolean }) {
+function LogsTab({ canManage, onSetUp }: { canManage: boolean; onSetUp: () => void }) {
     const qc = useQueryClient();
     const [status, setStatus] = useState('all');
     const [open, setOpen] = useState<WebhookDelivery | null>(null);
     const deliveries = useWebhookDeliveries(status === 'all' ? {} : { status });
     const rows = deliveries.data?.data ?? [];
+    const endpointCount = useWebhookEndpoints().data?.length;
 
     return (
         <Card>
@@ -550,7 +551,19 @@ function LogsTab({ canManage }: { canManage: boolean }) {
                 {deliveries.isLoading ? (
                     <Skeleton className="h-24" />
                 ) : rows.length === 0 ? (
-                    <p className="text-[13.5px] text-muted-foreground">Nothing sent yet. Use “Send test event” on an endpoint to try it.</p>
+                    // Audit APP-012: with no endpoint there is nothing to test yet, so lead to setting one up.
+                    (endpointCount ?? 0) === 0 ? (
+                        <div className="text-[13.5px] text-muted-foreground">
+                            <p>No webhook endpoints yet, so nothing has been sent. Add an endpoint, then use “Send test event” on it.</p>
+                            {canManage && (
+                                <Button size="sm" variant="outline" className="mt-3" onClick={onSetUp}>
+                                    Set up a webhook
+                                </Button>
+                            )}
+                        </div>
+                    ) : (
+                        <p className="text-[13.5px] text-muted-foreground">Nothing sent yet. Use “Send test event” on an endpoint to try it.</p>
+                    )
                 ) : (
                     <Table>
                         <TableHeader>
@@ -749,6 +762,7 @@ export default function DeveloperPage() {
     const { can } = useSession();
     const overview = useDeveloperOverview();
     const canManage = can(P.DeveloperManage);
+    const [tab, setTab] = useState('keys');
 
     if (!can(P.DeveloperView)) return <Forbidden />;
 
@@ -758,7 +772,7 @@ export default function DeveloperPage() {
             {!overview.data ? (
                 <Skeleton className="h-64" />
             ) : (
-                <Tabs defaultValue="keys">
+                <Tabs value={tab} onValueChange={setTab}>
                     <UsageStrip overview={overview.data} />
                     <TabsList>
                         <TabsTrigger value="keys">API keys</TabsTrigger>
@@ -773,7 +787,7 @@ export default function DeveloperPage() {
                         <WebhooksTab overview={overview.data} canManage={canManage} />
                     </TabsContent>
                     <TabsContent value="logs">
-                        <LogsTab canManage={canManage} />
+                        <LogsTab canManage={canManage} onSetUp={() => setTab('webhooks')} />
                     </TabsContent>
                     <TabsContent value="reference">
                         <ReferenceTab overview={overview.data} />

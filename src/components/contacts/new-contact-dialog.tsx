@@ -60,7 +60,7 @@ export function NewContactDialog({ open, onOpenChange }: { open: boolean; onOpen
             toast.success('Contact created · they’ll join the inbox when a WhatsApp chat starts');
             openContact(r.data);
         } catch (err) {
-            if (err instanceof ApiError && err.status === 422 && /Already in Engage/.test(errorMessage(err))) {
+            if (err instanceof ApiError && err.status === 422 && /Already in engageX/.test(errorMessage(err))) {
                 const found = await api<{ data: Contact[] }>('contacts', { query: { q: p || e, per_page: 1 } }).catch(() => null);
                 const m = found?.data[0];
                 setError(

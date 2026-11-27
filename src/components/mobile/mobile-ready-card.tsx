@@ -7,6 +7,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react';
 import { toast } from 'sonner';
 
 import { PUSH_KEY, usePushState } from '@/components/settings/phone-notifications-card';
+import { InstallGuide } from '@/components/mobile/install-guide';
 import { useStored } from '@/hooks/use-stored';
 import { api, errorMessage } from '@/lib/api';
 import { canPrompt, isInstalled, onInstallChange, platform, promptInstall } from '@/lib/install';
@@ -44,6 +45,7 @@ export function MobileReadyCard() {
     const [open, setOpen] = useState(true);
     const [busy, setBusy] = useState<string | null>(null);
     const [how, setHow] = useState(false);
+    const [guide, setGuide] = useState(false);
     const promptable = useSyncExternalStore(onInstallChange, canPrompt, () => false);
     const [env, setEnv] = useState({ installed: false, allowed: false, replied: false, support: 'unsupported' as ReturnType<typeof pushSupport> });
     useEffect(() => {
@@ -97,7 +99,8 @@ export function MobileReadyCard() {
         if (!next) return;
         if (next.key === 'install') {
             if (promptable) return void run('install', promptInstall);
-            return setHow(true);
+            // Can't install from here: QR code, link and steps (audit MOB-005).
+            return setGuide(true);
         }
         if (next.key === 'allow' || next.key === 'register') {
             if (env.support !== 'supported') return setHow(true);
@@ -184,6 +187,7 @@ export function MobileReadyCard() {
                     </div>
                 </>
             )}
+            <InstallGuide open={guide} onOpenChange={setGuide} />
         </section>
     );
 }

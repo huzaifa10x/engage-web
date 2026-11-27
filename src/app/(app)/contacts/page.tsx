@@ -254,7 +254,25 @@ function ContactsTab() {
                         {!contacts.isLoading && rows.length === 0 && (
                             <tr>
                                 <td colSpan={canBulk ? 11 : 10} className="p-8 text-center text-muted-foreground">
-                                    No contacts match
+                                    {contacts.isError ? (
+                                        'Couldn’t load contacts. Try again.'
+                                    ) : q || life || owner || dup ? (
+                                        'No contacts match these filters.'
+                                    ) : (
+                                        <>
+                                            <b className="block font-semibold text-foreground">No contacts yet.</b>
+                                            {can(P.ContactsCreate) && (
+                                                <span className="mt-3 inline-flex gap-2">
+                                                    <Button size="sm" onClick={() => setAdding(true)}>
+                                                        Add contact
+                                                    </Button>
+                                                    <Button size="sm" variant="outline" onClick={() => setImporting(true)}>
+                                                        Import CSV
+                                                    </Button>
+                                                </span>
+                                            )}
+                                        </>
+                                    )}
                                 </td>
                             </tr>
                         )}

@@ -36,11 +36,11 @@ export function InviteDialog({ open, onOpenChange, roles }: { open: boolean; onO
         resolver: zodResolver(schema),
         values: { email: '', role_id: defaultRole },
     });
-    // The numbers the person can use once they join. Without any, an Agent sees an empty inbox and
-    // cannot be assigned chats, so every connected number is ticked to start with.
+    // The numbers the person can use once they join (audit APP-021): none ticked to start with, so the
+    // inviter chooses on purpose; the line under the list says exactly what they will see.
     const numbers = (usePhoneNumbers().data ?? []).filter((n) => n.status !== 'disconnected');
     const [picked, setPicked] = useState<string[] | null>(null);
-    const chosen = picked ?? numbers.map((n) => n.id);
+    const chosen = picked ?? [];
     const roleId = useWatch({ control, name: 'role_id' });
     const role = roles.find((r) => r.id === roleId);
     const needsNumbers = !allNumbers(role) && numbers.length > 0;
@@ -136,6 +136,21 @@ export function InviteDialog({ open, onOpenChange, roles }: { open: boolean; onO
                                     );
                                 })}
                             </ul>
+                            <p className="mt-2 text-[12.5px]" role="status">
+                                {chosen.length === 0 ? (
+                                    <span className="text-warn">Tick the numbers this teammate may use. They see none until you do.</span>
+                                ) : (
+                                    <>
+                                        They will see:{' '}
+                                        <b className="font-semibold">
+                                            {numbers
+                                                .filter((n) => chosen.includes(n.id))
+                                                .map((n) => n.display_phone_number)
+                                                .join(', ')}
+                                        </b>
+                                    </>
+                                )}
+                            </p>
                         </Field>
                     )}
                 </form>

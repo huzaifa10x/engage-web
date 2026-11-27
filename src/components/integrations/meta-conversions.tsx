@@ -127,7 +127,7 @@ function Accounts({ data, canManage }: { data: Overview; canManage: boolean }) {
             ))}
             {data.accounts.some((a) => a.permission === 'not_enabled') && (
                 <p className="text-[12.5px] text-muted-foreground">
-                    “Not enabled” means the account hasn’t given 10X Engage permission to send conversion events. Use “Reconnect to enable” on Channels, then
+                    “Not enabled” means the account hasn’t given engageX permission to send conversion events. Use “Reconnect to enable” on Channels, then
                     switch reporting on.
                 </p>
             )}

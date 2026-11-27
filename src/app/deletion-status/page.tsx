@@ -34,7 +34,7 @@ function DeletionStatus() {
                 <>
                     <p className="mt-2 text-sm text-muted-foreground">
                         {q.data.status === 'completed'
-                            ? '10X Engage no longer holds the Facebook account data linked to this request.'
+                            ? 'engageX no longer holds the Facebook account data linked to this request.'
                             : 'We received your request and are processing it. This usually finishes within minutes.'}
                     </p>
                     <dl className="mt-5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">

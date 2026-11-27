@@ -787,7 +787,7 @@ export const updateIntegration = (
     }>,
 ) => api<Data<Integration>>(`integrations/${id}`, { method: 'PATCH', body }).then((r) => r.data);
 
-/** A workspace key for the "10X Engage for WooCommerce" plugin (shown once). With an id: upgrades that store to the plugin. */
+/** A workspace key for the "engageX for WooCommerce" plugin (shown once). With an id: upgrades that store to the plugin. */
 export const createPluginKey = (integrationId?: string) =>
     api<Data<{ key: string; expires_in_days: number; integration: Integration }>>('integrations/woocommerce/plugin-key', {
         method: 'POST',

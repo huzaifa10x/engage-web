@@ -1,28 +1,28 @@
 import {
     BanknoteIcon,
-    BellRingIcon,
     BarChart3Icon,
+    BellRingIcon,
     BotIcon,
     CodeIcon,
+    ContactIcon,
     CreditCardIcon,
     FileTextIcon,
     GlobeIcon,
-    TargetIcon,
-    TrendingUpIcon,
     InboxIcon,
     LayoutDashboardIcon,
     ListChecksIcon,
-    type LucideIcon,
     MegaphoneIcon,
     MessageCircleIcon,
-    PieChartIcon,
     PhoneIcon,
+    PieChartIcon,
     PlugIcon,
     SettingsIcon,
     ShieldCheckIcon,
     ShoppingCartIcon,
+    TargetIcon,
+    TrendingUpIcon,
+    type LucideIcon,
     UsersIcon,
-    ContactIcon,
     ZapIcon,
 } from 'lucide-react';
 
@@ -70,6 +70,8 @@ export const NAV: NavSection[] = [
             { label: 'Dashboard', icon: LayoutDashboardIcon, href: '/dashboard' },
             { label: 'Conversations', icon: InboxIcon, href: '/inbox', permission: P.InboxView },
             { label: 'Contacts & CRM', icon: ContactIcon, href: '/contacts', permission: P.ContactsView },
+            // The task list: every customer's next steps by due date (audit MOB-002).
+            { label: 'Follow-ups', icon: ListChecksIcon, href: '/next-steps', permission: P.ContactsView },
         ],
     },
     {
@@ -77,8 +79,8 @@ export const NAV: NavSection[] = [
         items: [
             { label: 'Web Chatbot', icon: MessageCircleIcon },
             { label: 'Chatbots & Flows', icon: BotIcon, href: '/chatbots', permission: P.ChatbotsView },
-            // Auto reply (after-hours flow per number) and follow-up rules, moved out of Settings.
-            { label: 'Follow-ups & Alerts', icon: BellRingIcon, href: '/follow-ups', permission: P.SettingsView },
+            // Auto reply (after-hours flow per number), reply alerts, nudges and feedback: settings, not the task list.
+            { label: 'Alerts & automation', icon: BellRingIcon, href: '/follow-ups', permission: P.SettingsView },
             { label: 'Automations', icon: ZapIcon },
         ],
     },
@@ -86,7 +88,7 @@ export const NAV: NavSection[] = [
         title: 'Grow',
         items: [
             { label: 'Campaigns', icon: MegaphoneIcon, href: '/campaigns', permission: P.CampaignsView },
-            { label: 'Templates', icon: FileTextIcon, href: '/templates', permission: P.TemplatesView },
+            { label: 'Message templates', icon: FileTextIcon, href: '/templates', permission: P.TemplatesView },
             { label: 'Growth Hub', icon: TrendingUpIcon, heading: true, growth: true, permission: P.InboxView },
             { label: 'Leads', icon: TargetIcon, href: '/growth/leads', permission: P.InboxView, growth: true, sub: true },
             { label: 'Tracking Setup', icon: GlobeIcon, href: '/growth/setup', permission: P.GrowthView, growth: true, sub: true },

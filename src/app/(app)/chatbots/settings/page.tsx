@@ -40,7 +40,7 @@ export default function BotSettingsPage() {
                     <h1>Bot settings</h1>
                     <p>
                         What all your flows share. A flow sets its own behaviour in its Flow settings, and a step can override that for itself. Business hours
-                        and CRM data live elsewhere in Engage and are only used here.
+                        and CRM data live elsewhere in engageX and are only used here.
                     </p>
                 </div>
             </div>

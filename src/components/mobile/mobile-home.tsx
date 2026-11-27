@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useMemo } from 'react';
 
 import { useSelectedNumber } from '@/components/app/number-switcher';
+import { ConnectPrompt, useNoNumber } from '@/components/app/connect-prompt';
 import { useSession } from '@/components/app/session';
 import { useNow } from '@/components/inbox/conversation-list';
 import { Avatar } from '@/components/ui/avatar';
@@ -34,6 +35,7 @@ const first = (name: string | null | undefined) => (name ?? '').trim().split(' '
 export function MobileHome() {
     const { me, can, membership } = useSession();
     const owner = membership.role?.key === 'owner';
+    const noNumber = useNoNumber();
     const [numberId] = useSelectedNumber();
     const now = useNow(15_000);
     const inbox = can(P.InboxView);
@@ -92,6 +94,7 @@ export function MobileHome() {
                         )}
                     </div>
 
+                    {noNumber && <ConnectPrompt purpose="start receiving chats" className="mt-2.5" />}
                     <MobileReadyCard />
 
                     <ActionCentre s={s} />

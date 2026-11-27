@@ -9,7 +9,7 @@ import { ServiceWorker } from '@/components/app/service-worker';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
-    title: { default: '10X Engage', template: '%s · 10X Engage' },
+    title: { default: 'engageX', template: '%s · engageX' },
     description: 'WhatsApp Business messaging, inbox and campaigns — by 10X Digital.',
     robots: { index: false, follow: false },
 };

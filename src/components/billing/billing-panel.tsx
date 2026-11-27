@@ -530,7 +530,7 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
                             </p>
                             <p className="text-[13px] text-muted-foreground">
                                 {card.data
-                                    ? `Expires ${String(card.data.exp_month).padStart(2, '0')}/${card.data.exp_year}. Kept by Stripe, not by 10X Engage.`
+                                    ? `Expires ${String(card.data.exp_month).padStart(2, '0')}/${card.data.exp_year}. Kept by Stripe, not by engageX.`
                                     : selfServe
                                       ? "Stripe has no card for renewals. Add one on Stripe's secure page."
                                       : "No card needed on Free. You add one on Stripe's secure page when you upgrade."}

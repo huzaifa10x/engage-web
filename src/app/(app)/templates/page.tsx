@@ -5,6 +5,7 @@ import { FileTextIcon, PlusIcon, SearchIcon, Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
+import { ConnectPrompt, useNoNumber } from '@/components/app/connect-prompt';
 import { EmptyState, Forbidden, PageHeader } from '@/components/app/page-header';
 import { useSession } from '@/components/app/session';
 import { CategoryChangeWarning } from '@/components/campaigns/cost-estimate';
@@ -44,7 +45,10 @@ export default function TemplatesPage() {
     const qc = useQueryClient();
     const allowed = can(P.TemplatesView);
     const numbers = usePhoneNumbers();
-    const accounts = (useWabaAccounts(allowed && can(P.ChannelsView)).data ?? []).filter((a) => a.status === 'connected');
+    const wabas = useWabaAccounts(allowed && can(P.ChannelsView));
+    const accounts = (wabas.data ?? []).filter((a) => a.status === 'connected');
+    // Loaded and nothing connected (not just still loading): say why New template is off (audit APP-002).
+    const noNumber = useNoNumber();
     const [accountId, setAccountId] = useState<string | null>(null);
     const [status, setStatus] = useState<string | null>(null);
     const [search, setSearch] = useState('');
@@ -89,12 +93,17 @@ export default function TemplatesPage() {
     return (
         <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
             <PageHeader
-                title="Templates"
+                title="Message templates"
                 description="Message templates approved by Meta. They are required to start a conversation or to write to a customer after the 24-hour window has closed."
                 actions={
                     <>
                         {can(P.TemplatesSubmit) && (
-                            <Button onClick={() => setCreating(true)} disabled={accounts.length === 0}>
+                            <Button
+                                onClick={() => setCreating(true)}
+                                disabled={accounts.length === 0}
+                                aria-describedby={noNumber ? 'templates-need-number' : undefined}
+                                title={wabas.isLoading ? 'Loading your WhatsApp accounts…' : noNumber ? 'Connect a WhatsApp number first' : undefined}
+                            >
                                 <PlusIcon /> New template
                             </Button>
                         )}
@@ -102,6 +111,12 @@ export default function TemplatesPage() {
                 }
             />
 
+            {noNumber && <ConnectPrompt purpose="create message templates" className="mb-4" />}
+            {noNumber && (
+                <span id="templates-need-number" className="sr-only">
+                    New template needs a connected WhatsApp number.
+                </span>
+            )}
             <div className="mb-4 flex flex-wrap items-center gap-2">
                 <div className="relative min-w-52 flex-1">
                     <SearchIcon className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />

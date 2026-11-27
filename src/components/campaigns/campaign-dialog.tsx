@@ -13,6 +13,16 @@ import { describeRule, FieldFilter, type FieldFilterValue } from '@/components/c
 import { emptySelection, selectionError, TemplatePicker, type TemplateSelection } from '@/components/templates/template-picker';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -115,6 +125,8 @@ export function CampaignDialog({
     const [at, setAt] = useState(inAnHour);
     const [error, setError] = useState<string | null>(null);
     const [pending, setPending] = useState<'save' | 'launch' | null>(null);
+    // Audit APP-004: one review step before anything is sent or scheduled.
+    const [reviewing, setReviewing] = useState(false);
 
     if (open && loaded !== (campaign?.id ?? null)) {
         setLoaded(campaign?.id ?? null);
@@ -666,7 +678,7 @@ export function CampaignDialog({
                     </Button>
                     {canSend && (
                         <Button
-                            onClick={() => submit(true)}
+                            onClick={() => setReviewing(true)}
                             disabled={
                                 pending !== null ||
                                 !selection.template ||
@@ -677,16 +689,85 @@ export function CampaignDialog({
                                 (needsConfirmation && !consentConfirmed)
                             }
                         >
-                            {pending === 'launch'
-                                ? 'Starting…'
-                                : when === 'later'
-                                  ? 'Schedule'
-                                  : ab.enabled && ab.testPercent === 20
-                                    ? 'Start the test'
-                                    : `Send to ${a?.eligible.toLocaleString() ?? '…'}`}
+                            {pending === 'launch' ? 'Starting…' : when === 'later' ? 'Review and schedule' : 'Review and send'}
                         </Button>
                     )}
                 </DialogFooter>
+                {a && from && selection.template && (
+                    <AlertDialog open={reviewing} onOpenChange={setReviewing}>
+                        <AlertDialogContent className="sm:max-w-lg">
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Check before {when === 'later' ? 'scheduling' : 'sending'}</AlertDialogTitle>
+                                <AlertDialogDescription>Nothing goes out until you confirm.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-[13.5px]">
+                                <dt className="text-muted-foreground">From</dt>
+                                <dd className="font-semibold">
+                                    {from.verified_name ?? 'WhatsApp number'} · <span className="font-mono text-[12.5px]">{from.display_phone_number}</span>
+                                </dd>
+                                <dt className="text-muted-foreground">Template</dt>
+                                <dd className="font-semibold">
+                                    {selection.template.name} · {selection.template.language}
+                                    {a.category ? ` · ${a.category.toLowerCase()}` : ''}
+                                </dd>
+                                <dt className="text-muted-foreground">When</dt>
+                                <dd className="font-semibold">
+                                    {when === 'later'
+                                        ? new Date(zonedToIso(at)).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+                                        : a.quiet_until
+                                          ? `When quiet hours end (${new Date(a.quiet_until).toLocaleTimeString(undefined, { timeStyle: 'short' })})`
+                                          : 'Now'}
+                                    {ab.enabled ? ' · A/B test' : ''}
+                                </dd>
+                                <dt className="text-muted-foreground">Recipients</dt>
+                                <dd>
+                                    <b className="font-semibold">{a.eligible.toLocaleString()}</b> of {a.matched.toLocaleString()} in the audience
+                                </dd>
+                                {a.matched > a.eligible && (
+                                    <>
+                                        <dt className="text-muted-foreground">Excluded</dt>
+                                        <dd>
+                                            {[
+                                                [a.excluded.opted_out, 'opted out'],
+                                                [a.excluded.stopped_marketing, 'stopped marketing'],
+                                                [a.excluded.frequency_cap, 'weekly cap reached'],
+                                                [a.excluded.no_consent_record ?? 0, 'no opt-in recorded'],
+                                                [a.excluded.no_number, 'no WhatsApp number'],
+                                            ]
+                                                .filter(([n]) => (n as number) > 0)
+                                                .map(([n, why]) => `${(n as number).toLocaleString()} ${why}`)
+                                                .join(' · ')}
+                                        </dd>
+                                    </>
+                                )}
+                                {a.cost_estimate && (
+                                    <>
+                                        <dt className="text-muted-foreground">Meta cost</dt>
+                                        <dd>
+                                            about <b className="font-semibold">USD {a.cost_estimate.total.toFixed(2)}</b>, billed by Meta to your account
+                                        </dd>
+                                    </>
+                                )}
+                            </dl>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel className="max-sm:h-12">Back</AlertDialogCancel>
+                                <AlertDialogAction
+                                    className="max-sm:h-12"
+                                    onClick={() => {
+                                        setReviewing(false);
+                                        void submit(true);
+                                    }}
+                                >
+                                    {when === 'later'
+                                        ? `Schedule for ${a.eligible.toLocaleString()} ${a.eligible === 1 ? 'person' : 'people'}`
+                                        : ab.enabled && ab.testPercent === 20
+                                          ? `Start the test (${a.eligible.toLocaleString()} people)`
+                                          : `Send to ${a.eligible.toLocaleString()} ${a.eligible === 1 ? 'person' : 'people'}`}
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                )}
             </DialogContent>
         </Dialog>
     );

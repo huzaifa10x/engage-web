@@ -203,8 +203,8 @@ function AutomationDialog({ platform, overview, onClose }: { platform: 'Zapier' 
                 <DialogHeader>
                     <DialogTitle>Connect {platform}</DialogTitle>
                     <DialogDescription>
-                        {platform} connects 10X Engage to thousands of other apps: start an automation when a WhatsApp message arrives, or send a WhatsApp
-                        message when something happens elsewhere.
+                        {platform} connects engageX to thousands of other apps: start an automation when a WhatsApp message arrives, or send a WhatsApp message
+                        when something happens elsewhere.
                     </DialogDescription>
                 </DialogHeader>
                 {!ready && (

@@ -9,7 +9,7 @@ import { P } from '@/lib/permissions';
 
 const LINKS = [
     ['/chatbots', 'My Flows'],
-    ['/chatbots/templates', 'Templates'],
+    ['/chatbots/templates', 'Flow templates'],
     ['/chatbots/runs', 'Runs & Activity'],
     ['/chatbots/insights', 'Flow insights'],
     ['/chatbots/start-rules', 'Start rules'],

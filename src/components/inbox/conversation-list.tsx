@@ -43,6 +43,7 @@ import {
 } from '@/lib/queries';
 import type { Conversation } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { ConnectPrompt, useNoNumber } from '@/components/app/connect-prompt';
 
 /** Mobile brief v5: Needs reply with the window open (closing soonest first), then closed, then the rest. */
 type QueueGroup = 'open' | 'closed' | 'rest';
@@ -285,6 +286,7 @@ export function ConversationList({
         Number(filters.bot !== 'all');
 
     const resolvedView = view === 'resolved' && !q;
+    const noNumber = useNoNumber();
     const list = useConversations(
         {
             phone_number_id: phoneNumberId,
@@ -306,6 +308,9 @@ export function ConversationList({
         polling ? 15_000 : false,
         !resolvedView,
     );
+    // An empty view: does the workspace have any chat at all ("No chats yet" vs "Everyone has a reply")?
+    const listEmpty = !!list.data && list.data.pages.every((p) => p.data.length === 0);
+    const anyChat = useConversations({ sort: 'newest', include_snoozed: true, assigned: 'any' }, false, listEmpty && !q && !activeFilters);
     // Pages are read by position while the order changes (a new message moves a chat up): a chat can
     // come back on the next page, so each one is listed once.
     const rows = useMemo(() => {
@@ -595,16 +600,44 @@ export function ConversationList({
                                 </div>
                             </li>
                         ))}
+                    {/* Five honest states (audit APP-026): no number, nothing yet, all done, filtered to zero, failed. */}
                     {!list.isLoading && rows.length === 0 && (
                         <li className="px-6 py-14 text-center text-[13px] text-muted-foreground">
-                            {view === 'needs' && !q && !activeFilters ? (
+                            {list.isError ? (
                                 <>
-                                    <b className="block font-semibold text-foreground">Inbox zero</b>Every customer has had a human reply.
+                                    <b className="block font-semibold text-foreground">Couldn’t load the chats.</b>
+                                    <Button variant="outline" size="sm" className="mt-3" onClick={() => void list.refetch()}>
+                                        Try again
+                                    </Button>
+                                </>
+                            ) : noNumber ? (
+                                <ConnectPrompt purpose="start receiving chats" className="text-left" />
+                            ) : q || activeFilters ? (
+                                <>
+                                    <b className="block font-semibold text-foreground">No chats match {q ? 'this search' : 'these filters'}.</b>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="mt-3"
+                                        onClick={() => {
+                                            setFilters(NO_FILTERS);
+                                            setSearch('');
+                                        }}
+                                    >
+                                        Clear {q ? 'search' : 'filters'}
+                                    </Button>
+                                </>
+                            ) : anyChat.isLoading ? null : !anyChat.data?.pages[0]?.data.length ? (
+                                <>
+                                    <b className="block font-semibold text-foreground">No chats yet.</b>They’ll appear here when a customer messages you.
+                                </>
+                            ) : view === 'needs' ? (
+                                <>
+                                    <b className="block font-semibold text-foreground">Everyone has a reply. 🎉</b>New messages from customers land here first.
                                 </>
                             ) : (
                                 <>
-                                    <b className="block font-semibold text-foreground">No matching conversations</b>Try another view, or clear search and
-                                    filters.
+                                    <b className="block font-semibold text-foreground">Nothing here right now.</b>Try another view.
                                 </>
                             )}
                         </li>

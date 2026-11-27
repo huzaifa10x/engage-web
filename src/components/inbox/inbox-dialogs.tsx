@@ -345,7 +345,7 @@ export function StepDialog({
             else await api(`contacts/${contactId}/next-steps`, { method: 'POST', body });
             invalidateEnquiry(qc, contactId);
             void qc.invalidateQueries({ queryKey: ['inbox', 'events'] });
-            toast.success('Next step saved to Follow-ups & Alerts');
+            toast.success('Next step saved to Follow-ups');
             onOpenChange(false);
         } catch (e) {
             setError(errorMessage(e));
@@ -369,7 +369,7 @@ export function StepDialog({
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
                     <DialogTitle>{step ? 'Edit next step' : 'Set next step'}</DialogTitle>
-                    <DialogDescription>Saved to Follow-ups & Alerts. It doesn’t snooze the chat or change Needs reply.</DialogDescription>
+                    <DialogDescription>Saved to Follow-ups. It doesn’t snooze the chat or change Needs reply.</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-3">
                     <label className={label}>

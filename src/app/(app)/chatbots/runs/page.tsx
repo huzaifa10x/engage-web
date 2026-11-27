@@ -112,10 +112,30 @@ function Runs() {
                 {runs.isLoading ? (
                     <Skeleton className="h-48 w-full" />
                 ) : rows.length === 0 ? (
-                    <div className="cb-empty">
-                        <b style={{ color: 'var(--cb-ink)' }}>No runs yet</b>
-                        <span>When a live flow answers a customer, the run shows up here.</span>
-                    </div>
+                    // Audit APP-018: filtered to nothing is not the same as no runs at all.
+                    Object.keys(filters).some((k) => k !== 'flow') ? (
+                        <div className="cb-empty">
+                            <b style={{ color: 'var(--cb-ink)' }}>No runs match these filters</b>
+                            <button
+                                type="button"
+                                className="cb-btn"
+                                onClick={() => {
+                                    setStatus('all');
+                                    setQ('');
+                                }}
+                            >
+                                Clear filters
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="cb-empty">
+                            <b style={{ color: 'var(--cb-ink)' }}>No runs yet</b>
+                            <span>When a live flow answers a customer, the run shows up here.</span>
+                            <Link href="/chatbots" className="cb-btn">
+                                Go to My Flows
+                            </Link>
+                        </div>
+                    )
                 ) : (
                     <div className="grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)]" style={{ borderTop: '1px solid var(--cb-line-2)' }}>
                         <div className="cb-scrollx" style={{ maxHeight: 640, overflowY: 'auto' }}>
