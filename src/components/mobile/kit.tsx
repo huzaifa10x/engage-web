@@ -2,8 +2,10 @@
 
 import { ChevronRightIcon } from 'lucide-react';
 import Link from 'next/link';
+import { useCallback, useState } from 'react';
 import { Dialog as DialogPrimitive } from 'radix-ui';
 
+import { useSwipeToClose } from '@/components/ui/swipe-to-close';
 import { useMediaQuery } from '@/hooks/use-media-query';
 import { liveClock, waitTier } from '@/lib/promise';
 import { dur } from '@/lib/inbox';
@@ -201,11 +203,16 @@ export function BottomSheet({
     title: string;
     children: React.ReactNode;
 }) {
+    const [node, setNode] = useState<HTMLDivElement | null>(null);
+    const close = useCallback(() => onOpenChange(false), [onOpenChange]);
+    useSwipeToClose(node, close);
+
     return (
         <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
             <DialogPrimitive.Portal>
                 <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/30 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
                 <DialogPrimitive.Content
+                    ref={setNode}
                     aria-describedby={undefined}
                     className="fixed inset-x-0 bottom-0 z-50 max-h-[80dvh] overflow-y-auto rounded-t-[20px] bg-card pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-12px_34px_rgba(13,17,9,.18)] outline-none data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:animate-in data-[state=open]:slide-in-from-bottom"
                 >

@@ -19,6 +19,7 @@ import { disablePush } from '@/lib/push';
 import { P } from '@/lib/permissions';
 
 import { useSession } from './session';
+import { confirmAction } from '@/components/ui/confirm';
 
 export function UserMenu() {
     const { me, can } = useSession();
@@ -29,7 +30,15 @@ export function UserMenu() {
         if (!me.impersonation) {
             // Unsent replies live only on this phone: say how many would be lost before going on.
             const unsent = outbox.countFor(me.user.id);
-            if (unsent > 0 && !window.confirm(`${unsent} unsent ${unsent === 1 ? 'reply' : 'replies'} on this phone will be deleted. Sign out anyway?`)) return;
+            if (
+                unsent > 0 &&
+                !(await confirmAction({
+                    title: `${unsent} unsent ${unsent === 1 ? 'reply' : 'replies'} on this phone will be deleted. Sign out anyway?`,
+                    destructive: true,
+                    confirm: 'Sign out',
+                }))
+            )
+                return;
             // This phone stops getting notifications for this account; drafts and unsent replies are removed.
             await disablePush();
             outbox.clearForSignOut(me.user.id);

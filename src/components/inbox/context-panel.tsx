@@ -41,6 +41,7 @@ import {
 } from '@/lib/queries';
 import type { Conversation, ConversationEvent, Enquiry, NextStep } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { HANDLE, useSwipeToClose } from '@/components/ui/swipe-to-close';
 
 const NO_TEAM = '__no_team__';
 
@@ -106,6 +107,8 @@ function Section({ title, badge, open = false, children }: { title: string; badg
  * opens over the chat.
  */
 export function ContextPanel({ conversation: c, open, onClose, now }: { conversation: Conversation; open: boolean; onClose: () => void; now: number }) {
+    const [sheet, setSheet] = useState<HTMLElement | null>(null);
+    useSwipeToClose(sheet, onClose);
     const [width, setWidth] = useStored<number>('engage.inbox.panel-width', 304);
     // One copy of the panel: beside the chat on wide screens, over it on narrow ones.
     const wide = useMediaQuery('(min-width: 1280px)');
@@ -135,14 +138,17 @@ export function ContextPanel({ conversation: c, open, onClose, now }: { conversa
                 </aside>
             )}
             {open && !wide && (
-                <div className="fixed inset-0 z-50 flex justify-end bg-black/30 xl:hidden" onClick={onClose}>
+                <div className="fixed inset-0 z-50 flex animate-in justify-end bg-black/30 duration-200 fade-in-0 max-sm:items-end xl:hidden" onClick={onClose}>
+                    {/* Phones: a tall bottom sheet with a grab handle (drag down to close); tablets: a side panel. */}
                     <aside
-                        className="h-full w-full max-w-sm overflow-y-auto bg-card shadow-raised"
+                        ref={setSheet}
+                        className="relative h-full w-full max-w-sm overflow-y-auto overscroll-contain bg-card shadow-raised max-sm:h-[94dvh] max-sm:max-w-none max-sm:animate-in max-sm:rounded-t-[20px] max-sm:pt-4 max-sm:pb-[env(safe-area-inset-bottom)] max-sm:duration-300 max-sm:slide-in-from-bottom"
                         aria-label="Customer context"
                         role="dialog"
                         aria-modal="true"
                         onClick={(e) => e.stopPropagation()}
                     >
+                        <span aria-hidden className={HANDLE} />
                         {body}
                     </aside>
                 </div>

@@ -33,6 +33,7 @@ import {
 import type { Billing, BillingPlan, BillingPortalFlow } from '@/lib/types';
 
 import { PlanUsage } from './plan-usage';
+import { confirmAction } from '@/components/ui/confirm';
 
 const money = (minor: number, currency: string) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency, minimumFractionDigits: minor % 100 === 0 ? 0 : 2 }).format(minor / 100);
@@ -344,8 +345,8 @@ export function BillingPanel({ canManage }: { canManage: boolean }) {
         toStripe(`checkout-${plan.key}`, () => startCheckout(plan.key, interval));
     };
 
-    const switchFree = () => {
-        if (!window.confirm(`Switch to Free now? ${b.plan.name} trial features stop straight away.`)) return;
+    const switchFree = async () => {
+        if (!(await confirmAction({ title: `Switch to Free now? ${b.plan.name} trial features stop straight away.`, destructive: true }))) return;
         setBusy('free');
         switchToFree().then(
             (data) => {

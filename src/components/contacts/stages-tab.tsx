@@ -14,6 +14,7 @@ import { api, errorMessage } from '@/lib/api';
 import { P } from '@/lib/permissions';
 import { keys, useStages } from '@/lib/queries';
 import type { CrmStage, StageColor, StageGroup } from '@/lib/types';
+import { confirmAction } from '@/components/ui/confirm';
 
 const COLORS: { value: StageColor; label: string }[] = [
     { value: 'grey', label: 'Grey' },
@@ -171,10 +172,11 @@ export function StagesTab({ open }: { open: boolean }) {
                                     variant="ghost"
                                     aria-label={`Remove stage ${s.name}`}
                                     disabled={run.isPending}
-                                    onClick={() =>
-                                        window.confirm(
-                                            `Archive the stage “${s.name}”? Every enquiry on it must be moved first, and you always keep at least one Open, one Won and one Lost stage. Archived stages stay in the history and can be restored.`,
-                                        ) && run.mutate(() => api(`crm/stages/${s.id}`, { method: 'DELETE' }))
+                                    onClick={async () =>
+                                        (await confirmAction({
+                                            title: `Archive the stage “${s.name}”? Every enquiry on it must be moved first, and you always keep at least one Open, one Won and one Lost stage. Archived stages stay in the history and can be restored.`,
+                                            destructive: true,
+                                        })) && run.mutate(() => api(`crm/stages/${s.id}`, { method: 'DELETE' }))
                                     }
                                 >
                                     <Trash2Icon />

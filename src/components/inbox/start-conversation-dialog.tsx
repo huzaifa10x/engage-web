@@ -282,7 +282,9 @@ export function StartConversationDialog({
                                 </span>
                             </button>
                         </div>
-                        <p className="text-[12px] text-muted-foreground">↑ ↓ to move · Enter to choose · numbers match in any format (050…, 55…, +971 55…)</p>
+                        <p className="text-[12px] text-muted-foreground">
+                            <span className="max-sm:hidden">↑ ↓ to move · Enter to choose · </span>Numbers match in any format (050…, 55…, +971 55…)
+                        </p>
                     </>
                 ) : (
                     from && (

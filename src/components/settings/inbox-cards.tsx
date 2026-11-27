@@ -18,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { ApiError, errorMessage } from '@/lib/api';
 import { deleteCannedResponse, saveCannedResponse, updateInboxSettings, useCannedResponses, useInboxSettings, usePhoneNumbers } from '@/lib/queries';
 import type { CannedResponse, InboxSettings, WeekHours } from '@/lib/types';
+import { confirmAction } from '@/components/ui/confirm';
 
 const DAYS: [keyof InboxSettings['business_hours']['days'], string][] = [
     ['mon', 'Monday'],
@@ -485,7 +486,7 @@ export function CannedResponsesCard({ canManage, limit }: { canManage: boolean; 
                                     size="icon-sm"
                                     aria-label={`Delete ${r.shortcut}`}
                                     onClick={async () => {
-                                        if (!window.confirm(`Delete the saved reply “/${r.shortcut}”?`)) return;
+                                        if (!(await confirmAction({ title: `Delete the saved reply “/${r.shortcut}”?`, destructive: true }))) return;
                                         await deleteCannedResponse(r.id).catch((e: unknown) => toast.error(errorMessage(e)));
                                         void refresh();
                                     }}

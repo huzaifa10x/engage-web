@@ -3,6 +3,7 @@
 import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 
+import { ConfirmHost } from '@/components/ui/confirm';
 import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ApiError } from '@/lib/api';
@@ -53,6 +54,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
             <TooltipProvider>
                 {children}
                 <Toaster />
+                <ConfirmHost />
             </TooltipProvider>
         </QueryClientProvider>
     );

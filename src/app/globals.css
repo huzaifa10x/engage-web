@@ -273,3 +273,65 @@
         opacity: 1;
     }
 }
+
+/*
+ * Phones (below 640 px): menus, pickers and popovers open as action sheets pinned to the bottom of
+ * the screen, full width, with large rows and the page dimmed behind (mobile brief: no floating web
+ * pop-ups). Radix still handles focus, keyboard and closing; only where it sits changes.
+ */
+@media (max-width: 639px) {
+    [data-radix-popper-content-wrapper]:has(> [data-slot='dropdown-menu-content']),
+    [data-radix-popper-content-wrapper]:has(> [data-slot='select-content']),
+    [data-radix-popper-content-wrapper]:has(> [data-slot='popover-content']) {
+        position: fixed !important;
+        transform: none !important;
+        top: auto !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        min-width: 0 !important;
+        width: 100% !important;
+        z-index: 60 !important;
+    }
+    [data-slot='dropdown-menu-content'],
+    [data-slot='select-content'],
+    [data-slot='popover-content'] {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        max-height: 75dvh !important;
+        overflow-y: auto;
+        border-radius: 20px 20px 0 0 !important;
+        border-width: 1px 0 0 !important;
+        padding: 1.5rem 0.5rem max(0.75rem, env(safe-area-inset-bottom)) !important;
+        box-shadow: 0 0 0 100vmax rgb(13 17 9 / 0.4) !important;
+        --tw-enter-scale: 1;
+        --tw-exit-scale: 1;
+        --tw-enter-translate-y: 100%;
+        --tw-exit-translate-y: 100%;
+        animation-duration: 260ms;
+        position: relative;
+    }
+    /* The grab handle. */
+    [data-slot='dropdown-menu-content']::before,
+    [data-slot='select-content']::before,
+    [data-slot='popover-content']::before {
+        content: '';
+        position: absolute;
+        top: 0.5rem;
+        left: 50%;
+        width: 2.25rem;
+        height: 0.25rem;
+        margin-left: -1.125rem;
+        border-radius: 999px;
+        background: var(--line-2);
+    }
+    /* Native-size rows. */
+    [data-slot='dropdown-menu-item'],
+    [data-slot='select-item'] {
+        min-height: 3rem;
+        font-size: 15px;
+        padding-top: 0.625rem;
+        padding-bottom: 0.625rem;
+    }
+}

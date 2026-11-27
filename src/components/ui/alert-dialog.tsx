@@ -6,6 +6,8 @@ import * as React from 'react';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
+import { HANDLE, PHONE_SHEET } from './swipe-to-close';
+
 function AlertDialog(props: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
     return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />;
 }
@@ -14,7 +16,7 @@ function AlertDialogTrigger(props: React.ComponentProps<typeof AlertDialogPrimit
     return <AlertDialogPrimitive.Trigger data-slot="alert-dialog-trigger" {...props} />;
 }
 
-function AlertDialogContent({ className, ...props }: React.ComponentProps<typeof AlertDialogPrimitive.Content>) {
+function AlertDialogContent({ className, children, ...props }: React.ComponentProps<typeof AlertDialogPrimitive.Content>) {
     return (
         <AlertDialogPrimitive.Portal>
             <AlertDialogPrimitive.Overlay className="fixed inset-0 z-50 bg-slate-900/40 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0" />
@@ -24,9 +26,14 @@ function AlertDialogContent({ className, ...props }: React.ComponentProps<typeof
                     'fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-card p-6 shadow-[0_12px_34px_rgba(15,23,42,.16)] sm:max-w-md',
                     'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
                     className,
+                    // Phones: rises from the bottom like an action sheet.
+                    PHONE_SHEET,
                 )}
                 {...props}
-            />
+            >
+                <span aria-hidden className={HANDLE} />
+                {children}
+            </AlertDialogPrimitive.Content>
         </AlertDialogPrimitive.Portal>
     );
 }

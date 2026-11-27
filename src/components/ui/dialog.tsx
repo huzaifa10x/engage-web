@@ -6,6 +6,8 @@ import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 
+import { HANDLE, PHONE_SHEET, useSwipeToClose } from './swipe-to-close';
+
 function Dialog(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
     return <DialogPrimitive.Root data-slot="dialog" {...props} />;
 }
@@ -37,25 +39,40 @@ function DialogContent({
     showCloseButton = true,
     ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & { showCloseButton?: boolean }) {
+    // Phones: a bottom sheet with a grab handle; drag it down to close (mobile brief).
+    const [node, setNode] = React.useState<HTMLDivElement | null>(null);
+    const closer = React.useRef<HTMLButtonElement>(null);
+    const close = React.useCallback(() => closer.current?.click(), []);
+    useSwipeToClose(node, close);
+
     return (
         <DialogPrimitive.Portal>
             <DialogOverlay />
             <DialogPrimitive.Content
+                ref={setNode}
                 data-slot="dialog-content"
                 className={cn(
-                    'fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto rounded-lg border bg-card p-6 shadow-[0_12px_34px_rgba(15,23,42,.16)] duration-200 sm:max-w-lg',
+                    'fixed top-[50%] left-[50%] z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto overscroll-contain rounded-lg border bg-card p-6 shadow-[0_12px_34px_rgba(15,23,42,.16)] duration-200 sm:max-w-lg',
                     'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95',
                     className,
+                    PHONE_SHEET,
                 )}
                 {...props}
             >
+                <span aria-hidden className={HANDLE} />
                 {children}
-                {showCloseButton && (
-                    <DialogPrimitive.Close className="absolute top-4 right-4 rounded-sm opacity-60 transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40">
-                        <XIcon className="size-4" />
-                        <span className="sr-only">Close</span>
-                    </DialogPrimitive.Close>
-                )}
+                <DialogPrimitive.Close
+                    ref={closer}
+                    className={
+                        showCloseButton
+                            ? 'absolute top-4 right-4 rounded-sm opacity-60 transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 max-sm:top-5'
+                            : 'hidden'
+                    }
+                    tabIndex={showCloseButton ? undefined : -1}
+                >
+                    <XIcon className="size-4" />
+                    <span className="sr-only">Close</span>
+                </DialogPrimitive.Close>
             </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
     );

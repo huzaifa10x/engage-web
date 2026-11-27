@@ -17,6 +17,7 @@ import type { ContactField, Segment } from '@/lib/types';
 
 import { ContactFieldDialog, typeLabel } from './contact-field-dialog';
 import { StagesTab } from './stages-tab';
+import { confirmAction } from '@/components/ui/confirm';
 
 /** One place to manage what contacts are organised by: segments, tags and custom fields. */
 export function CrmSettingsDialog({
@@ -119,9 +120,11 @@ export function CrmSettingsDialog({
                                     {t.name} <span className="opacity-70">{t.contacts}</span>
                                     {canEdit && (
                                         <button
-                                            onClick={() =>
-                                                window.confirm(`Delete the tag “${t.name}” and remove it from ${t.contacts} contact(s)?`) &&
-                                                run.mutate(() => deleteTag(t.id))
+                                            onClick={async () =>
+                                                (await confirmAction({
+                                                    title: `Delete the tag “${t.name}” and remove it from ${t.contacts} contact(s)?`,
+                                                    destructive: true,
+                                                })) && run.mutate(() => deleteTag(t.id))
                                             }
                                             aria-label={`Delete tag ${t.name}`}
                                         >
@@ -173,9 +176,11 @@ export function CrmSettingsDialog({
                                         <Button
                                             variant="ghost"
                                             size="icon-sm"
-                                            onClick={() =>
-                                                window.confirm(`Delete the field “${f.label}”? Values already saved on contacts are kept.`) &&
-                                                run.mutate(() => deleteContactField(f.id))
+                                            onClick={async () =>
+                                                (await confirmAction({
+                                                    title: `Delete the field “${f.label}”? Values already saved on contacts are kept.`,
+                                                    destructive: true,
+                                                })) && run.mutate(() => deleteContactField(f.id))
                                             }
                                             aria-label={`Delete ${f.label}`}
                                         >

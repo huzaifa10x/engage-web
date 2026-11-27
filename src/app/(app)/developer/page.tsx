@@ -36,6 +36,7 @@ import {
     useWebhookEndpoints,
 } from '@/lib/queries';
 import type { ApiKey, DeveloperOverview, WebhookDelivery, WebhookEndpoint } from '@/lib/types';
+import { confirmAction } from '@/components/ui/confirm';
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—');
 const firstError = (e: unknown) => (e instanceof ApiError ? (Object.values(e.fields)[0]?.[0] ?? e.message) : errorMessage(e));
@@ -191,7 +192,13 @@ function KeysTab({ overview, canManage }: { overview: DeveloperOverview; canMana
                                                 size="sm"
                                                 className="text-bad"
                                                 onClick={async () => {
-                                                    if (!window.confirm(`Revoke “${k.name}”? Anything using this key stops working immediately.`)) return;
+                                                    if (
+                                                        !(await confirmAction({
+                                                            title: `Revoke “${k.name}”? Anything using this key stops working immediately.`,
+                                                            destructive: true,
+                                                        }))
+                                                    )
+                                                        return;
                                                     await revokeApiKey(k.id).catch((e: unknown) => toast.error(errorMessage(e)));
                                                     void refresh();
                                                 }}
@@ -404,7 +411,13 @@ function WebhooksTab({ overview, canManage }: { overview: DeveloperOverview; can
                                         variant="outline"
                                         size="sm"
                                         onClick={async () => {
-                                            if (!window.confirm('Create a new signing secret? The current one stops working immediately.')) return;
+                                            if (
+                                                !(await confirmAction({
+                                                    title: 'Create a new signing secret? The current one stops working immediately.',
+                                                    destructive: true,
+                                                }))
+                                            )
+                                                return;
                                             try {
                                                 const rotated = await rotateWebhookSecret(e.id);
                                                 if (rotated.secret) setSecret({ value: rotated.secret, what: 'secret' });
@@ -419,8 +432,8 @@ function WebhooksTab({ overview, canManage }: { overview: DeveloperOverview; can
                                         variant="ghost"
                                         size="sm"
                                         className="text-bad"
-                                        onClick={() =>
-                                            window.confirm('Delete this endpoint and its delivery log?') &&
+                                        onClick={async () =>
+                                            (await confirmAction({ title: 'Delete this endpoint and its delivery log?', destructive: true })) &&
                                             act(() => deleteWebhookEndpoint(e.id), 'Endpoint deleted')
                                         }
                                     >

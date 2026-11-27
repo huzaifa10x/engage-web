@@ -33,6 +33,7 @@ import { relative } from '@/lib/format';
 import { P } from '@/lib/permissions';
 import { cancelCampaign, deleteCampaign, duplicateCampaign, keys, pauseCampaign, resumeCampaign, useCampaigns } from '@/lib/queries';
 import type { Campaign } from '@/lib/types';
+import { confirmAction } from '@/components/ui/confirm';
 
 const when = (c: Campaign) =>
     c.status === 'scheduled' && c.scheduled_at
@@ -184,11 +185,12 @@ export default function CampaignsPage() {
                                                     )}
                                                     {['sending', 'scheduled', 'paused'].includes(c.status) && can(P.CampaignsSend) && (
                                                         <DropdownMenuItem
-                                                            onSelect={() =>
+                                                            onSelect={async () =>
                                                                 (c.status === 'scheduled' ||
-                                                                    window.confirm(
-                                                                        'Stop this campaign for good? Contacts not yet messaged will not receive it.',
-                                                                    )) &&
+                                                                    (await confirmAction({
+                                                                        title: 'Stop this campaign for good? Contacts not yet messaged will not receive it.',
+                                                                        destructive: true,
+                                                                    }))) &&
                                                                 act.mutate(() => cancelCampaign(c.id))
                                                             }
                                                         >
@@ -210,9 +212,11 @@ export default function CampaignsPage() {
                                                     {!['sending', 'scheduled', 'paused'].includes(c.status) && can(P.CampaignsCreate) && (
                                                         <DropdownMenuItem
                                                             destructive
-                                                            onSelect={() =>
-                                                                window.confirm(`Delete the campaign “${c.name}”? Its results are removed too.`) &&
-                                                                act.mutate(() => deleteCampaign(c.id))
+                                                            onSelect={async () =>
+                                                                (await confirmAction({
+                                                                    title: `Delete the campaign “${c.name}”? Its results are removed too.`,
+                                                                    destructive: true,
+                                                                })) && act.mutate(() => deleteCampaign(c.id))
                                                             }
                                                         >
                                                             <Trash2Icon className="!text-destructive" /> Delete
