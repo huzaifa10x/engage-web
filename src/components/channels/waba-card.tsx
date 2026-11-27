@@ -25,7 +25,8 @@ import { SyncProgress, syncSummary } from '@/components/channels/sync-progress';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api, errorMessage } from '@/lib/api';
@@ -90,8 +91,13 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
         onError: (e) => toast.error(errorMessage(e)),
     });
 
+    // Never one click (audit APP-013): the last 4 digits of the number are typed to confirm.
+    const [typed, setTyped] = useState('');
+    const last4 = (numbers[0]?.display_phone_number ?? '').replace(/\D/g, '').slice(-4);
+    const answers = numbers.map((n) => (n.display_phone_number ?? '').replace(/\D/g, '').slice(-4)).filter(Boolean);
+    const confirmed = answers.length ? answers.includes(typed.trim()) : typed.trim().toLowerCase() === 'disconnect';
     const disconnect = useMutation({
-        mutationFn: () => api(`whatsapp/accounts/${waba.id}`, { method: 'DELETE', body: { reason: 'Disconnected from Channels' } }),
+        mutationFn: () => api(`whatsapp/accounts/${waba.id}`, { method: 'DELETE', body: { reason: 'Disconnected from Channels', confirm: typed.trim() } }),
         onSuccess: () => {
             toast.success('WhatsApp account disconnected');
             invalidate();
@@ -176,7 +182,14 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                             <DropdownMenuItem onSelect={() => reconnectWebhooks.mutate()} disabled={reconnectWebhooks.isPending}>
                                 <WebhookIcon /> Reconnect webhooks
                             </DropdownMenuItem>
-                            <DropdownMenuItem destructive onSelect={() => setConfirm(true)}>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                                destructive
+                                onSelect={() => {
+                                    setTyped('');
+                                    setConfirm(true);
+                                }}
+                            >
                                 <UnplugIcon className="!text-destructive" /> Disconnect
                             </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -364,8 +377,12 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                         <AlertDialogDescription asChild>
                             <div className="grid gap-2">
                                 <p>
-                                    10X Engage will stop receiving and sending messages for its numbers, and the access token is destroyed. You can reconnect
-                                    later with Connect WhatsApp.
+                                    Messages to{' '}
+                                    <b className="font-semibold text-foreground">
+                                        {numbers.length ? numbers.map((n) => phoneDisplay(n.display_phone_number)).join(', ') : 'this account'}
+                                    </b>{' '}
+                                    stop reaching engageX: no new chats, replies or campaigns from {numbers.length === 1 ? 'it' : 'them'}. The access token is
+                                    destroyed. You can reconnect later with Connect WhatsApp.
                                 </p>
                                 {hasCoexistence && (
                                     <p>
@@ -376,9 +393,22 @@ export function WabaCard({ waba, canManage }: { waba: WabaAccount; canManage: bo
                             </div>
                         </AlertDialogDescription>
                     </AlertDialogHeader>
+                    <label className="grid gap-1.5 text-[13px] font-semibold">
+                        {answers.length
+                            ? `Type the last 4 digits of the number (${phoneDisplay(numbers[0]?.display_phone_number ?? '')}) to confirm`
+                            : 'Type “disconnect” to confirm'}
+                        <Input
+                            value={typed}
+                            onChange={(e) => setTyped(e.target.value)}
+                            inputMode={answers.length ? 'numeric' : 'text'}
+                            autoComplete="off"
+                            placeholder={answers.length ? last4.replace(/\d/g, '•') : 'disconnect'}
+                            aria-label="Confirm disconnect"
+                        />
+                    </label>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Keep connected</AlertDialogCancel>
-                        <AlertDialogAction destructive onClick={() => disconnect.mutate()}>
+                        <AlertDialogAction destructive disabled={!confirmed || disconnect.isPending} onClick={() => disconnect.mutate()}>
                             Disconnect
                         </AlertDialogAction>
                     </AlertDialogFooter>

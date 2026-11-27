@@ -696,6 +696,8 @@ export type Conversation = {
     window: { open: boolean; expires_at: string | null; replies_allowed?: boolean; closing_soon?: boolean };
     /** Who the chat is waiting on, set by the system: needs_reply (on us) | waiting (on the customer) | snoozed | closed. */
     state?: 'needs_reply' | 'waiting' | 'snoozed' | 'closed';
+    /** One conversation only: the line the first reply will start with (name intro), or null. */
+    intro_preview?: string | null;
     /** Needs reply: since when the customer has been waiting. */
     needs_reply_since?: string | null;
     /** The wait started outside business hours. */

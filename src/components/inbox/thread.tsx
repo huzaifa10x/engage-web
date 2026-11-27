@@ -12,6 +12,7 @@ import {
     ExternalLinkIcon,
     FileTextIcon,
     FlagIcon,
+    HandIcon,
     HistoryIcon,
     InfoIcon,
     Loader2Icon,
@@ -635,6 +636,37 @@ export function Thread({
         banners.push(
             <Banner key="critical" tone="red" icon={<TriangleAlertIcon />}>
                 Window closes in <b className="font-semibold">{dur(windowLeft(c.window.expires_at, now), true)}</b>. Reply now to avoid needing a template.
+            </Banner>,
+        );
+    }
+    // Audit APP-023: the agent sees the intro line before the first reply goes out, exactly as sent.
+    if (c.intro_preview && mode === 'reply' && !disabledReason) {
+        banners.push(
+            <Banner
+                key="intro"
+                tone="grey"
+                icon={<HandIcon />}
+                actions={
+                    can(P.SettingsManage) ? (
+                        <button
+                            type="button"
+                            className="text-[12px] font-semibold text-brand-600 hover:underline"
+                            onClick={async () => {
+                                try {
+                                    await api('tenant/reply-promise', { method: 'PUT', body: { intro: false } });
+                                    toast.success('Replies now send exactly what you type');
+                                    void conversation.refetch();
+                                } catch (e) {
+                                    toast.error(errorMessage(e));
+                                }
+                            }}
+                        >
+                            Turn off
+                        </button>
+                    ) : undefined
+                }
+            >
+                Your first reply starts with “<b className="font-semibold">{c.intro_preview}</b>”. Later replies send exactly what you type.
             </Banner>,
         );
     }

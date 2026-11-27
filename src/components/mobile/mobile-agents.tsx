@@ -97,11 +97,11 @@ export function MobileAgents({ agentId }: { agentId: string | null }) {
                 />
                 <Kpi
                     label="Slow (up to 2× target)"
-                    value={<span className={(d?.first_response.slow ?? 0) > 0 ? 'text-warn' : ''}>{d ? (d.first_response.slow ?? 0) : '–'}</span>}
+                    value={<span className={(d?.first_response.slow ?? 0) > 0 ? 'text-warn' : ''}>{d ? (d.first_response.slow ?? '—') : '–'}</span>}
                 />
                 <Kpi
                     label="Late (over 2× target)"
-                    value={<span className={(d?.first_response.late ?? 0) > 0 ? 'text-bad' : ''}>{d ? (d.first_response.late ?? 0) : '–'}</span>}
+                    value={<span className={(d?.first_response.late ?? 0) > 0 ? 'text-bad' : ''}>{d ? (d.first_response.late ?? '—') : '–'}</span>}
                 />
             </div>
 

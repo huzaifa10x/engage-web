@@ -437,7 +437,12 @@ export default function ConsentPrivacyPage() {
         ['Opted in', o?.contacts.opted_in, 'Can receive marketing'],
         ['No consent recorded', o?.contacts.unknown, 'Service and utility messages only'],
         ['Opted out', o?.contacts.opted_out, 'Receive nothing'],
-        ['Opt-outs, last 30 days', o?.last_30_days.opt_outs, `${o?.last_30_days.opt_ins ?? 0} opt-ins in the same period`],
+        // Audit APP-006: no "0 opt-ins" before the figures have loaded.
+        [
+            'Opt-outs, last 30 days',
+            o?.last_30_days.opt_outs,
+            o ? `${o.last_30_days.opt_ins.toLocaleString()} opt-ins in the same period` : 'Opt-ins in the same period',
+        ],
     ];
 
     return (
@@ -455,7 +460,17 @@ export default function ConsentPrivacyPage() {
                         {stats.map(([label, value, hint]) => (
                             <Card key={label} className="gap-1 p-4">
                                 <p className="text-[12.5px] text-muted-foreground">{label}</p>
-                                <p className="text-2xl font-semibold tabular-nums">{value === undefined ? '—' : value.toLocaleString()}</p>
+                                {overview.isLoading ? (
+                                    <Skeleton className="h-8 w-16" />
+                                ) : (
+                                    <p className="text-2xl font-semibold tabular-nums">
+                                        {value === undefined || value === null ? (
+                                            <span className="text-base text-muted-foreground">Not available</span>
+                                        ) : (
+                                            value.toLocaleString()
+                                        )}
+                                    </p>
+                                )}
                                 <p className="text-[12px] text-muted-foreground">{hint}</p>
                             </Card>
                         ))}

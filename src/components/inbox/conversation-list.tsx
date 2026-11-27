@@ -183,7 +183,7 @@ function CardChips({ c, now, fetchedAt }: { c: Conversation; now: number; fetche
             return (
                 <>
                     <Chip tone="info">
-                        <CornerUpLeftIcon /> Waiting for customer
+                        <CornerUpLeftIcon /> Replied · waiting for customer
                     </Chip>
                     {over}
                 </>
@@ -197,7 +197,7 @@ function CardChips({ c, now, fetchedAt }: { c: Conversation; now: number; fetche
 
         return (
             <Chip tone="info">
-                <CornerUpLeftIcon /> Waiting for customer
+                <CornerUpLeftIcon /> Replied · waiting for customer
             </Chip>
         );
     }
@@ -581,7 +581,7 @@ export function ConversationList({
                     )}
                     {q && (
                         <li className="border-b bg-muted/50 px-4 py-1.5 text-[11px] text-muted-foreground">
-                            Searching all conversations, including resolved · {rows.length}
+                            Searching all chats, every queue and resolved · {rows.length}
                             {list.hasNextPage ? '+' : ''} found
                         </li>
                     )}

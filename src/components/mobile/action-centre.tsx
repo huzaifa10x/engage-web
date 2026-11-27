@@ -10,6 +10,9 @@ import { cn } from '@/lib/utils';
 
 import { SectionLabel } from './kit';
 
+/** A count that hasn't arrived shows a dash, never a 0 that looks real (audit APP-006). */
+const shown = (v: number | null | undefined): string | number => (v === null || v === undefined ? '—' : v);
+
 type Tile = { label: string; value: string | number; href: string; tone?: 'warn' | 'bad' | 'good' };
 
 /**
@@ -29,49 +32,49 @@ export function ActionCentre({ s }: { s: DashboardSummary | undefined }) {
             ? [
                   {
                       label: 'My chats needing a reply',
-                      value: s?.needs_reply_mine ?? 0,
+                      value: shown(s?.needs_reply_mine),
                       href: '/inbox?tab=needs_reply&assigned=me',
                       tone: (s?.needs_reply_mine ?? 0) > 0 ? 'warn' : undefined,
                   },
                   {
                       label: 'Windows closing within 2 h',
-                      value: a?.closing_soon ?? 0,
+                      value: shown(a?.closing_soon),
                       href: '/inbox?tab=needs_reply&assigned=me&window=closing',
                       tone: (a?.closing_soon ?? 0) > 0 ? 'bad' : undefined,
                   },
                   {
                       label: 'Follow-ups today and overdue',
-                      value: followups,
+                      value: a ? followups : shown(undefined),
                       href: (a?.followups_overdue ?? 0) > 0 ? '/next-steps?bucket=overdue' : '/next-steps?bucket=today',
                       tone: (a?.followups_overdue ?? 0) > 0 ? 'bad' : undefined,
                   },
-                  { label: 'Unread mentions', value: a?.mentions_unread ?? 0, href: '/notifications' },
+                  { label: 'Unread mentions', value: shown(a?.mentions_unread), href: '/notifications' },
               ]
             : role === 'manager'
               ? [
                     {
                         label: 'Team needs reply',
-                        value: s?.needs_reply ?? 0,
+                        value: shown(s?.needs_reply),
                         href: '/inbox?tab=needs_reply',
                         tone: (s?.needs_reply ?? 0) > 0 ? 'warn' : undefined,
                     },
-                    { label: 'Unassigned', value: s?.needs_reply_unassigned ?? 0, href: '/inbox?tab=needs_reply&assigned=unassigned' },
+                    { label: 'Unassigned', value: shown(s?.needs_reply_unassigned), href: '/inbox?tab=needs_reply&assigned=unassigned' },
                     {
                         label: 'Windows closing within 2 h',
-                        value: a?.closing_soon ?? 0,
+                        value: shown(a?.closing_soon),
                         href: '/inbox?tab=needs_reply&window=closing',
                         tone: (a?.closing_soon ?? 0) > 0 ? 'bad' : undefined,
                     },
                     {
                         label: 'Overdue follow-ups',
-                        value: a?.followups_overdue ?? 0,
+                        value: shown(a?.followups_overdue),
                         href: '/next-steps?bucket=overdue',
                         tone: (a?.followups_overdue ?? 0) > 0 ? 'bad' : undefined,
                     },
                 ]
               : [
-                    { label: 'New enquiries yesterday', value: w?.new_enquiries.at(-2) ?? 0, href: '/insights' },
-                    { label: 'Open deals', value: a?.open_deals ?? 0, href: '/contacts?tab=deals' },
+                    { label: 'New enquiries yesterday', value: shown(w?.new_enquiries.at(-2)), href: '/insights' },
+                    { label: 'Open deals', value: shown(a?.open_deals), href: '/contacts?tab=deals' },
                     {
                         label: 'Answered on time · 7 days',
                         value: w?.on_time_pct === null || w?.on_time_pct === undefined ? '—' : `${w.on_time_pct}%`,
@@ -80,7 +83,7 @@ export function ActionCentre({ s }: { s: DashboardSummary | undefined }) {
                     },
                     {
                         label: 'Overdue follow-ups',
-                        value: a?.followups_overdue ?? 0,
+                        value: shown(a?.followups_overdue),
                         href: '/next-steps?bucket=overdue',
                         tone: (a?.followups_overdue ?? 0) > 0 ? 'bad' : undefined,
                     },
