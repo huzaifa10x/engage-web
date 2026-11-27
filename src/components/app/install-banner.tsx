@@ -39,7 +39,8 @@ export function InstallBanner() {
 
     useEffect(() => {
         const p = platform();
-        if (p === 'desktop' || isInstalled() || hiddenNow()) return;
+        // The /mobile install page is the guide itself: no banner on top of it.
+        if (p === 'desktop' || isInstalled() || hiddenNow() || window.location.pathname.startsWith('/mobile')) return;
         const t = setTimeout(() => {
             setWhere(p);
             setShow(true);
@@ -60,10 +61,10 @@ export function InstallBanner() {
     };
     const copy = async () => {
         try {
-            await navigator.clipboard.writeText(window.location.origin);
+            await navigator.clipboard.writeText(`${window.location.origin}/mobile`);
             toast.success('Link copied. Paste it in Safari or Chrome.');
         } catch {
-            toast.message(window.location.origin);
+            toast.message(`${window.location.origin}/mobile`);
         }
     };
     const act = async () => {

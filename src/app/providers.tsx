@@ -8,7 +8,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ApiError } from '@/lib/api';
 
-const PUBLIC_PATHS = ['/login', '/register', '/impersonate', '/invitations', '/deletion-status', '/select-workspace'];
+const PUBLIC_PATHS = ['/mobile', '/login', '/register', '/impersonate', '/invitations', '/deletion-status', '/select-workspace'];
 
 /**
  * Cross-cutting API outcomes handled once, not per page:

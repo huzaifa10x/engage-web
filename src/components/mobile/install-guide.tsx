@@ -24,7 +24,7 @@ const STEPS: Record<'iphone' | 'android', string[]> = {
 export function InstallGuide({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
     // Only read in the browser, and only shown once the sheet opens (never rendered on the server).
     const [where] = useState<Platform>(() => (typeof window === 'undefined' ? 'desktop' : platform()));
-    const [url] = useState(() => (typeof window === 'undefined' ? '' : window.location.origin));
+    const [url] = useState(() => (typeof window === 'undefined' ? '' : `${window.location.origin}/mobile`));
     const installed = typeof window !== 'undefined' && isInstalled();
     const copy = async () => {
         try {
@@ -59,6 +59,9 @@ export function InstallGuide({ open, onOpenChange }: { open: boolean; onOpenChan
                         </p>
                     </div>
                 )}
+                <a href="/mobile" className="text-[13.5px] font-semibold text-brand-600 underline-offset-2 hover:underline">
+                    Full install guide with help →
+                </a>
                 <div className="flex items-center gap-2 rounded-xl bg-muted px-3 py-2.5">
                     <span className="min-w-0 flex-1 truncate font-mono text-[13px]">{url}</span>
                     <button type="button" onClick={() => void copy()} className="shrink-0 text-[13px] font-semibold text-brand-600">
