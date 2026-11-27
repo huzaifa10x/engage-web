@@ -160,7 +160,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                                 key={pathname}
                                 data-screen={ROOT_PATHS.has(pathname) ? 'root' : 'push'}
                                 className={cn(
-                                    fullBleed ? 'min-h-0 flex-1' : flush ? 'flex min-w-0 flex-1' : 'mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:py-8',
+                                    fullBleed ? 'min-h-0 flex-1' : flush ? 'flex min-w-0 flex-1' : 'mb-6 mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:py-8',
                                     // Room for the phone's tab bar (and the home bar) under the content.
                                     !tabBarHidden && 'pb-[var(--tabbar)]',
                                     // In a chat: the composer sits on the keyboard (iPhone) or the home bar.
